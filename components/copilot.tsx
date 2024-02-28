@@ -4,67 +4,32 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import RecorderTranscriber from "@/components/recorder";
-import { useCallback, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useCompletion } from "ai/react";
 import { FLAGS } from "@/lib/types";
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { Switch } from "@/components/ui/switch";
 
 export function Copilot() {
-  const bgRef = useRef<HTMLTextAreaElement>(null);
-
   const [transcribedText, setTranscribedText] = useState<string>("");
-
-  const searchParams = useSearchParams();
-  const pathname = usePathname();
-  const router = useRouter();
-
-  const setFlag = (flag: FLAGS) => {
-    router.push(
-      `${pathname}?${createQueryString({
-        flag,
-      })}`,
-      {
-        scroll: false,
-      },
-    );
-  };
-
-  const createQueryString = useCallback(
-    (params: Record<string, string | number | null>) => {
-      const newSearchParams = new URLSearchParams(searchParams?.toString());
-
-      for (const [key, value] of Object.entries(params)) {
-        if (value === null) {
-          newSearchParams.delete(key);
-        } else {
-          newSearchParams.set(key, String(value));
-        }
-      }
-
-      return newSearchParams.toString();
-    },
-    [searchParams],
-  );
+  const [flag, setFlag] = useState<FLAGS>(FLAGS.COPILOT);
+  const [bg, setBg] = useState<string>("");
 
   const { completion, stop, isLoading, error, setInput, handleSubmit } =
     useCompletion({
       api: "/api/openai/completion",
       body: {
-        bg: bgRef.current?.value,
-        flag: searchParams.get("flag") || FLAGS.COPILOT,
+        bg,
+        flag,
       },
     });
 
-  const handleSummarize = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setFlag(FLAGS.SUMMERIZER);
-    handleSubmit(e);
-  };
-  const handleCopilot = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setFlag(FLAGS.COPILOT);
-    handleSubmit(e);
+  const handleFlag = (checked: boolean) => {
+    if (!checked) {
+      setFlag(FLAGS.SUMMERIZER);
+    } else {
+      setFlag(FLAGS.COPILOT);
+    }
   };
 
   const addTextinTranscription = (text: string) => {
@@ -77,6 +42,18 @@ export function Copilot() {
     setTranscribedText(e.target.value);
   };
 
+  useEffect(() => {
+    const savedBg = localStorage.getItem("bg");
+    if (savedBg) {
+      setBg(savedBg);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!bg) return;
+    localStorage.setItem("bg", bg);
+  }, [bg]);
+
   return (
     <div className="grid w-full gap-4 mt-12">
       <h2 className="text-3xl underline text-green-700">
@@ -87,7 +64,7 @@ export function Copilot() {
           {error.message}
         </div>
       )}
-      <div className="grid gap-4 grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="grid gap-1.5">
           <Label htmlFor="system_prompt" className="text-green-800">
             Interview Background
@@ -97,7 +74,8 @@ export function Copilot() {
             placeholder="Type or paste your text here."
             className="resize-none h-[50px] overflow-hidden"
             style={{ lineHeight: "1.5", maxHeight: "150px" }}
-            ref={bgRef}
+            value={bg}
+            onChange={(e) => setBg(e.target.value)}
           />
           <RecorderTranscriber
             addTextinTranscription={addTextinTranscription}
@@ -117,8 +95,17 @@ export function Copilot() {
           />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <form onSubmit={handleCopilot}>
+      <div>
+        <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-2">
+          <div className="flex items-center justify-center w-full border">
+            <Label className="text-green-800">Summerizer</Label>
+            <Switch
+              className="data-[state=checked]:bg-green-600 data-[state=unchecked]:bg-gray-200 mx-2"
+              onCheckedChange={handleFlag}
+              defaultChecked
+            />
+            <Label className="text-green-800">Copilot</Label>
+          </div>
           <Button
             className="h-9 w-full bg-green-600 hover:bg-green-800 text-white"
             size="sm"
@@ -126,18 +113,7 @@ export function Copilot() {
             disabled={isLoading}
             type="submit"
           >
-            Suggest
-          </Button>
-        </form>
-        <form onSubmit={handleSummarize}>
-          <Button
-            className="h-9 w-full bg-green-600 hover:bg-green-800 text-white"
-            size="sm"
-            variant="outline"
-            disabled={isLoading}
-            type="submit"
-          >
-            Summarize
+            Process
           </Button>
         </form>
       </div>
