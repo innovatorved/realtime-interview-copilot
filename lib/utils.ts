@@ -17,6 +17,7 @@ Response:`;
 
 export function buildSummerizerPrompt(text: string) {
   return `You are a summerizer. You are summarizing the given text. Summarize the following text. Only write summary.
+Content:
 ${text}
 Summary:
 `;

@@ -12,6 +12,8 @@ import { MicIcon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { MicOffIcon } from "lucide-react";
+import { Switch } from "./ui/switch";
+import { Label } from "./ui/label";
 
 interface RecorderTranscriberProps {
   addTextinTranscription: (text: string) => void;
@@ -30,36 +32,42 @@ export default function RecorderTranscriber({
   const [micOpen, setMicOpen] = useState(false);
   const [microphone, setRecorderTranscriber] = useState<MediaRecorder | null>();
   const [userMedia, setUserMedia] = useState<MediaStream | null>();
+
   const [caption, setCaption] = useState<string | null>();
 
   const toggleRecorderTranscriber = useCallback(async () => {
+    let currentMedia = userMedia;
     if (microphone && userMedia) {
-      setUserMedia(null);
-      setRecorderTranscriber(null);
-
       microphone.stop();
+      setRecorderTranscriber(null);
     } else {
-      const userMedia = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-      });
+      if (!userMedia) {
+        const media = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: true,
+        });
+        media.getVideoTracks().forEach((track) => track.stop());
+        currentMedia = media;
+        setUserMedia((_) => media);
+      }
 
-      const microphone = new MediaRecorder(userMedia);
-      microphone.start(500);
+      if (!currentMedia) return;
+      const mic = new MediaRecorder(currentMedia);
+      mic.start(500);
 
-      microphone.onstart = () => {
-        setMicOpen(true);
+      mic.onstart = () => {
+        setMicOpen((_) => true);
       };
 
-      microphone.onstop = () => {
-        setMicOpen(false);
+      mic.onstop = () => {
+        setMicOpen((_) => false);
       };
 
-      microphone.ondataavailable = (e) => {
+      mic.ondataavailable = (e) => {
         add(e.data);
       };
 
-      setUserMedia(userMedia);
-      setRecorderTranscriber(microphone);
+      setRecorderTranscriber((_) => mic);
     }
   }, [add, microphone, userMedia]);
 
@@ -154,7 +162,7 @@ export default function RecorderTranscriber({
 
   return (
     <div className="w-full relative">
-      <div className="grid mt-2 align-middle items-center">
+      <div className="grid mt-2 align-middle items-center md:grid-cols-2 gap-2">
         <Button
           className="h-9 bg-green-600 hover:bg-green-800 text-white"
           size="sm"

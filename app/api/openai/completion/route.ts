@@ -16,10 +16,6 @@ export async function POST(req: Request) {
     prompt = buildSummerizerPrompt(transcribe);
   }
 
-  console.log({
-    prompt,
-  });
-
   const response = await openai.completions.create({
     model: MODEL,
     max_tokens: 2000,

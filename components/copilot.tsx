@@ -4,7 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import RecorderTranscriber from "@/components/recorder";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useCompletion } from "ai/react";
 import { FLAGS } from "@/lib/types";
@@ -24,15 +24,16 @@ export function Copilot() {
       },
     });
 
-  const handleFlag = (checked: boolean) => {
+  const handleFlag = useCallback((checked: boolean) => {
     if (!checked) {
       setFlag(FLAGS.SUMMERIZER);
     } else {
       setFlag(FLAGS.COPILOT);
     }
-  };
+  }, []);
 
   const addTextinTranscription = (text: string) => {
+    setInput((prev) => prev + " " + text);
     setTranscribedText((prev) => prev + " " + text);
   };
   const handleTranscriptionChange = (
@@ -100,12 +101,13 @@ export function Copilot() {
           <div className="flex items-center justify-center w-full border">
             <Label className="text-green-800">Summerizer</Label>
             <Switch
-              className="data-[state=checked]:bg-green-600 data-[state=unchecked]:bg-gray-200 mx-2"
+              className="data-[state=checked]:bg-green-600 data-[state=unchecked]:bg-gray-200 m-2"
               onCheckedChange={handleFlag}
               defaultChecked
             />
             <Label className="text-green-800">Copilot</Label>
           </div>
+
           <Button
             className="h-9 w-full bg-green-600 hover:bg-green-800 text-white"
             size="sm"
