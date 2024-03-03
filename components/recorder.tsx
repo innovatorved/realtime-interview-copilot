@@ -162,7 +162,7 @@ export default function RecorderTranscriber({
 
   return (
     <div className="w-full relative">
-      <div className="grid mt-2 align-middle items-center md:grid-cols-2 gap-2">
+      <div className="grid mt-2 align-middle items-center gap-2">
         <Button
           className="h-9 bg-green-600 hover:bg-green-800 text-white"
           size="sm"

@@ -18,6 +18,7 @@
     "@radix-ui/react-slot": "^1.0.2",
     "@radix-ui/react-switch": "^1.0.3",
     "@uidotdev/usehooks": "^2.4.1",
+    "@vercel/analytics": "^1.2.2",
     "ai": "^2.2.37",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
