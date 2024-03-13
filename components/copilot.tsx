@@ -17,7 +17,7 @@ export function Copilot() {
 
   const { completion, stop, isLoading, error, setInput, handleSubmit } =
     useCompletion({
-      api: "/api/openai/completion",
+      api: "/api/groq/completion",
       body: {
         bg,
         flag,
