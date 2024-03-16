@@ -16,11 +16,17 @@ export async function POST(req: Request) {
     prompt = buildSummerizerPrompt(transcribe);
   }
 
-  const response = await groq.completions.create({
+  const response = await groq.chat.completions.create({
     model: GROK_MODEL,
     max_tokens: 2000,
     stream: true,
-    prompt: prompt,
+    // prompt: prompt,
+    messages: [
+      {
+        role: 'user',
+        content: prompt
+      }
+    ]
   });
 
   const stream = OpenAIStream(response);
