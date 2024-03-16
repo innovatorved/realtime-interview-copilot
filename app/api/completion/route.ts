@@ -4,7 +4,7 @@ import { buildPrompt, buildSummerizerPrompt } from "@/lib/utils";
 import { OpenAIStream, StreamingTextResponse } from "ai";
 
 export const runtime = "edge";
-const MODEL = "gpt-3.5-turbo-instruct";
+const MODEL = process.env.MODEL || "gpt-3.5-turbo-instruct";
 
 export async function POST(req: Request) {
   const { bg, flag, prompt: transcribe } = await req.json();
@@ -16,11 +16,16 @@ export async function POST(req: Request) {
     prompt = buildSummerizerPrompt(transcribe);
   }
 
-  const response = await openai.completions.create({
+  const response = await openai.chat.completions.create({
     model: MODEL,
     max_tokens: 2000,
     stream: true,
-    prompt: prompt,
+    messages: [
+      {
+        role: "user",
+        content: prompt,
+      },
+    ],
   });
 
   const stream = OpenAIStream(response);
