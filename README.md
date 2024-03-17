@@ -23,7 +23,7 @@ Realtime Interview Copilot is a web application that assists users in crafting r
 1. Clone the repository:
 
     ```bash
-    git clone https://github.com/your-username/realtime-interview-copilot.git
+    git clone https://github.com/innovatorved/realtime-interview-copilot.git
     ```
 
 2. Install dependencies:
