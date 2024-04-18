@@ -120,7 +120,7 @@ export function Copilot() {
         </form>
       </div>
 
-      <div className="flex mx-2 md:mx-10 mt-4">{completion}</div>
+      <div className="flex mx-2 md:mx-10 mt-4 whitespace-pre-wrap">{completion}</div>
     </div>
   );
 }
