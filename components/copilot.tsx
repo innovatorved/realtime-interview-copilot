@@ -32,6 +32,21 @@ export function Copilot() {
     }
   }, []);
 
+  const formRef = useRef<HTMLFormElement>(null);
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    if (event.ctrlKey && event.key === "p") {
+      event.preventDefault();
+      formRef.current?.dispatchEvent(new Event("submit", { cancelable: true }));
+    }
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [handleKeyDown]);
+
   const addTextinTranscription = (text: string) => {
     setInput((prev) => prev + " " + text);
     setTranscribedText((prev) => prev + " " + text);
@@ -97,7 +112,11 @@ export function Copilot() {
         </div>
       </div>
       <div>
-        <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-2">
+        <form
+          ref={formRef}
+          onSubmit={handleSubmit}
+          className="grid md:grid-cols-2 gap-2"
+        >
           <div className="flex items-center justify-center w-full border">
             <Label className="text-green-800">Summerizer</Label>
             <Switch
@@ -115,12 +134,14 @@ export function Copilot() {
             disabled={isLoading}
             type="submit"
           >
-            Process
+            Process (Ctrl + P)
           </Button>
         </form>
       </div>
 
-      <div className="flex mx-2 md:mx-10 mt-4 whitespace-pre-wrap">{completion}</div>
+      <div className="flex mx-2 md:mx-10 mt-4 whitespace-pre-wrap">
+        {completion}
+      </div>
     </div>
   );
 }
