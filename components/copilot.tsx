@@ -34,9 +34,15 @@ export function Copilot() {
 
   const formRef = useRef<HTMLFormElement>(null);
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    if (event.ctrlKey && event.key === "p") {
+    if (event.ctrlKey && event.key === "Enter") {
       event.preventDefault();
-      formRef.current?.dispatchEvent(new Event("submit", { cancelable: true }));
+      if (formRef.current) {
+        const submitEvent = new Event("submit", {
+          cancelable: true,
+          bubbles: true,
+        });
+        formRef.current.dispatchEvent(submitEvent);
+      }
     }
   }, []);
 
@@ -128,13 +134,14 @@ export function Copilot() {
           </div>
 
           <Button
-            className="h-9 w-full bg-green-600 hover:bg-green-800 text-white"
+            className="h-9 w-full bg-green-600 hover:bg-green-800 text-white transition-opacity duration-300"
             size="sm"
             variant="outline"
             disabled={isLoading}
             type="submit"
           >
-            Process (Ctrl + P)
+            Process
+            <span className="opacity-85 text-xs p-2"> (Ctrl + Enter)</span>
           </Button>
         </form>
       </div>
