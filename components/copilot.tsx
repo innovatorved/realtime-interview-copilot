@@ -34,14 +34,26 @@ export function Copilot() {
 
   const formRef = useRef<HTMLFormElement>(null);
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    if (event.ctrlKey && event.key === "Enter") {
-      event.preventDefault();
-      if (formRef.current) {
-        const submitEvent = new Event("submit", {
-          cancelable: true,
-          bubbles: true,
-        });
-        formRef.current.dispatchEvent(submitEvent);
+    if (event.ctrlKey) {
+      switch (event.key) {
+        case "Enter":
+          event.preventDefault();
+          if (formRef.current) {
+            const submitEvent = new Event("submit", {
+              cancelable: true,
+              bubbles: true,
+            });
+            formRef.current.dispatchEvent(submitEvent);
+          }
+          break;
+        case "s":
+          event.preventDefault();
+          setFlag(FLAGS.SUMMERIZER);
+          break;
+        case "c":
+          event.preventDefault();
+          setFlag(FLAGS.COPILOT);
+          break;
       }
     }
   }, []);
@@ -70,6 +82,8 @@ export function Copilot() {
       setBg(savedBg);
     }
   }, []);
+
+  useEffect(() => console.log(flag), [flag]);
 
   useEffect(() => {
     if (!bg) return;
@@ -124,13 +138,19 @@ export function Copilot() {
           className="grid md:grid-cols-2 gap-2"
         >
           <div className="flex items-center justify-center w-full border">
-            <Label className="text-green-800">Summerizer</Label>
+            <Label className="text-green-800  transition-opacity duration-300">
+              Summerizer
+              <span className="opacity-85 text-xs p-2"> (Ctrl + s)</span>
+            </Label>
             <Switch
               className="data-[state=checked]:bg-green-600 data-[state=unchecked]:bg-gray-200 m-2"
               onCheckedChange={handleFlag}
               defaultChecked
+              checked={flag === FLAGS.COPILOT}
             />
-            <Label className="text-green-800">Copilot</Label>
+            <Label className="text-green-800  transition-opacity duration-300">
+              Copilot<span className="opacity-85 text-xs p-2"> (Ctrl + c)</span>
+            </Label>
           </div>
 
           <Button
