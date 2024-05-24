@@ -25,7 +25,6 @@
     "openai": "^4.28.0",
     "react": "^18",
     "react-dom": "^18",
-    "replicate": "^0.27.1",
     "tailwind-merge": "^2.2.1",
     "tailwindcss-animate": "^1.0.7"
   },
