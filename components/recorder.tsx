@@ -6,7 +6,7 @@ import {
   LiveTranscriptionEvents,
   createClient,
 } from "@deepgram/sdk";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useQueue } from "@uidotdev/usehooks";
 import { MicIcon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ interface RecorderTranscriberProps {
 export default function RecorderTranscriber({
   addTextinTranscription,
 }: RecorderTranscriberProps) {
+  const isRendered = useRef(false);
   const { add, remove, first, size, queue } = useQueue<any>([]);
   const [apiKey, setApiKey] = useState<CreateProjectKeyResponse | null>();
   const [connection, setConnection] = useState<LiveClient | null>();
@@ -72,20 +73,23 @@ export default function RecorderTranscriber({
   }, [add, microphone, userMedia]);
 
   useEffect(() => {
-    if (!apiKey) {
-      console.log("getting a new api key");
-      fetch("/api/deepgram", { cache: "no-store" })
-        .then((res) => res.json())
-        .then((object) => {
-          if (!("key" in object)) throw new Error("No api key returned");
+    console.log({ apiKey });
+    if (apiKey) return;
+    // if (isRendered.current) return;
+    isRendered.current = true;
+    console.log("getting a new api key");
+    fetch("/api/deepgram", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((object) => {
+        console.log(object);
+        if (!("key" in object)) throw new Error("No api key returned");
 
-          setApiKey(object);
-          setLoadingKey(false);
-        })
-        .catch((e) => {
-          console.error(e);
-        });
-    }
+        setApiKey(object);
+        setLoadingKey(false);
+      })
+      .catch((e) => {
+        console.error(e);
+      });
   }, [apiKey]);
 
   useEffect(() => {

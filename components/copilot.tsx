@@ -7,10 +7,13 @@ import RecorderTranscriber from "@/components/recorder";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useCompletion } from "ai/react";
-import { FLAGS } from "@/lib/types";
+import { FLAGS, HistoryData } from "@/lib/types";
 import { Switch } from "@/components/ui/switch";
 
-export function Copilot() {
+interface CopilotProps {
+  addInSavedData: (data: HistoryData) => void;
+}
+export function Copilot({ addInSavedData }: CopilotProps) {
   const [transcribedText, setTranscribedText] = useState<string>("");
   const [flag, setFlag] = useState<FLAGS>(FLAGS.COPILOT);
   const [bg, setBg] = useState<string>("");
@@ -90,6 +93,14 @@ export function Copilot() {
     localStorage.setItem("bg", bg);
   }, [bg]);
 
+  const handleSave = () => {
+    addInSavedData({
+      createdAt: new Date().toISOString(),
+      data: completion,
+      tag: flag === FLAGS.COPILOT ? "Copilot" : "Summerizer",
+    });
+  };
+
   return (
     <div className="grid w-full gap-4 mt-12">
       <h2 className="text-3xl underline text-green-700">
@@ -166,8 +177,17 @@ export function Copilot() {
         </form>
       </div>
 
-      <div className="flex mx-2 md:mx-10 mt-4 whitespace-pre-wrap">
-        {completion}
+      <div className="mx-2 md:mx-10 mt-4 mb-8">
+        {completion && (
+          <button
+            type="button"
+            className="text-xs text-green-500 hover:text-green-800 underline"
+            onClick={handleSave}
+          >
+            save
+          </button>
+        )}
+        <div className="flex whitespace-pre-wrap">{completion}</div>
       </div>
     </div>
   );
