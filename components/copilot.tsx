@@ -79,6 +79,11 @@ export function Copilot({ addInSavedData }: CopilotProps) {
     setTranscribedText(e.target.value);
   };
 
+  const clearTranscriptionChange = () => {
+    setInput("");
+    setTranscribedText("");
+  };
+
   useEffect(() => {
     const savedBg = localStorage.getItem("bg");
     if (savedBg) {
@@ -130,11 +135,18 @@ export function Copilot({ addInSavedData }: CopilotProps) {
         </div>
 
         <div className="grid gap-1.5 my-2">
-          <Label htmlFor="transcribtion" className="text-green-800">
-            Transcription
+          <Label htmlFor="transcription" className="text-green-800">
+            Transcription{" "}
+            <button
+              type="button"
+              className="text-xs text-red-500 hover:text-red-800 underline"
+              onClick={clearTranscriptionChange}
+            >
+              clear
+            </button>
           </Label>
           <Textarea
-            id="transcribtion"
+            id="transcription"
             className="h-[100px] min-h-[100px] mt-2"
             placeholder="Your transcribed text will appear here."
             value={transcribedText}
