@@ -12,9 +12,7 @@ export default function Loading() {
           Please wait
         </h1>
         <p className="text-gray-600 dark:text-gray-400">
-          {
-            "Content is being loaded, this won't take long."
-          }
+          {"Content is being loaded, this won't take long."}
         </p>
       </div>
     </div>
