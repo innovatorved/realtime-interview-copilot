@@ -12,8 +12,6 @@ import { MicIcon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { MicOffIcon } from "lucide-react";
-import { Switch } from "./ui/switch";
-import { Label } from "./ui/label";
 
 interface RecorderTranscriberProps {
   addTextinTranscription: (text: string) => void;
