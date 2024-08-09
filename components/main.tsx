@@ -5,7 +5,7 @@ import History from "@/components/History";
 import { HistoryData } from "@/lib/types";
 import { useEffect, useRef, useState } from "react";
 
-export default function HomePage() {
+export default function MainPage() {
   const isRendered = useRef(false);
   const [savedData, setSavedData] = useState<HistoryData[]>([]);
 
