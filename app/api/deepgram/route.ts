@@ -2,9 +2,8 @@ import { DeepgramError, createClient } from "@deepgram/sdk";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
-  // gotta use the request object to invalidate the cache every request :vomit:
   const url = request.url;
-  const deepgram = createClient(process.env.DEEPGRAM_API_KEY ?? "");
+  const deepgram = createClient("09e1436b08a4574301a820436be75d452899b7ec");
 
   let { result: projectsResult, error: projectsError } =
     await deepgram.manage.getProjects();
