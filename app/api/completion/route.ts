@@ -4,10 +4,18 @@ import { buildPrompt, buildSummerizerPrompt } from "@/lib/utils";
 import { OpenAIStream, StreamingTextResponse } from "ai";
 
 export const runtime = "edge";
-const MODEL = process.env.MODEL || "gpt-3.5-turbo-instruct";
+const MODEL = "llava-v1.5-7b-4096-preview";
 
 export async function POST(req: Request) {
-  const { bg, flag, prompt: transcribe } = await req.json();
+  const {
+    bg,
+    flag,
+    prompt: transcribe,
+  } = (await req.json()) as {
+    bg: string;
+    flag: string;
+    prompt: string;
+  };
 
   let prompt = transcribe;
   if (flag === FLAGS.COPILOT) {

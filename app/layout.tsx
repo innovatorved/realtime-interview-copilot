@@ -11,6 +11,8 @@ export const metadata: Metadata = {
   description: "Get Interview Answers Realtime",
 };
 
+export const runtime = "edge";
+
 export default function RootLayout({
   children,
 }: Readonly<{
