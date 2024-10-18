@@ -78,7 +78,7 @@ export default function RecorderTranscriber({
     fetch("/api/deepgram", { cache: "no-store" })
       .then((res) => res.json())
       .then((object) => {
-         if (!("key" in object)) throw new Error("No api key returned");
+        if (!("key" in object)) throw new Error("No api key returned");
 
         setApiKey(object);
         setLoadingKey(false);
