@@ -8,8 +8,8 @@ export async function GET(request: Request) {
   const projectsResponse = await fetch("https://api.deepgram.com/v1/projects", {
     method: "GET",
     headers: {
-      "Authorization": `Token ${DEEPGRAM_APIKEY}`,
-      "accept": "application/json",
+      Authorization: `Token ${DEEPGRAM_APIKEY}`,
+      accept: "application/json",
     },
   });
 
@@ -27,20 +27,23 @@ export async function GET(request: Request) {
     });
   }
 
-  const newKeyResponse = await fetch(`https://api.deepgram.com/v1/projects/${project.project_id}/keys`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Token ${DEEPGRAM_APIKEY}`,
-      "accept": "application/json",
-      "content-type": "application/json",
+  const newKeyResponse = await fetch(
+    `https://api.deepgram.com/v1/projects/${project.project_id}/keys`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Token ${DEEPGRAM_APIKEY}`,
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        comment: "Temporary API key",
+        scopes: ["usage:write"],
+        tags: ["next.js"],
+        time_to_live_in_seconds: 10,
+      }),
     },
-    body: JSON.stringify({
-      comment: "Temporary API key",
-      scopes: ["usage:write"],
-      tags: ["next.js"],
-      time_to_live_in_seconds: 10,
-    }),
-  });
+  );
 
   const newKeyResult = await newKeyResponse.json();
 
