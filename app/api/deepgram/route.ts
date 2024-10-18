@@ -1,37 +1,51 @@
-import { DeepgramError, createClient } from "@deepgram/sdk";
 import { NextResponse } from "next/server";
+
+const DEEPGRAM_APIKEY = process.env.DEEPGRAM_API_KEY!;
 
 export async function GET(request: Request) {
   const url = request.url;
-  const deepgram = createClient("09e1436b08a4574301a820436be75d452899b7ec");
 
-  let { result: projectsResult, error: projectsError } =
-    await deepgram.manage.getProjects();
+  const projectsResponse = await fetch("https://api.deepgram.com/v1/projects", {
+    method: "GET",
+    headers: {
+      "Authorization": `Token ${DEEPGRAM_APIKEY}`,
+      "accept": "application/json",
+    },
+  });
 
-  if (projectsError) {
-    return NextResponse.json(projectsError);
+  const projectsResult = await projectsResponse.json();
+
+  if (!projectsResponse.ok) {
+    return NextResponse.json(projectsResult);
   }
 
-  const project = projectsResult?.projects[0];
+  const project = projectsResult.projects[0];
 
   if (!project) {
-    return NextResponse.json(
-      new DeepgramError(
-        "Cannot find a Deepgram project. Please create a project first.",
-      ),
-    );
+    return NextResponse.json({
+      error: "Cannot find a Deepgram project. Please create a project first.",
+    });
   }
 
-  let { result: newKeyResult, error: newKeyError } =
-    await deepgram.manage.createProjectKey(project.project_id, {
+  const newKeyResponse = await fetch(`https://api.deepgram.com/v1/projects/${project.project_id}/keys`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Token ${DEEPGRAM_APIKEY}`,
+      "accept": "application/json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
       comment: "Temporary API key",
       scopes: ["usage:write"],
       tags: ["next.js"],
       time_to_live_in_seconds: 10,
-    });
+    }),
+  });
 
-  if (newKeyError) {
-    return NextResponse.json(newKeyError);
+  const newKeyResult = await newKeyResponse.json();
+
+  if (!newKeyResponse.ok) {
+    return NextResponse.json(newKeyResult);
   }
 
   return NextResponse.json({ ...newKeyResult, url });
