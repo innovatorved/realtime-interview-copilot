@@ -71,7 +71,6 @@ export default function RecorderTranscriber({
   }, [add, microphone, userMedia]);
 
   useEffect(() => {
-    console.log({ apiKey });
     if (apiKey) return;
     // if (isRendered.current) return;
     isRendered.current = true;
@@ -79,8 +78,7 @@ export default function RecorderTranscriber({
     fetch("/api/deepgram", { cache: "no-store" })
       .then((res) => res.json())
       .then((object) => {
-        console.log(object);
-        if (!("key" in object)) throw new Error("No api key returned");
+         if (!("key" in object)) throw new Error("No api key returned");
 
         setApiKey(object);
         setLoadingKey(false);

@@ -1,8 +1,11 @@
 import OpenAI from "openai";
 
+const API_KEY= process.env.OPENAI_API_KEY!;
+const BASE_URL = process.env.OPENAI_BASE_URL!;
+
 const openai = new OpenAI({
-  apiKey: "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",
-  baseURL: "https://api.groq.com/openai/v1",
+  apiKey: API_KEY,
+  baseURL: BASE_URL,
 });
 
 export default openai;
