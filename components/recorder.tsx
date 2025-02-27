@@ -31,6 +31,9 @@ export default function RecorderTranscriber({
   const [micOpen, setMicOpen] = useState(false);
   const [microphone, setRecorderTranscriber] = useState<MediaRecorder | null>();
   const [userMedia, setUserMedia] = useState<MediaStream | null>();
+  const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
+  const [audioSource, setAudioSource] = useState<MediaStreamAudioSourceNode | null>(null);
+  const [captureType, setCaptureType] = useState<'mic' | 'screen' | 'both'>('both');
 
   const [caption, setCaption] = useState<string | null>();
 
@@ -39,36 +42,76 @@ export default function RecorderTranscriber({
     if (microphone && userMedia) {
       microphone.stop();
       setRecorderTranscriber(null);
-    } else {
-      if (!userMedia) {
-        const media = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: true,
-        });
-        media.getVideoTracks().forEach((track) => track.stop());
-        currentMedia = media;
-        setUserMedia((_) => media);
+      if (audioContext) {
+        audioContext.close();
+        setAudioContext(null);
       }
+    } else {
+      try {
+        // Create a new audio context
+        const context = new AudioContext();
+        setAudioContext(context);
+        
+        // Create a destination for our mixed audio
+        const destination = context.createMediaStreamDestination();
+        
+        // Capture device microphone if needed
+        if (captureType === 'mic' || captureType === 'both') {
+          const micStream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: false,
+          });
+          
+          const micSource = context.createMediaStreamSource(micStream);
+          micSource.connect(destination);
+          console.log("Microphone connected to audio context");
+        }
+        
+        // Capture screen audio if needed
+        if (captureType === 'screen' || captureType === 'both') {
+          const screenStream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: true,
+          });
+          
+          // We don't need video, so stop those tracks
+          screenStream.getVideoTracks().forEach((track) => track.stop());
+          
+          // Only connect if we have audio tracks
+          if (screenStream.getAudioTracks().length > 0) {
+            const screenSource = context.createMediaStreamSource(screenStream);
+            screenSource.connect(destination);
+            console.log("Screen audio connected to audio context");
+          }
+        }
+        
+        // Use the combined stream
+        currentMedia = destination.stream;
+        setUserMedia(currentMedia);
+        
+        // Create a media recorder with the combined stream
+        const mic = new MediaRecorder(currentMedia);
+        mic.start(500);
 
-      if (!currentMedia) return;
-      const mic = new MediaRecorder(currentMedia);
-      mic.start(500);
+        mic.onstart = () => {
+          setMicOpen(true);
+          console.log("Recording started with combined audio sources");
+        };
 
-      mic.onstart = () => {
-        setMicOpen((_) => true);
-      };
+        mic.onstop = () => {
+          setMicOpen(false);
+        };
 
-      mic.onstop = () => {
-        setMicOpen((_) => false);
-      };
+        mic.ondataavailable = (e) => {
+          add(e.data);
+        };
 
-      mic.ondataavailable = (e) => {
-        add(e.data);
-      };
-
-      setRecorderTranscriber((_) => mic);
+        setRecorderTranscriber(mic);
+      } catch (error) {
+        console.error("Error setting up audio capture:", error);
+      }
     }
-  }, [add, microphone, userMedia]);
+  }, [add, microphone, userMedia, captureType, audioContext]);
 
   useEffect(() => {
     console.log({ apiKey });
@@ -165,24 +208,38 @@ export default function RecorderTranscriber({
   return (
     <div className="w-full relative">
       <div className="grid mt-2 align-middle items-center gap-2">
-        <Button
-          className="h-9 bg-green-600 hover:bg-green-800 text-white"
-          size="sm"
-          variant="outline"
-          onClick={() => toggleRecorderTranscriber()}
-        >
-          {!micOpen ? (
-            <div className="flex items-center">
-              <MicIcon className="h-4 w-4 -translate-x-0.5 mr-2" />
-              Start listening
-            </div>
-          ) : (
-            <div className="flex items-center">
-              <MicOffIcon className="h-4 w-4 -translate-x-0.5 mr-2" />
-              Stop listening
-            </div>
-          )}
-        </Button>
+        <div className="flex flex-col space-y-2">
+          <div className="flex items-center space-x-2 mb-2">
+            <label className="text-sm font-medium">Capture from:</label>
+            <select 
+              className="p-1 border rounded text-sm"
+              value={captureType}
+              onChange={(e) => setCaptureType(e.target.value as 'mic' | 'screen' | 'both')}
+            >
+              <option value="both">Microphone & Screen</option>
+              <option value="mic">Microphone Only</option>
+              <option value="screen">Screen Only</option>
+            </select>
+          </div>
+          <Button
+            className="h-9 bg-green-600 hover:bg-green-800 text-white"
+            size="sm"
+            variant="outline"
+            onClick={() => toggleRecorderTranscriber()}
+          >
+            {!micOpen ? (
+              <div className="flex items-center">
+                <MicIcon className="h-4 w-4 -translate-x-0.5 mr-2" />
+                Start listening
+              </div>
+            ) : (
+              <div className="flex items-center">
+                <MicOffIcon className="h-4 w-4 -translate-x-0.5 mr-2" />
+                Stop listening
+              </div>
+            )}
+          </Button>
+        </div>
       </div>
       <div
         className="z-20 text-white flex shrink-0 grow-0 justify-around items-center 

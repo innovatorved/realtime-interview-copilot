@@ -16,16 +16,11 @@ export async function POST(req: Request) {
     prompt = buildSummerizerPrompt(transcribe);
   }
 
-  const response = await openai.chat.completions.create({
+  const response = await openai.completions.create({
     model: MODEL,
     max_tokens: 2000,
     stream: true,
-    messages: [
-      {
-        role: "user",
-        content: prompt,
-      },
-    ],
+    prompt: prompt,
   });
 
   const stream = OpenAIStream(response);
