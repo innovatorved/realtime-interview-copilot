@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import RecorderTranscriber from "@/components/recorder";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { useCompletion } from "ai/react";
+import { useCompletion } from "@ai-sdk/react";
 import { FLAGS, HistoryData } from "@/lib/types";
 import { Switch } from "@/components/ui/switch";
 
