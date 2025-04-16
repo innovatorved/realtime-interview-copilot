@@ -1,10 +1,10 @@
-import openai from "@/lib/openai";
 import { FLAGS } from "@/lib/types";
 import { buildPrompt, buildSummerizerPrompt } from "@/lib/utils";
-import { OpenAIStream, StreamingTextResponse } from "ai";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { streamText } from "ai";
 
+const google = createGoogleGenerativeAI({});
 export const runtime = "edge";
-const MODEL = process.env.MODEL ?? "mixtral-8x7b-32768";
 
 export async function POST(req: Request) {
   const {
@@ -24,10 +24,8 @@ export async function POST(req: Request) {
     prompt = buildSummerizerPrompt(transcribe);
   }
 
-  const response = await openai.chat.completions.create({
-    model: MODEL,
-    max_tokens: 2000,
-    stream: true,
+  const result = streamText({
+    model: google("gemini-2.0-flash-lite"),
     messages: [
       {
         role: "user",
@@ -36,6 +34,5 @@ export async function POST(req: Request) {
     ],
   });
 
-  const stream = OpenAIStream(response);
-  return new StreamingTextResponse(stream);
+  return result.toDataStreamResponse();
 }

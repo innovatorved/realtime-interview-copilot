@@ -13,42 +13,50 @@
     "deploy": "npm run pages:build && wrangler pages deploy"
   },
   "dependencies": {
-    "@deepgram/sdk": "^3.8.1",
-    "@radix-ui/react-icons": "^1.3.0",
-    "@radix-ui/react-label": "^2.1.0",
-    "@radix-ui/react-slot": "^1.1.0",
-    "@radix-ui/react-switch": "^1.1.1",
+    "@ai-sdk/google": "^1.2.11",
+    "@ai-sdk/react": "^1.2.9",
+    "@radix-ui/react-icons": "^1.3.2",
+    "@radix-ui/react-label": "^2.1.3",
+    "@radix-ui/react-slot": "^1.2.0",
+    "@radix-ui/react-switch": "^1.1.4",
+    "@tailwindcss/postcss": "^4.1.4",
     "@uidotdev/usehooks": "^2.4.1",
-    "ai": "^2.2.37",
-    "class-variance-authority": "^0.7.0",
+    "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "lucide-react": "^0.341.0",
-    "next": "^14.2.15",
+    "lucide-react": "^0.488.0",
+    "next": "15.3.0",
     "next-auth": "5.0.0-beta.20",
-    "openai": "^4.67.3",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "tailwind-merge": "^2.5.4",
-    "tailwindcss-animate": "^1.0.7"
+    "openai": "^4.94.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "tailwind-merge": "^3.2.0",
+    "tailwindcss-animate": "^1.0.7",
+    "zod": "^3.24.2"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.3",
-    "@cloudflare/next-on-pages": "^1.13.5",
-    "@cloudflare/workers-types": "^4.20241011.0",
-    "@types/node": "^20.16.11",
-    "@types/react": "^18.3.11",
-    "@types/react-dom": "^18.3.1",
-    "autoprefixer": "^10.4.20",
-    "eslint": "^8.57.1",
-    "eslint-config-next": "14.1.0",
-    "eslint-plugin-next-on-pages": "^1.13.5",
-    "postcss": "^8.4.47",
-    "tailwindcss": "^3.4.14",
-    "typescript": "^5.6.3",
-    "vercel": "39.1.1",
-    "wrangler": "^3.107.2"
+    "@biomejs/biome": "^1.9.4",
+    "@cloudflare/next-on-pages": "^1.13.12",
+    "@cloudflare/workers-types": "^4.20250416.0",
+    "@types/node": "^22.14.1",
+    "@types/react": "19.1.2",
+    "@types/react-dom": "19.1.2",
+    "autoprefixer": "^10.4.21",
+    "eslint": "^9.24.0",
+    "eslint-config-next": "15.3.0",
+    "eslint-plugin-next-on-pages": "^1.13.12",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^4.1.4",
+    "typescript": "^5.8.3",
+    "vercel": "41.6.1",
+    "wrangler": "^4.11.1"
   },
   "overrides": {
     "vercel": "$vercel"
+  },
+  "pnpm": {
+    "overrides": {
+      "@types/react": "19.1.2",
+      "@types/react-dom": "19.1.2"
+    }
   }
 }
