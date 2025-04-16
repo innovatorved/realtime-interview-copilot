@@ -4,6 +4,7 @@ import {
   CreateProjectKeyResponse,
   LiveClient,
   LiveTranscriptionEvents,
+  LiveSchema,
   createClient,
 } from "@deepgram/sdk";
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -15,188 +16,179 @@ import { MicOffIcon } from "lucide-react";
 
 interface RecorderTranscriberProps {
   addTextinTranscription: (text: string) => void;
+  language: "ru" | "en";
 }
 
 export default function RecorderTranscriber({
   addTextinTranscription,
+  language,
 }: RecorderTranscriberProps) {
-  const isRendered = useRef(false);
   const { add, remove, first, size, queue } = useQueue<any>([]);
-  const [apiKey, setApiKey] = useState<CreateProjectKeyResponse | null>();
   const [connection, setConnection] = useState<LiveClient | null>();
   const [isListening, setListening] = useState(false);
-  const [isLoadingKey, setLoadingKey] = useState(true);
-  const [isLoading, setLoading] = useState(true);
+  const [isLoading, setLoading] = useState(false);
   const [isProcessing, setProcessing] = useState(false);
   const [micOpen, setMicOpen] = useState(false);
   const [microphone, setRecorderTranscriber] = useState<MediaRecorder | null>();
   const [userMedia, setUserMedia] = useState<MediaStream | null>();
+  const [nextApiKey, setNextApiKey] = useState<CreateProjectKeyResponse | null>(null);
+  const keepAliveRef = useRef<number | null>(null);
 
-  const [caption, setCaption] = useState<string | null>();
-
-  const toggleRecorderTranscriber = useCallback(async () => {
-    let currentMedia = userMedia;
-    if (microphone && userMedia) {
-      microphone.stop();
-      setRecorderTranscriber(null);
-    } else {
-      if (!userMedia) {
-        const media = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: true,
-        });
-        media.getVideoTracks().forEach((track) => track.stop());
-        currentMedia = media;
-        setUserMedia((_) => media);
+  const fetchKey = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const res = await fetch("/api/deepgram", { cache: "no-store", signal });
+      const keyObject = await res.json();
+      if (!keyObject || !("key" in keyObject)) {
+        throw new Error("No valid API key returned from fetch");
       }
-
-      if (!currentMedia) return;
-      const mic = new MediaRecorder(currentMedia);
-      mic.start(500);
-
-      mic.onstart = () => {
-        setMicOpen((_) => true);
-      };
-
-      mic.onstop = () => {
-        setMicOpen((_) => false);
-      };
-
-      mic.ondataavailable = (e) => {
-        add(e.data);
-      };
-
-      setRecorderTranscriber((_) => mic);
+      return keyObject as CreateProjectKeyResponse;
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+      } else {
+        return null;
+      }
     }
-  }, [add, microphone, userMedia]);
+  }, []);
 
-  useEffect(() => {
-    console.log({ apiKey });
-    if (apiKey) return;
-    // if (isRendered.current) return;
-    isRendered.current = true;
-    console.log("getting a new api key");
-    fetch("/api/deepgram", { cache: "no-store" })
-      .then((res) => res.json())
-      .then((object) => {
-        console.log(object);
-        if (!("key" in object)) throw new Error("No api key returned");
-
-        setApiKey(object);
-        setLoadingKey(false);
-      })
-      .catch((e) => {
-        console.error(e);
-      });
-  }, [apiKey]);
-
-  useEffect(() => {
-    if (apiKey && "key" in apiKey) {
-      console.log("connecting to deepgram");
-      const deepgram = createClient(apiKey?.key ?? "");
-      const connection = deepgram.listen.live({
+  const connectToDeepgram = useCallback(async () => {
+    setLoading(true);
+    try {
+      const keyObj = await fetchKey();
+      if (!keyObj) {
+        setLoading(false);
+        return;
+      }
+      const dg = createClient(keyObj.key);
+      const opts: LiveSchema = {
         model: "nova-2",
+        language,
         interim_results: true,
         smart_format: true,
-      });
+      };
+      const conn = dg.listen.live(opts);
+      setConnection(conn);
 
-      connection.on(LiveTranscriptionEvents.Open, () => {
-        console.log("connection established");
+      conn.on(LiveTranscriptionEvents.Open, () => {
         setListening(true);
+        setLoading(false);
+        // set up keepalive every 8 seconds
+        keepAliveRef.current = window.setInterval(() => {
+          if (conn.getReadyState?.() === 1) {
+            conn.send(JSON.stringify({ type: "KeepAlive" }));
+          }
+        }, 8000);
       });
-
-      connection.on(LiveTranscriptionEvents.Close, () => {
-        console.log("connection closed");
-        setListening(false);
-        setApiKey(null);
-        setConnection(null);
-      });
-
-      connection.on(LiveTranscriptionEvents.Transcript, (data) => {
-        const words = data.channel.alternatives[0].words;
-        const caption = words
-          .map((word: any) => word.punctuated_word ?? word.word)
-          .join(" ");
-        if (caption !== "") {
-          setCaption(caption);
-          addTextinTranscription(caption);
+      conn.on(LiveTranscriptionEvents.Transcript, (data) => {
+        if (data.is_final) {
+          const caption = data.channel.alternatives[0].words
+            .map((w: any) => w.punctuated_word ?? w.word)
+            .join(" ");
+          if (caption) addTextinTranscription(caption);
         }
       });
-
-      setConnection(connection);
+      const teardown = () => {
+        setConnection(null);
+        setListening(false);
+        setLoading(false);
+        if (keepAliveRef.current) {
+          clearInterval(keepAliveRef.current);
+          keepAliveRef.current = null;
+        }
+      };
+      conn.on(LiveTranscriptionEvents.Close, teardown);
+      conn.on(LiveTranscriptionEvents.Error, teardown);
+    } catch (err) {
+      console.error("Error in connectToDeepgram:", err);
       setLoading(false);
     }
-  }, [apiKey]);
+  }, [language, fetchKey, addTextinTranscription]);
+
+  const toggleRecorderTranscriber = useCallback(async () => {
+    // stop if already recording
+    if (micOpen) {
+      microphone?.stop();
+      setRecorderTranscriber(null);
+      setMicOpen(false);
+      if (keepAliveRef.current) {
+        clearInterval(keepAliveRef.current);
+        keepAliveRef.current = null;
+      }
+      connection?.finish();
+      setConnection(null);
+      setListening(false);
+      return;
+    }
+    // start recording
+    let media = userMedia;
+    if (!media) {
+      try {
+        media = await navigator.mediaDevices.getUserMedia({ audio: true });
+        setUserMedia(media);
+      } catch (e) {
+        console.error("User media error:", e);
+        return;
+      }
+    }
+    const mic = new MediaRecorder(media, { mimeType: 'audio/webm' });
+    mic.onstart = () => { setMicOpen(true); };
+    mic.onstop = () => { setMicOpen(false); };
+    mic.onerror = (e) => console.error("MediaRecorder error:", e);
+    mic.ondataavailable = (e) => { if (e.data.size > 0) add(e.data); };
+    mic.start(500);
+    setRecorderTranscriber(mic);
+    // connect to Deepgram
+    await connectToDeepgram();
+  }, [
+    add, microphone, userMedia, micOpen, connection, connectToDeepgram
+  ]);
 
   useEffect(() => {
     const processQueue = async () => {
-      if (size > 0 && !isProcessing) {
+      const readyState = connection?.getReadyState();
+      if (connection && size > 0 && !isProcessing && readyState === 1) {
         setProcessing(true);
-
-        if (isListening) {
-          const blob = first;
-          connection?.send(blob);
-          remove();
-        }
-
-        const waiting = setTimeout(() => {
-          clearTimeout(waiting);
-          setProcessing(false);
-        }, 250);
+        const blob = first;
+        connection.send(blob);
+        remove();
+        const waiting = setTimeout(() => { clearTimeout(waiting); setProcessing(false); }, 100);
       }
     };
-
     processQueue();
-  }, [connection, queue, remove, first, size, isProcessing, isListening]);
-
-  if (isLoadingKey)
-    return (
-      <span className="w-full p-2 text-center text-xs bg-red-500 text-white">
-        Loading temporary API key...
-      </span>
-    );
-  if (isLoading)
-    return (
-      <span className="w-full p-2 text-center text-xs bg-red-500 text-white">
-        Loading the app...
-      </span>
-    );
+  }, [connection, queue, remove, first, size, isProcessing]);
 
   return (
     <div className="w-full relative">
       <div className="grid mt-2 align-middle items-center gap-2">
         <Button
-          className="h-9 bg-green-600 hover:bg-green-800 text-white"
+          className={cn(
+            "h-9 text-white",
+            micOpen ? "bg-red-600 hover:bg-red-800" : "bg-green-600 hover:bg-green-800"
+          )}
           size="sm"
           variant="outline"
-          onClick={() => toggleRecorderTranscriber()}
+          onClick={toggleRecorderTranscriber}
+          disabled={isLoading}
         >
-          {!micOpen ? (
-            <div className="flex items-center">
-              <MicIcon className="h-4 w-4 -translate-x-0.5 mr-2" />
-              Start listening
-            </div>
-          ) : (
-            <div className="flex items-center">
-              <MicOffIcon className="h-4 w-4 -translate-x-0.5 mr-2" />
-              Stop listening
-            </div>
-          )}
+          <div className="flex items-center">
+            {micOpen ? <MicOffIcon className="h-4 w-4 -translate-x-0.5 mr-2" /> : <MicIcon className="h-4 w-4 -translate-x-0.5 mr-2" />}
+            {isLoading ? "Connecting..." : micOpen ? "Stop listening" : "Start listening"}
+          </div>
         </Button>
+        {!isListening && !isLoading && !micOpen && (
+          <span className="text-xs text-red-500">Deepgram disconnected.</span>
+        )}
       </div>
       <div
         className="z-20 text-white flex shrink-0 grow-0 justify-around items-center 
                   fixed bottom-0 right-5 rounded-lg mr-1 mb-5 lg:mr-5 lg:mb-5 xl:mr-10 xl:mb-10 gap-5"
       >
         <span className="text-sm text-gray-400">
-          {isListening
-            ? "Deepgram connection open!"
-            : "Deepgram is connecting..."}
+          {isListening ? "Connected" : "Disconnected"}
         </span>
         <MicIcon
           className={cn("h-4 w-4 -translate-x-0.5 mr-2", {
             "fill-green-400 drop-shadow-glowBlue": isListening,
-            "fill-green-600": !isListening,
+            "fill-gray-600": !isListening,
           })}
         />
       </div>

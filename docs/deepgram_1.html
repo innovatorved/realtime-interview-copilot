@@ -1,0 +1,1219 @@
+<article class="fern-layout-content max-w-content-width">
+  <header class="mb-8">
+    <div class="space-y-1">
+      <div>
+        <span class="fern-breadcrumb"
+          ><a class="fern-breadcrumb-item" href="/docs/live-streaming-audio"
+            >Streaming Audio</a
+          ></span
+        >
+      </div>
+      <h1 class="fern-page-heading"><p>Getting Started</p></h1>
+    </div>
+    <div class="prose-p:t-muted mt-2 leading-7">
+      <p>
+        An introduction to getting transcription data from live streaming audio
+        in real time.
+      </p>
+    </div>
+  </header>
+  <div
+    class="prose dark:prose-invert prose-h1:mt-[1.5em] first:prose-h1:mt-0 max-w-full break-words"
+  >
+    <a
+      class="fern-mdx-link dg-badge"
+      href="/docs/getting-started-with-live-streaming-audio"
+      ><span
+        ><span
+          class="fa-icon"
+          style="
+            mask-image: url('https://icons.ferndocs.com/solid/waveform-lines.svg');
+            mask-repeat: no-repeat;
+            mask-position: center center;
+          "
+        ></span>
+        Streaming</span
+      ></a
+    >
+    <p>
+      In this guide, you’ll learn how to automatically transcribe live streaming
+      audio in real time using Deepgram’s SDKs, which are supported for use with
+      the <a class="fern-mdx-link" href="/reference/">Deepgram API</a>. (If you
+      prefer not to use a Deepgram SDK, jump to the section
+      <a
+        class="fern-mdx-link"
+        href="/docs/getting-started-with-live-streaming-audio#non-sdk-code-examples"
+        >Non-SDK Code Examples</a
+      >.)
+    </p>
+    <div class="mb-6 mt-4 rounded-lg p-4 first:mt-0 callout-outlined">
+      <div class="flex items-start space-x-3">
+        <div class="mt-0.5 w-4">
+          <svg
+            width="1.5em"
+            height="1.5em"
+            stroke-width="1.5"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            color="currentColor"
+            class="text-intent-default size-icon-md"
+          >
+            <path
+              d="M12 11.5V16.5"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            ></path>
+            <path
+              d="M12 7.51L12.01 7.49889"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            ></path>
+            <path
+              d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            ></path>
+          </svg>
+        </div>
+        <div
+          class="prose prose-sm dark:prose-invert -my-4 flex-1 overflow-x-auto before:mb-4 before:block after:mt-4 after:block"
+        >
+          <div class="text-intent-default">
+            <h5 class="leading-snug"></h5>
+            <p>
+              Before you start, you’ll need to follow the steps in the
+              <a class="fern-mdx-link" href="/docs/make-your-first-api-request"
+                >Make Your First API Request</a
+              >
+              guide to obtain a Deepgram API key, and configure your environment
+              if you are choosing to use a Deepgram SDK.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <h2 id="sdks" data-state="closed">SDKs</h2>
+    <p>
+      To transcribe audio from an audio stream using one of Deepgram’s SDKs,
+      follow these steps.
+    </p>
+    <h3 id="install-the-sdk" data-state="closed">Install the SDK</h3>
+    <p>
+      Open your terminal, navigate to the location on your drive where you want
+      to create your project, and install the Deepgram SDK.
+    </p>
+    <div
+      dir="ltr"
+      data-orientation="horizontal"
+      class="bg-card after:ring-card-border relative mb-6 mt-4 flex w-full min-w-0 max-w-full flex-col rounded-lg shadow-sm after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:ring-1 after:ring-inset after:content-[''] first:mt-0"
+    >
+      <div class="bg-tag-default-soft rounded-t-[inherit]">
+        <div
+          class="shadow-border-default mx-px flex min-h-10 items-center justify-between shadow-[inset_0_-1px_0_0]"
+        >
+          <div class="fern-x-overflow flex min-h-10">
+            <button
+              type="button"
+              role="tab"
+              aria-selected="true"
+              aria-controls="radix-:r1n:-content-0"
+              data-state="active"
+              id="radix-:r1n:-trigger-0"
+              class="data-[state=active]:shadow-accent group flex min-h-10 items-center px-2 py-1.5 data-[state=active]:shadow-[inset_0_-2px_0_0_rgba(0,0,0,0.1)]"
+              tabindex="-1"
+              data-orientation="horizontal"
+              data-radix-collection-item=""
+            >
+              <span
+                class="t-muted group-data-[state=active]:t-default group-hover:bg-tag-default whitespace-nowrap rounded px-2 py-1 text-sm group-data-[state=active]:font-semibold"
+                >JavaScript</span
+              ></button
+            ><button
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="radix-:r1n:-content-1"
+              data-state="inactive"
+              id="radix-:r1n:-trigger-1"
+              class="data-[state=active]:shadow-accent group flex min-h-10 items-center px-2 py-1.5 data-[state=active]:shadow-[inset_0_-2px_0_0_rgba(0,0,0,0.1)]"
+              tabindex="-1"
+              data-orientation="horizontal"
+              data-radix-collection-item=""
+            >
+              <span
+                class="t-muted group-data-[state=active]:t-default group-hover:bg-tag-default whitespace-nowrap rounded px-2 py-1 text-sm group-data-[state=active]:font-semibold"
+                >Python</span
+              ></button
+            ><button
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="radix-:r1n:-content-2"
+              data-state="inactive"
+              id="radix-:r1n:-trigger-2"
+              class="data-[state=active]:shadow-accent group flex min-h-10 items-center px-2 py-1.5 data-[state=active]:shadow-[inset_0_-2px_0_0_rgba(0,0,0,0.1)]"
+              tabindex="-1"
+              data-orientation="horizontal"
+              data-radix-collection-item=""
+            >
+              <span
+                class="t-muted group-data-[state=active]:t-default group-hover:bg-tag-default whitespace-nowrap rounded px-2 py-1 text-sm group-data-[state=active]:font-semibold"
+                >C#</span
+              ></button
+            ><button
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="radix-:r1n:-content-3"
+              data-state="inactive"
+              id="radix-:r1n:-trigger-3"
+              class="data-[state=active]:shadow-accent group flex min-h-10 items-center px-2 py-1.5 data-[state=active]:shadow-[inset_0_-2px_0_0_rgba(0,0,0,0.1)]"
+              tabindex="-1"
+              data-orientation="horizontal"
+              data-radix-collection-item=""
+            >
+              <span
+                class="t-muted group-data-[state=active]:t-default group-hover:bg-tag-default whitespace-nowrap rounded px-2 py-1 text-sm group-data-[state=active]:font-semibold"
+                >Go</span
+              >
+            </button>
+          </div>
+          <button
+            tabindex="0"
+            data-state="closed"
+            aria-disabled="false"
+            class="fern-copy-button group ml-2 mr-1 fern-button minimal normal rounded square"
+          >
+            <span class="fern-button-content"
+              ><svg
+                width="1.5em"
+                height="1.5em"
+                stroke-width="1.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                color="currentColor"
+              >
+                <path
+                  d="M19.4 20H9.6C9.26863 20 9 19.7314 9 19.4V9.6C9 9.26863 9.26863 9 9.6 9H19.4C19.7314 9 20 9.26863 20 9.6V19.4C20 19.7314 19.7314 20 19.4 20Z"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                ></path>
+                <path
+                  d="M15 9V4.6C15 4.26863 14.7314 4 14.4 4H4.6C4.26863 4 4 4.26863 4 4.6V14.4C4 14.7314 4.26863 15 4.6 15H9"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                ></path></svg
+            ></span>
+          </button>
+        </div>
+      </div>
+      <pre
+        class="code-block-root not-prose rounded-t-0 rounded-b-[inherit]"
+        tabindex="0"
+        style="
+          animation-duration: 0s;
+          background-color: rgb(255, 255, 255);
+          --shiki-dark-bg: #212121;
+          color: rgb(36, 41, 46);
+          --shiki-dark: #eeffff;
+        "
+      ><div dir="ltr" class="fern-scroll-area" style="position: relative; --radix-scroll-area-corner-width: 0px; --radix-scroll-area-corner-height: 0px;"><style>[data-radix-scroll-area-viewport]{scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch;}[data-radix-scroll-area-viewport]::-webkit-scrollbar{display:none}</style><div data-radix-scroll-area-viewport="" class="fern-scroll-area-viewport" data-scrollbars="both" style="overflow: scroll; max-height: 479px;"><div style="min-width: 100%; display: table;"><code class="code-block text-sm"><div class="code-block-inner"><table class="code-block-line-group"><colgroup><col class="w-fit"><col></colgroup><tbody><tr class="code-block-line"><td class="code-block-line-gutter"><span>$</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(194, 195, 197); font-style: inherit; --shiki-dark: #545454; --shiki-dark-font-style: italic;"># Install the Deepgram JS SDK</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>&gt;</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(194, 195, 197); font-style: inherit; --shiki-dark: #545454; --shiki-dark-font-style: italic;"># https://github.com/deepgram/deepgram-js-sdk</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>&gt;</span></td><td class="code-block-line-content"><span class="line"></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>&gt;</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(111, 66, 193); --shiki-dark: #FFCB6B;">npm</span><span style="color: rgb(43, 85, 129); --shiki-dark: #C3E88D;"> install</span><span style="color: rgb(43, 85, 129); --shiki-dark: #C3E88D;"> @deepgram/sdk</span></span></td></tr></tbody></table></div></code></div></div></div></pre>
+    </div>
+    <h3 id="add-dependencies" data-state="closed">Add Dependencies</h3>
+    <div
+      dir="ltr"
+      data-orientation="horizontal"
+      class="bg-card after:ring-card-border relative mb-6 mt-4 flex w-full min-w-0 max-w-full flex-col rounded-lg shadow-sm after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:ring-1 after:ring-inset after:content-[''] first:mt-0"
+    >
+      <div class="bg-tag-default-soft rounded-t-[inherit]">
+        <div
+          class="shadow-border-default mx-px flex min-h-10 items-center justify-between shadow-[inset_0_-1px_0_0]"
+        >
+          <div class="fern-x-overflow flex min-h-10">
+            <button
+              type="button"
+              role="tab"
+              aria-selected="true"
+              aria-controls="radix-:r1u:-content-0"
+              data-state="active"
+              id="radix-:r1u:-trigger-0"
+              class="data-[state=active]:shadow-accent group flex min-h-10 items-center px-2 py-1.5 data-[state=active]:shadow-[inset_0_-2px_0_0_rgba(0,0,0,0.1)]"
+              tabindex="-1"
+              data-orientation="horizontal"
+              data-radix-collection-item=""
+            >
+              <span
+                class="t-muted group-data-[state=active]:t-default group-hover:bg-tag-default whitespace-nowrap rounded px-2 py-1 text-sm group-data-[state=active]:font-semibold"
+                >JavaScript</span
+              ></button
+            ><button
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="radix-:r1u:-content-1"
+              data-state="inactive"
+              id="radix-:r1u:-trigger-1"
+              class="data-[state=active]:shadow-accent group flex min-h-10 items-center px-2 py-1.5 data-[state=active]:shadow-[inset_0_-2px_0_0_rgba(0,0,0,0.1)]"
+              tabindex="-1"
+              data-orientation="horizontal"
+              data-radix-collection-item=""
+            >
+              <span
+                class="t-muted group-data-[state=active]:t-default group-hover:bg-tag-default whitespace-nowrap rounded px-2 py-1 text-sm group-data-[state=active]:font-semibold"
+                >Python</span
+              ></button
+            ><button
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="radix-:r1u:-content-2"
+              data-state="inactive"
+              id="radix-:r1u:-trigger-2"
+              class="data-[state=active]:shadow-accent group flex min-h-10 items-center px-2 py-1.5 data-[state=active]:shadow-[inset_0_-2px_0_0_rgba(0,0,0,0.1)]"
+              tabindex="-1"
+              data-orientation="horizontal"
+              data-radix-collection-item=""
+            >
+              <span
+                class="t-muted group-data-[state=active]:t-default group-hover:bg-tag-default whitespace-nowrap rounded px-2 py-1 text-sm group-data-[state=active]:font-semibold"
+                >C#</span
+              ></button
+            ><button
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="radix-:r1u:-content-3"
+              data-state="inactive"
+              id="radix-:r1u:-trigger-3"
+              class="data-[state=active]:shadow-accent group flex min-h-10 items-center px-2 py-1.5 data-[state=active]:shadow-[inset_0_-2px_0_0_rgba(0,0,0,0.1)]"
+              tabindex="-1"
+              data-orientation="horizontal"
+              data-radix-collection-item=""
+            >
+              <span
+                class="t-muted group-data-[state=active]:t-default group-hover:bg-tag-default whitespace-nowrap rounded px-2 py-1 text-sm group-data-[state=active]:font-semibold"
+                >Go</span
+              >
+            </button>
+          </div>
+          <button
+            tabindex="0"
+            data-state="closed"
+            aria-disabled="false"
+            class="fern-copy-button group ml-2 mr-1 fern-button minimal normal rounded square"
+          >
+            <span class="fern-button-content"
+              ><svg
+                width="1.5em"
+                height="1.5em"
+                stroke-width="1.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                color="currentColor"
+              >
+                <path
+                  d="M19.4 20H9.6C9.26863 20 9 19.7314 9 19.4V9.6C9 9.26863 9.26863 9 9.6 9H19.4C19.7314 9 20 9.26863 20 9.6V19.4C20 19.7314 19.7314 20 19.4 20Z"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                ></path>
+                <path
+                  d="M15 9V4.6C15 4.26863 14.7314 4 14.4 4H4.6C4.26863 4 4 4.26863 4 4.6V14.4C4 14.7314 4.26863 15 4.6 15H9"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                ></path></svg
+            ></span>
+          </button>
+        </div>
+      </div>
+      <pre
+        class="code-block-root not-prose rounded-t-0 rounded-b-[inherit]"
+        tabindex="0"
+        style="
+          animation-duration: 0s;
+          background-color: rgb(255, 255, 255);
+          --shiki-dark-bg: #212121;
+          color: rgb(36, 41, 46);
+          --shiki-dark: #eeffff;
+        "
+      ><div dir="ltr" class="fern-scroll-area" style="position: relative; --radix-scroll-area-corner-width: 0px; --radix-scroll-area-corner-height: 0px;"><style>[data-radix-scroll-area-viewport]{scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch;}[data-radix-scroll-area-viewport]::-webkit-scrollbar{display:none}</style><div data-radix-scroll-area-viewport="" class="fern-scroll-area-viewport" data-scrollbars="both" style="overflow: scroll; max-height: 479px;"><div style="min-width: 100%; display: table;"><code class="code-block text-sm"><div class="code-block-inner"><table class="code-block-line-group"><colgroup><col class="w-fit"><col></colgroup><tbody><tr class="code-block-line"><td class="code-block-line-gutter"><span>$</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(194, 195, 197); font-style: inherit; --shiki-dark: #545454; --shiki-dark-font-style: italic;"># Install cross-fetch: Platform-agnostic Fetch API with typescript support, a simple interface, and optional polyfill.</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>&gt;</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(194, 195, 197); font-style: inherit; --shiki-dark: #545454; --shiki-dark-font-style: italic;"># Install dotenv to protect your api key</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>&gt;</span></td><td class="code-block-line-content"><span class="line"></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>&gt;</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(111, 66, 193); --shiki-dark: #FFCB6B;">npm</span><span style="color: rgb(43, 85, 129); --shiki-dark: #C3E88D;"> install</span><span style="color: rgb(43, 85, 129); --shiki-dark: #C3E88D;"> cross-fetch</span><span style="color: rgb(43, 85, 129); --shiki-dark: #C3E88D;"> dotenv</span></span></td></tr></tbody></table></div></code></div></div><div data-orientation="horizontal" data-state="hidden" class="fern-scroll-area-scrollbar" style="position: absolute; bottom: 0px; left: 0px; right: var(--radix-scroll-area-corner-width); --radix-scroll-area-thumb-width: 471.5984555984556px;"><div data-state="visible" class="fern-scroll-area-thumb" style="width: var(--radix-scroll-area-thumb-width); height: var(--radix-scroll-area-thumb-height); transform: translate3d(0px, 0px, 0px);"></div></div></div></pre>
+    </div>
+    <h3 id="transcribe-audio-from-a-remote-stream" data-state="closed">
+      Transcribe Audio from a Remote Stream
+    </h3>
+    <p>
+      The following code shows how to transcribe audio from a remote audio
+      stream. If you would like to learn how to stream audio from a microphone,
+      check out our
+      <a class="fern-mdx-link" href="/docs/stt-streaming-feature-overview"
+        >Live Audio Starter Apps</a
+      >
+      or specific examples in the readme of each of the
+      <a class="fern-mdx-link" href="/docs/deepgram-sdks">Deepgram SDKs</a>.
+    </p>
+    <div
+      dir="ltr"
+      data-orientation="horizontal"
+      class="bg-card after:ring-card-border relative mb-6 mt-4 flex w-full min-w-0 max-w-full flex-col rounded-lg shadow-sm after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:ring-1 after:ring-inset after:content-[''] first:mt-0"
+    >
+      <div class="bg-tag-default-soft rounded-t-[inherit]">
+        <div
+          class="shadow-border-default mx-px flex min-h-10 items-center justify-between shadow-[inset_0_-1px_0_0]"
+        >
+          <div class="fern-x-overflow flex min-h-10">
+            <button
+              type="button"
+              role="tab"
+              aria-selected="true"
+              aria-controls="radix-:r25:-content-0"
+              data-state="active"
+              id="radix-:r25:-trigger-0"
+              class="data-[state=active]:shadow-accent group flex min-h-10 items-center px-2 py-1.5 data-[state=active]:shadow-[inset_0_-2px_0_0_rgba(0,0,0,0.1)]"
+              tabindex="-1"
+              data-orientation="horizontal"
+              data-radix-collection-item=""
+            >
+              <span
+                class="t-muted group-data-[state=active]:t-default group-hover:bg-tag-default whitespace-nowrap rounded px-2 py-1 text-sm group-data-[state=active]:font-semibold"
+                >JavaScript</span
+              ></button
+            ><button
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="radix-:r25:-content-1"
+              data-state="inactive"
+              id="radix-:r25:-trigger-1"
+              class="data-[state=active]:shadow-accent group flex min-h-10 items-center px-2 py-1.5 data-[state=active]:shadow-[inset_0_-2px_0_0_rgba(0,0,0,0.1)]"
+              tabindex="-1"
+              data-orientation="horizontal"
+              data-radix-collection-item=""
+            >
+              <span
+                class="t-muted group-data-[state=active]:t-default group-hover:bg-tag-default whitespace-nowrap rounded px-2 py-1 text-sm group-data-[state=active]:font-semibold"
+                >Python</span
+              ></button
+            ><button
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="radix-:r25:-content-2"
+              data-state="inactive"
+              id="radix-:r25:-trigger-2"
+              class="data-[state=active]:shadow-accent group flex min-h-10 items-center px-2 py-1.5 data-[state=active]:shadow-[inset_0_-2px_0_0_rgba(0,0,0,0.1)]"
+              tabindex="-1"
+              data-orientation="horizontal"
+              data-radix-collection-item=""
+            >
+              <span
+                class="t-muted group-data-[state=active]:t-default group-hover:bg-tag-default whitespace-nowrap rounded px-2 py-1 text-sm group-data-[state=active]:font-semibold"
+                >C#</span
+              ></button
+            ><button
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="radix-:r25:-content-3"
+              data-state="inactive"
+              id="radix-:r25:-trigger-3"
+              class="data-[state=active]:shadow-accent group flex min-h-10 items-center px-2 py-1.5 data-[state=active]:shadow-[inset_0_-2px_0_0_rgba(0,0,0,0.1)]"
+              tabindex="-1"
+              data-orientation="horizontal"
+              data-radix-collection-item=""
+            >
+              <span
+                class="t-muted group-data-[state=active]:t-default group-hover:bg-tag-default whitespace-nowrap rounded px-2 py-1 text-sm group-data-[state=active]:font-semibold"
+                >Go</span
+              >
+            </button>
+          </div>
+          <button
+            tabindex="0"
+            data-state="closed"
+            aria-disabled="false"
+            class="fern-copy-button group ml-2 mr-1 fern-button minimal normal rounded square"
+          >
+            <span class="fern-button-content"
+              ><svg
+                width="1.5em"
+                height="1.5em"
+                stroke-width="1.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                color="currentColor"
+              >
+                <path
+                  d="M19.4 20H9.6C9.26863 20 9 19.7314 9 19.4V9.6C9 9.26863 9.26863 9 9.6 9H19.4C19.7314 9 20 9.26863 20 9.6V19.4C20 19.7314 19.7314 20 19.4 20Z"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                ></path>
+                <path
+                  d="M15 9V4.6C15 4.26863 14.7314 4 14.4 4H4.6C4.26863 4 4 4.26863 4 4.6V14.4C4 14.7314 4.26863 15 4.6 15H9"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                ></path></svg
+            ></span>
+          </button>
+        </div>
+      </div>
+      <pre
+        class="code-block-root not-prose rounded-t-0 rounded-b-[inherit]"
+        tabindex="0"
+        style="
+          animation-duration: 0s;
+          background-color: rgb(255, 255, 255);
+          --shiki-dark-bg: #212121;
+          color: rgb(36, 41, 46);
+          --shiki-dark: #eeffff;
+        "
+      ><div dir="ltr" class="fern-scroll-area" style="position: relative; --radix-scroll-area-corner-width: 4px; --radix-scroll-area-corner-height: 4px;"><style>[data-radix-scroll-area-viewport]{scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch;}[data-radix-scroll-area-viewport]::-webkit-scrollbar{display:none}</style><div data-radix-scroll-area-viewport="" class="fern-scroll-area-viewport" data-scrollbars="both" style="overflow: scroll; max-height: 479px;"><div style="min-width: 100%; display: table;"><code class="code-block text-sm"><div class="code-block-inner"><table class="code-block-line-group"><colgroup><col class="w-fit"><col></colgroup><tbody><tr class="code-block-line"><td class="code-block-line-gutter"><span>1</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(194, 195, 197); font-style: inherit; --shiki-dark: #545454; --shiki-dark-font-style: italic;">// Example filename: index.js</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>2</span></td><td class="code-block-line-content"><span class="line"></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>3</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;">const</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;"> {</span><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;"> createClient</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;"> LiveTranscriptionEvents</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;"> }</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;"> =</span><span style="color: rgb(111, 66, 193); --shiki-dark: #82AAFF;"> require</span><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;">(</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">@deepgram/sdk</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;">)</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">;</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>4</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;">const</span><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;"> fetch</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;"> =</span><span style="color: rgb(111, 66, 193); --shiki-dark: #82AAFF;"> require</span><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;">(</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">cross-fetch</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;">)</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">;</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>5</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;">const</span><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;"> dotenv</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;"> =</span><span style="color: rgb(111, 66, 193); --shiki-dark: #82AAFF;"> require</span><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;">(</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">dotenv</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;">)</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">;</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>6</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">dotenv</span><span style="color: rgb(111, 66, 193); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(111, 66, 193); --shiki-dark: #82AAFF;">config</span><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;">()</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">;</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>7</span></td><td class="code-block-line-content"><span class="line"></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>8</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(194, 195, 197); font-style: inherit; --shiki-dark: #545454; --shiki-dark-font-style: italic;">// URL for the realtime streaming audio you would like to transcribe</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>9</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;">const</span><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;"> url</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;"> =</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;"> "</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">http://stream.live.vc.bbcmedia.co.uk/bbc_world_service</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">;</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>10</span></td><td class="code-block-line-content"><span class="line"></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>11</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;">const</span><span style="color: rgb(111, 66, 193); --shiki-dark: #EEFFFF;"> live</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;"> =</span><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;"> async</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;"> ()</span><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;"> =&gt;</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;"> {</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>12</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(194, 195, 197); font-style: inherit; --shiki-dark: #545454; --shiki-dark-font-style: italic;">  // STEP 1: Create a Deepgram client using the API key</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>13</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;">  const</span><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;"> deepgram</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;"> =</span><span style="color: rgb(111, 66, 193); --shiki-dark: #82AAFF;"> createClient</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">(</span><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">process</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">env</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">DEEPGRAM_API_KEY</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">)</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">;</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>14</span></td><td class="code-block-line-content"><span class="line"></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>15</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(194, 195, 197); font-style: inherit; --shiki-dark: #545454; --shiki-dark-font-style: italic;">  // STEP 2: Create a live transcription connection</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>16</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;">  const</span><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;"> connection</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;"> =</span><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;"> deepgram</span><span style="color: rgb(111, 66, 193); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">listen</span><span style="color: rgb(111, 66, 193); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(111, 66, 193); --shiki-dark: #82AAFF;">live</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">(</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">{</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>17</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">    model</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;"> "</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">nova-3</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>18</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">    language</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;"> "</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">en-US</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>19</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">    smart_format</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(25, 118, 210); --shiki-dark: #FF9CAC;"> true</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>20</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">  }</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">)</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">;</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>21</span></td><td class="code-block-line-content"><span class="line"></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>22</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(194, 195, 197); font-style: inherit; --shiki-dark: #545454; --shiki-dark-font-style: italic;">  // STEP 3: Listen for events from the live transcription connection</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>23</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">  connection</span><span style="color: rgb(111, 66, 193); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(111, 66, 193); --shiki-dark: #82AAFF;">on</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">(</span><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">LiveTranscriptionEvents</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;">Open</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;"> ()</span><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;"> =&gt;</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;"> {</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>24</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">    connection</span><span style="color: rgb(111, 66, 193); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(111, 66, 193); --shiki-dark: #82AAFF;">on</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">(</span><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">LiveTranscriptionEvents</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;">Close</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;"> ()</span><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;"> =&gt;</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;"> {</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>25</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">      console</span><span style="color: rgb(111, 66, 193); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(111, 66, 193); --shiki-dark: #82AAFF;">log</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">(</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">Connection closed.</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">)</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">;</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>26</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">    }</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">)</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">;</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>27</span></td><td class="code-block-line-content"><span class="line"></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>28</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">    connection</span><span style="color: rgb(111, 66, 193); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(111, 66, 193); --shiki-dark: #82AAFF;">on</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">(</span><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">LiveTranscriptionEvents</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;">Transcript</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;"> (</span><span style="color: rgb(36, 41, 46); font-style: inherit; --shiki-dark: #EEFFFF; --shiki-dark-font-style: italic;">data</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">)</span><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;"> =&gt;</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;"> {</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>29</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">      console</span><span style="color: rgb(111, 66, 193); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(111, 66, 193); --shiki-dark: #82AAFF;">log</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">(</span><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">data</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">channel</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;">alternatives</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">[</span><span style="color: rgb(25, 118, 210); --shiki-dark: #F78C6C;">0</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">]</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;">transcript</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">)</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">;</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>30</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">    }</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">)</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">;</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>31</span></td><td class="code-block-line-content"><span class="line"></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>32</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">    connection</span><span style="color: rgb(111, 66, 193); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(111, 66, 193); --shiki-dark: #82AAFF;">on</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">(</span><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">LiveTranscriptionEvents</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;">Metadata</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;"> (</span><span style="color: rgb(36, 41, 46); font-style: inherit; --shiki-dark: #EEFFFF; --shiki-dark-font-style: italic;">data</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">)</span><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;"> =&gt;</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;"> {</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>33</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">      console</span><span style="color: rgb(111, 66, 193); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(111, 66, 193); --shiki-dark: #82AAFF;">log</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">(</span><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;">data</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">)</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">;</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>34</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">    }</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">)</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">;</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>35</span></td><td class="code-block-line-content"><span class="line"></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>36</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">    connection</span><span style="color: rgb(111, 66, 193); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(111, 66, 193); --shiki-dark: #82AAFF;">on</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">(</span><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">LiveTranscriptionEvents</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;">Error</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;"> (</span><span style="color: rgb(36, 41, 46); font-style: inherit; --shiki-dark: #EEFFFF; --shiki-dark-font-style: italic;">err</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">)</span><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;"> =&gt;</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;"> {</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>37</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">      console</span><span style="color: rgb(111, 66, 193); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(111, 66, 193); --shiki-dark: #82AAFF;">error</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">(</span><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;">err</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">)</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">;</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>38</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">    }</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">)</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">;</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>39</span></td><td class="code-block-line-content"><span class="line"></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>40</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(194, 195, 197); font-style: inherit; --shiki-dark: #545454; --shiki-dark-font-style: italic;">    // STEP 4: Fetch the audio stream and send it to the live transcription connection</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>41</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(111, 66, 193); --shiki-dark: #82AAFF;">    fetch</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">(</span><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;">url</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">)</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>42</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(111, 66, 193); --shiki-dark: #89DDFF;">      .</span><span style="color: rgb(111, 66, 193); --shiki-dark: #82AAFF;">then</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">(</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">(</span><span style="color: rgb(36, 41, 46); font-style: inherit; --shiki-dark: #EEFFFF; --shiki-dark-font-style: italic;">r</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">)</span><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;"> =&gt;</span><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;"> r</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;">body</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">)</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>43</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(111, 66, 193); --shiki-dark: #89DDFF;">      .</span><span style="color: rgb(111, 66, 193); --shiki-dark: #82AAFF;">then</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">(</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">(</span><span style="color: rgb(36, 41, 46); font-style: inherit; --shiki-dark: #EEFFFF; --shiki-dark-font-style: italic;">res</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">)</span><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;"> =&gt;</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;"> {</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>44</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">        res</span><span style="color: rgb(111, 66, 193); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(111, 66, 193); --shiki-dark: #82AAFF;">on</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">(</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">readable</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;"> ()</span><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;"> =&gt;</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;"> {</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>45</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">          connection</span><span style="color: rgb(111, 66, 193); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(111, 66, 193); --shiki-dark: #82AAFF;">send</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">(</span><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">res</span><span style="color: rgb(111, 66, 193); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(111, 66, 193); --shiki-dark: #82AAFF;">read</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">())</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">;</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>46</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">        }</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">)</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">;</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>47</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">      }</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">)</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">;</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>48</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">  }</span><span style="color: rgb(36, 41, 46); --shiki-dark: #F07178;">)</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">;</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>49</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">};</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>50</span></td><td class="code-block-line-content"><span class="line"></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>51</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(111, 66, 193); --shiki-dark: #82AAFF;">live</span><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;">()</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">;</span></span></td></tr></tbody></table></div></code></div></div><div data-orientation="vertical" data-state="hidden" class="fern-scroll-area-scrollbar" style="position: absolute; top: 0px; right: 0px; bottom: var(--radix-scroll-area-corner-height); --radix-scroll-area-thumb-height: 188.12077702702703px;"><div data-state="visible" class="fern-scroll-area-thumb" style="width: var(--radix-scroll-area-thumb-width); height: var(--radix-scroll-area-thumb-height); transform: translate3d(0px, 276.879px, 0px);"></div></div><div data-orientation="horizontal" data-state="hidden" class="fern-scroll-area-scrollbar" style="position: absolute; bottom: 0px; left: 0px; right: var(--radix-scroll-area-corner-width); --radix-scroll-area-thumb-width: 626.7870967741936px;"><div data-state="visible" class="fern-scroll-area-thumb" style="width: var(--radix-scroll-area-thumb-width); height: var(--radix-scroll-area-thumb-height); transform: translate3d(0px, 0px, 0px);"></div></div><div class="fern-scroll-area-corner" style="width: 4px; height: 4px; position: absolute; right: 0px; bottom: 0px;"></div></div></pre>
+    </div>
+    <div class="mb-6 mt-4 rounded-lg p-4 first:mt-0 callout-outlined">
+      <div class="flex items-start space-x-3">
+        <div class="mt-0.5 w-4">
+          <svg
+            width="1.5em"
+            height="1.5em"
+            stroke-width="1.5"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            color="currentColor"
+            class="text-intent-default size-icon-md"
+          >
+            <path
+              d="M12 11.5V16.5"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            ></path>
+            <path
+              d="M12 7.51L12.01 7.49889"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            ></path>
+            <path
+              d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            ></path>
+          </svg>
+        </div>
+        <div
+          class="prose prose-sm dark:prose-invert -my-4 flex-1 overflow-x-auto before:mb-4 before:block after:mt-4 after:block"
+        >
+          <div class="text-intent-default">
+            <h5 class="leading-snug"></h5>
+            <p>
+              The above example includes the parameter
+              <code>model=nova-3</code>, which tells the API to use Deepgram’s
+              latest model. Removing this parameter will result in the API using
+              the default model, which is currently <code>model=base</code>.
+            </p>
+            <p>
+              It also includes Deepgram’s
+              <a class="fern-mdx-link" href="/docs/smart-format"
+                >Smart Formatting</a
+              >
+              feature, <code>smart_format=true</code>. This will format currency
+              amounts, phone numbers, email addresses, and more for enhanced
+              transcript readability.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <h2 id="non-sdk-code-examples" data-state="closed">
+      Non-SDK Code Examples
+    </h2>
+    <p>
+      If you would like to try out making a Deepgram speech-to-text request in a
+      specific language (but not using Deepgram’s SDKs), we offer a library of
+      code-samples in this
+      <a
+        class="fern-mdx-link"
+        target="_blank"
+        rel="noreferrer"
+        href="https://github.com/deepgram-devs/code-samples"
+        >Github repo<svg
+          width="1.5em"
+          height="1.5em"
+          viewBox="0 0 24 24"
+          stroke-width="1.5"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          color="currentColor"
+          class="external-link-icon"
+        >
+          <path
+            d="M21 3L15 3M21 3L12 12M21 3V9"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          ></path>
+          <path
+            d="M21 13V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V5C3 3.89543 3.89543 3 5 3H11"
+            stroke="currentColor"
+            stroke-linecap="round"
+          ></path></svg></a
+      >. However, we recommend first trying out our SDKs.
+    </p>
+    <h2 id="results" data-state="closed">Results</h2>
+    <p>
+      In order to see the results from Deepgram, you must run the application.
+      Run your application from the terminal. Your transcripts will appear in
+      your shell.
+    </p>
+    <div
+      dir="ltr"
+      data-orientation="horizontal"
+      class="bg-card after:ring-card-border relative mb-6 mt-4 flex w-full min-w-0 max-w-full flex-col rounded-lg shadow-sm after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:ring-1 after:ring-inset after:content-[''] first:mt-0"
+    >
+      <div class="bg-tag-default-soft rounded-t-[inherit]">
+        <div
+          class="shadow-border-default mx-px flex min-h-10 items-center justify-between shadow-[inset_0_-1px_0_0]"
+        >
+          <div class="fern-x-overflow flex min-h-10">
+            <button
+              type="button"
+              role="tab"
+              aria-selected="true"
+              aria-controls="radix-:r2d:-content-0"
+              data-state="active"
+              id="radix-:r2d:-trigger-0"
+              class="data-[state=active]:shadow-accent group flex min-h-10 items-center px-2 py-1.5 data-[state=active]:shadow-[inset_0_-2px_0_0_rgba(0,0,0,0.1)]"
+              tabindex="-1"
+              data-orientation="horizontal"
+              data-radix-collection-item=""
+            >
+              <span
+                class="t-muted group-data-[state=active]:t-default group-hover:bg-tag-default whitespace-nowrap rounded px-2 py-1 text-sm group-data-[state=active]:font-semibold"
+                >JavaScript</span
+              ></button
+            ><button
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="radix-:r2d:-content-1"
+              data-state="inactive"
+              id="radix-:r2d:-trigger-1"
+              class="data-[state=active]:shadow-accent group flex min-h-10 items-center px-2 py-1.5 data-[state=active]:shadow-[inset_0_-2px_0_0_rgba(0,0,0,0.1)]"
+              tabindex="-1"
+              data-orientation="horizontal"
+              data-radix-collection-item=""
+            >
+              <span
+                class="t-muted group-data-[state=active]:t-default group-hover:bg-tag-default whitespace-nowrap rounded px-2 py-1 text-sm group-data-[state=active]:font-semibold"
+                >Python</span
+              ></button
+            ><button
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="radix-:r2d:-content-2"
+              data-state="inactive"
+              id="radix-:r2d:-trigger-2"
+              class="data-[state=active]:shadow-accent group flex min-h-10 items-center px-2 py-1.5 data-[state=active]:shadow-[inset_0_-2px_0_0_rgba(0,0,0,0.1)]"
+              tabindex="-1"
+              data-orientation="horizontal"
+              data-radix-collection-item=""
+            >
+              <span
+                class="t-muted group-data-[state=active]:t-default group-hover:bg-tag-default whitespace-nowrap rounded px-2 py-1 text-sm group-data-[state=active]:font-semibold"
+                >C#</span
+              ></button
+            ><button
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="radix-:r2d:-content-3"
+              data-state="inactive"
+              id="radix-:r2d:-trigger-3"
+              class="data-[state=active]:shadow-accent group flex min-h-10 items-center px-2 py-1.5 data-[state=active]:shadow-[inset_0_-2px_0_0_rgba(0,0,0,0.1)]"
+              tabindex="-1"
+              data-orientation="horizontal"
+              data-radix-collection-item=""
+            >
+              <span
+                class="t-muted group-data-[state=active]:t-default group-hover:bg-tag-default whitespace-nowrap rounded px-2 py-1 text-sm group-data-[state=active]:font-semibold"
+                >Go</span
+              >
+            </button>
+          </div>
+          <button
+            tabindex="0"
+            data-state="closed"
+            aria-disabled="false"
+            class="fern-copy-button group ml-2 mr-1 fern-button minimal normal rounded square"
+          >
+            <span class="fern-button-content"
+              ><svg
+                width="1.5em"
+                height="1.5em"
+                stroke-width="1.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                color="currentColor"
+              >
+                <path
+                  d="M19.4 20H9.6C9.26863 20 9 19.7314 9 19.4V9.6C9 9.26863 9.26863 9 9.6 9H19.4C19.7314 9 20 9.26863 20 9.6V19.4C20 19.7314 19.7314 20 19.4 20Z"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                ></path>
+                <path
+                  d="M15 9V4.6C15 4.26863 14.7314 4 14.4 4H4.6C4.26863 4 4 4.26863 4 4.6V14.4C4 14.7314 4.26863 15 4.6 15H9"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                ></path></svg
+            ></span>
+          </button>
+        </div>
+      </div>
+      <pre
+        class="code-block-root not-prose rounded-t-0 rounded-b-[inherit]"
+        tabindex="0"
+        style="
+          animation-duration: 0s;
+          background-color: rgb(255, 255, 255);
+          --shiki-dark-bg: #212121;
+          color: rgb(36, 41, 46);
+          --shiki-dark: #eeffff;
+        "
+      ><div dir="ltr" class="fern-scroll-area" style="position: relative; --radix-scroll-area-corner-width: 0px; --radix-scroll-area-corner-height: 0px;"><style>[data-radix-scroll-area-viewport]{scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch;}[data-radix-scroll-area-viewport]::-webkit-scrollbar{display:none}</style><div data-radix-scroll-area-viewport="" class="fern-scroll-area-viewport" data-scrollbars="both" style="overflow: scroll; max-height: 479px;"><div style="min-width: 100%; display: table;"><code class="code-block text-sm"><div class="code-block-inner"><table class="code-block-line-group"><colgroup><col class="w-fit"><col></colgroup><tbody><tr class="code-block-line"><td class="code-block-line-gutter"><span>1</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;"># Run your application </span><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;">using</span><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;"> the</span><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;"> file you created </span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">in</span><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;"> the previous step</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>2</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;"># </span><span style="color: rgb(36, 41, 46); --shiki-dark: #FFCB6B;">Example</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;"> node </span><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">index</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;">js</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>3</span></td><td class="code-block-line-content"><span class="line"></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>4</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;">node </span><span style="color: rgb(25, 118, 210); --shiki-dark: #EEFFFF;">YOUR_PROJECT_NAME</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">.</span><span style="color: rgb(36, 41, 46); --shiki-dark: #EEFFFF;">js</span></span></td></tr></tbody></table></div></code></div></div></div></pre>
+    </div>
+    <div class="mb-6 mt-4 rounded-lg p-4 first:mt-0 callout-outlined-warning">
+      <div class="flex items-start space-x-3">
+        <div class="mt-0.5 w-4">
+          <svg
+            width="1.5em"
+            height="1.5em"
+            stroke-width="1.5"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            color="currentColor"
+            class="size-icon-md text-intent-warning"
+          >
+            <path
+              d="M18 8.4C18 6.70261 17.3679 5.07475 16.2426 3.87452C15.1174 2.67428 13.5913 2 12 2C10.4087 2 8.88258 2.67428 7.75736 3.87452C6.63214 5.07475 6 6.70261 6 8.4C6 15.8667 3 18 3 18H21C21 18 18 15.8667 18 8.4Z"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            ></path>
+            <path
+              d="M13.73 21C13.5542 21.3031 13.3019 21.5547 12.9982 21.7295C12.6946 21.9044 12.3504 21.9965 12 21.9965C11.6496 21.9965 11.3054 21.9044 11.0018 21.7295C10.6982 21.5547 10.4458 21.3031 10.27 21"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            ></path>
+          </svg>
+        </div>
+        <div
+          class="prose prose-sm dark:prose-invert -my-4 flex-1 overflow-x-auto before:mb-4 before:block after:mt-4 after:block"
+        >
+          <div class="text-intent-warning">
+            <h5 class="leading-snug"></h5>
+            <p>
+              Deepgram does not store transcripts, so the Deepgram API response
+              is the only opportunity to retrieve the transcript. Make sure to
+              save output or
+              <a class="fern-mdx-link" href="/docs/callback/"
+                >return transcriptions to a callback URL for custom
+                processing</a
+              >.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <h3 id="analyze-the-response" data-state="closed">Analyze the Response</h3>
+    <p>The responses that are returned will look similar to this:</p>
+    <div
+      class="bg-card after:ring-card-border relative mb-6 mt-4 flex w-full min-w-0 max-w-full flex-col rounded-lg shadow-sm after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:ring-1 after:ring-inset after:content-[''] first:mt-0"
+    >
+      <div class="bg-tag-default-soft rounded-t-[inherit]">
+        <div
+          class="shadow-border-default mx-px flex min-h-10 items-center justify-between shadow-[inset_0_-1px_0_0]"
+        >
+          <div class="flex min-h-10 overflow-x-auto">
+            <div class="flex items-center px-3 py-1.5">
+              <span class="t-muted rounded text-sm font-semibold">JSON</span>
+            </div>
+          </div>
+          <button
+            tabindex="0"
+            data-state="closed"
+            aria-disabled="false"
+            class="fern-copy-button group ml-2 mr-1 fern-button minimal normal rounded square"
+          >
+            <span class="fern-button-content"
+              ><svg
+                width="1.5em"
+                height="1.5em"
+                stroke-width="1.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                color="currentColor"
+              >
+                <path
+                  d="M19.4 20H9.6C9.26863 20 9 19.7314 9 19.4V9.6C9 9.26863 9.26863 9 9.6 9H19.4C19.7314 9 20 9.26863 20 9.6V19.4C20 19.7314 19.7314 20 19.4 20Z"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                ></path>
+                <path
+                  d="M15 9V4.6C15 4.26863 14.7314 4 14.4 4H4.6C4.26863 4 4 4.26863 4 4.6V14.4C4 14.7314 4.26863 15 4.6 15H9"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                ></path></svg
+            ></span>
+          </button>
+        </div>
+      </div>
+      <pre
+        class="code-block-root not-prose rounded-b-[inherit]"
+        tabindex="0"
+        style="
+          background-color: rgb(255, 255, 255);
+          --shiki-dark-bg: #212121;
+          color: rgb(36, 41, 46);
+          --shiki-dark: #eeffff;
+        "
+      ><div dir="ltr" class="fern-scroll-area" style="position: relative; --radix-scroll-area-corner-width: 0px; --radix-scroll-area-corner-height: 0px;"><style>[data-radix-scroll-area-viewport]{scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch;}[data-radix-scroll-area-viewport]::-webkit-scrollbar{display:none}</style><div data-radix-scroll-area-viewport="" class="fern-scroll-area-viewport" data-scrollbars="both" style="overflow: scroll; max-height: 479px;"><div style="min-width: 100%; display: table;"><code class="code-block text-sm"><div class="code-block-inner"><table class="code-block-line-group"><colgroup><col class="w-fit"><col></colgroup><tbody><tr class="code-block-line"><td class="code-block-line-gutter"><span>1</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">{</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>2</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">  "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;">type</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;"> "</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">Results</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>3</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">  "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;">channel_index</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;"> [</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>4</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(25, 118, 210); --shiki-dark: #F78C6C;">    0</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>5</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(25, 118, 210); --shiki-dark: #F78C6C;">    1</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>6</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">  ]</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>7</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">  "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;">duration</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(25, 118, 210); --shiki-dark: #F78C6C;"> 1.98</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>8</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">  "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;">start</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(25, 118, 210); --shiki-dark: #F78C6C;"> 5.99</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>9</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">  "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;">is_final</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(25, 118, 210); --shiki-dark: #89DDFF;"> true</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>10</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">  "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;">speech_final</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(25, 118, 210); --shiki-dark: #89DDFF;"> true</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>11</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">  "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;">channel</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;"> {</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>12</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">    "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #FFCB6B;">alternatives</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;"> [</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>13</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">      {</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>14</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">        "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F78C6C;">transcript</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;"> "</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">Tell me more about this.</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>15</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">        "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F78C6C;">confidence</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(25, 118, 210); --shiki-dark: #F78C6C;"> 0.99964225</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>16</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">        "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F78C6C;">words</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;"> [</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>17</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">          {</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>18</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">word</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;"> "</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">tell</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>19</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">start</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(25, 118, 210); --shiki-dark: #F78C6C;"> 6.0699997</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>20</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">end</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(25, 118, 210); --shiki-dark: #F78C6C;"> 6.3499994</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>21</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">confidence</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(25, 118, 210); --shiki-dark: #F78C6C;"> 0.99782443</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>22</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">punctuated_word</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;"> "</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">Tell</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>23</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">          }</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>24</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">          {</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>25</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">word</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;"> "</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">me</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>26</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">start</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(25, 118, 210); --shiki-dark: #F78C6C;"> 6.3499994</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>27</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">end</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(25, 118, 210); --shiki-dark: #F78C6C;"> 6.6299996</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>28</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">confidence</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(25, 118, 210); --shiki-dark: #F78C6C;"> 0.9998324</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>29</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">punctuated_word</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;"> "</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">me</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>30</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">          }</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>31</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">          {</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>32</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">word</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;"> "</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">more</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>33</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">start</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(25, 118, 210); --shiki-dark: #F78C6C;"> 6.6299996</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>34</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">end</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(25, 118, 210); --shiki-dark: #F78C6C;"> 6.79</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>35</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">confidence</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(25, 118, 210); --shiki-dark: #F78C6C;"> 0.9995466</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>36</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">punctuated_word</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;"> "</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">more</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>37</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">          }</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>38</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">          {</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>39</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">word</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;"> "</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">about</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>40</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">start</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(25, 118, 210); --shiki-dark: #F78C6C;"> 6.79</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>41</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">end</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(25, 118, 210); --shiki-dark: #F78C6C;"> 7.0299997</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>42</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">confidence</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(25, 118, 210); --shiki-dark: #F78C6C;"> 0.99984455</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>43</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">punctuated_word</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;"> "</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">about</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>44</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">          }</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>45</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">          {</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>46</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">word</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;"> "</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">this</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>47</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">start</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(25, 118, 210); --shiki-dark: #F78C6C;"> 7.0299997</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>48</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">end</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(25, 118, 210); --shiki-dark: #F78C6C;"> 7.2699995</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>49</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">confidence</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(25, 118, 210); --shiki-dark: #F78C6C;"> 0.99964225</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>50</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">            "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F07178;">punctuated_word</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;"> "</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">this</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>51</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">          }</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>52</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">        ]</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>53</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">      }</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>54</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">    ]</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>55</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">  }</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>56</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">  "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;">metadata</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;"> {</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>57</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">    "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #FFCB6B;">request_id</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;"> "</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">52cc0efe-fa77-4aa7-b79c-0dda09de2f14</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>58</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">    "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #FFCB6B;">model_info</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;"> {</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>59</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">      "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F78C6C;">name</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;"> "</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">2-general-nova</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>60</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">      "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F78C6C;">version</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;"> "</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">2024-01-18.26916</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>61</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">      "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #F78C6C;">arch</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;"> "</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">nova-2</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>62</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">    }</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>63</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">    "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #FFCB6B;">model_uuid</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;"> "</span><span style="color: rgb(34, 134, 58); --shiki-dark: #C3E88D;">c0d1a568-ce81-4fea-97e7-bd45cb1fdf3c</span><span style="color: rgb(34, 134, 58); --shiki-dark: #89DDFF;">"</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>64</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">  }</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">,</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>65</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">  "</span><span style="color: rgb(211, 47, 47); --shiki-dark: #C792EA;">from_finalize</span><span style="color: rgb(211, 47, 47); --shiki-dark: #89DDFF;">"</span><span style="color: rgb(33, 33, 33); --shiki-dark: #89DDFF;">:</span><span style="color: rgb(25, 118, 210); --shiki-dark: #89DDFF;"> false</span></span></td></tr><tr class="code-block-line"><td class="code-block-line-gutter"><span>66</span></td><td class="code-block-line-content"><span class="line"><span style="color: rgb(36, 41, 46); --shiki-dark: #89DDFF;">}</span></span></td></tr></tbody></table></div></code></div></div><div data-orientation="vertical" data-state="hidden" class="fern-scroll-area-scrollbar" style="position: absolute; top: 0px; right: 0px; bottom: var(--radix-scroll-area-corner-height); --radix-scroll-area-thumb-height: 147.21559633027522px;"><div data-state="visible" class="fern-scroll-area-thumb" style="width: var(--radix-scroll-area-thumb-width); height: var(--radix-scroll-area-thumb-height); transform: translate3d(0px, 0px, 0px);"></div></div></div></pre>
+    </div>
+    <p>In this default response, we see:</p>
+    <ul class="mb-3 list-outside list-disc space-y-2">
+      <li class="">
+        <p>
+          <code>transcript</code>: the transcript for the audio segment being
+          processed.
+        </p>
+      </li>
+      <li class="">
+        <p>
+          <code>confidence</code>: a floating point value between 0 and 1 that
+          indicates overall transcript reliability. Larger values indicate
+          higher confidence.
+        </p>
+      </li>
+      <li class="">
+        <p>
+          <code>words</code>: an object containing each <code>word</code> in the
+          transcript, along with its <code>start</code> time and
+          <code>end</code> time (in seconds) from the beginning of the audio
+          stream, and a <code>confidence</code> value.
+        </p>
+        <ul class="mb-3 list-outside list-disc space-y-2">
+          <li class="">
+            Because we passed the <code>smart_format: true</code> option to the
+            <code>transcription.prerecorded</code> method, each word object also
+            includes its <code>punctuated_word</code> value, which contains the
+            transformed word after punctuation and capitalization are applied.
+          </li>
+        </ul>
+      </li>
+      <li class="">
+        <p>
+          <code>speech_final</code>: tells us this segment of speech naturally
+          ended at this point. By default, Deepgram live streaming looks for any
+          deviation in the natural flow of speech and returns a finalized
+          response at these places. To learn more about this feature, see
+          <a class="fern-mdx-link" href="/docs/endpointing/">Endpointing</a>.
+        </p>
+      </li>
+      <li class="">
+        <p>
+          <code>is_final</code>: If this says <code>false</code>, it is
+          indicating that Deepgram will continue waiting to see if more data
+          will improve its predictions. Deepgram live streaming can return a
+          series of interim transcripts followed by a final transcript. To learn
+          more, see
+          <a class="fern-mdx-link" href="/docs/interim-results/"
+            >Interim Results</a
+          >.
+        </p>
+      </li>
+    </ul>
+    <div class="mb-6 mt-4 rounded-lg p-4 first:mt-0 callout-outlined">
+      <div class="flex items-start space-x-3">
+        <div class="mt-0.5 w-4">
+          <svg
+            width="1.5em"
+            height="1.5em"
+            stroke-width="1.5"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            color="currentColor"
+            class="text-intent-default size-icon-md"
+          >
+            <path
+              d="M12 11.5V16.5"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            ></path>
+            <path
+              d="M12 7.51L12.01 7.49889"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            ></path>
+            <path
+              d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            ></path>
+          </svg>
+        </div>
+        <div
+          class="prose prose-sm dark:prose-invert -my-4 flex-1 overflow-x-auto before:mb-4 before:block after:mt-4 after:block"
+        >
+          <div class="text-intent-default">
+            <h5 class="leading-snug"></h5>
+            <p>
+              Endpointing can be used with Deepgram’s
+              <a class="fern-mdx-link" href="/docs/interim-results/"
+                >Interim Results</a
+              >
+              feature. To compare and contrast these features, and to explore
+              best practices for using them together, see
+              <a
+                class="fern-mdx-link"
+                href="/docs/understand-endpointing-interim-results/"
+                >Using Endpointing and Interim Results with Live Streaming
+                Audio</a
+              >.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p>
+      If your scenario requires you to keep the connection alive even while data
+      is not being sent to Deepgram, you can send periodic KeepAlive messages to
+      essentially “pause” the connection without closing it. To learn more, see
+      <a class="fern-mdx-link" href="/docs/keep-alive">KeepAlive</a>.
+    </p>
+    <h2 id="whats-next" data-state="closed">What’s Next?</h2>
+    <p>
+      Now that you’ve gotten transcripts for streaming audio, enhance your
+      knowledge by exploring the following areas. You can also check out our
+      <a class="fern-mdx-link" href="/reference/streaming"
+        >Live Streaming API Reference</a
+      >
+      for a list of all possible parameters.
+    </p>
+    <h3 id="try-the-starter-apps" data-state="closed">Try the Starter Apps</h3>
+    <ul class="mb-3 list-outside list-disc space-y-2">
+      <li class="">
+        Clone and run one of our
+        <a class="fern-mdx-link" href="/docs/starter-apps"
+          >Live Audio Starter App</a
+        >
+        repositories to see a full application with a frontend UI and a backend
+        server streaming audio to Deepgram.
+      </li>
+    </ul>
+    <h3 id="read-the-feature-guides" data-state="closed">
+      Read the Feature Guides
+    </h3>
+    <p>Deepgram’s features help you to customize your transcripts.</p>
+    <ul class="mb-3 list-outside list-disc space-y-2">
+      <li class="">
+        <a class="fern-mdx-link" href="/docs/language">Language</a>: Learn how
+        to transcribe audio in other languages.
+      </li>
+      <li class="">
+        <a class="fern-mdx-link" href="/docs/stt-streaming-feature-overview"
+          >Feature Overview</a
+        >: Review the list of features available for streaming speech-to-text.
+        Then, dive into individual guides for more details.
+      </li>
+    </ul>
+    <h3 id="tips-and-tricks" data-state="closed">Tips and tricks</h3>
+    <ul class="mb-3 list-outside list-disc space-y-2">
+      <li class="">
+        <a
+          class="fern-mdx-link"
+          href="/docs/understanding-end-of-speech-detection"
+          >End of speech detection</a
+        >
+        - Learn how to pinpoint end of speech post-speaking more effectively.
+      </li>
+      <li class="">
+        <a class="fern-mdx-link" href="/docs/using-interim-results"
+          >Using interim results</a
+        >
+        - Learn how to use preliminary results provided during the streaming
+        process which can help with speech detection.
+      </li>
+      <li class="">
+        <a class="fern-mdx-link" href="/docs/measuring-streaming-latency"
+          >Measuring streaming latency</a
+        >
+        - Learn how to measure latency in real-time streaming of audio.
+      </li>
+    </ul>
+    <h3 id="add-your-audio" data-state="closed">Add Your Audio</h3>
+    <ul class="mb-3 list-outside list-disc space-y-2">
+      <li class="">
+        Ready to connect Deepgram to your own audio source? Start by reviewing
+        <a
+          class="fern-mdx-link"
+          href="/docs/determining-your-audio-format-for-live-streaming-audio/"
+          >how to determine your audio format</a
+        >
+        and format your API request accordingly.
+      </li>
+      <li class="">
+        Then, check out our
+        <a
+          class="fern-mdx-link"
+          href="/docs/getting-started-with-the-streaming-test-suite"
+          >Live Streaming Starter Kit</a
+        >. It’s the perfect “102” introduction to integrating your own audio.
+      </li>
+    </ul>
+    <h3 id="explore-use-cases" data-state="closed">Explore Use Cases</h3>
+    <ul class="mb-3 list-outside list-disc space-y-2">
+      <li class="">
+        Learn about the different ways you can use Deepgram products to help you
+        meet your business objectives.
+        <a class="fern-mdx-link" href="/use-cases/"
+          >Explore Deepgram’s use cases</a
+        >.
+      </li>
+    </ul>
+    <h3 id="transcribe-pre-recorded-audio" data-state="closed">
+      Transcribe Pre-recorded Audio
+    </h3>
+    <ul class="mb-3 list-outside list-disc space-y-2">
+      <li class="">
+        Now that you know how to transcribe streaming audio, check out how you
+        can use Deepgram to transcribe pre-recorded audio. To learn more, see
+        <a
+          class="fern-mdx-link"
+          href="/docs/getting-started-with-pre-recorded-audio/"
+          >Getting Started with Pre-recorded Audio</a
+        >.
+      </li>
+    </ul>
+    <hr />
+  </div>
+  <footer class="mt-12">
+    <div class="flex gap-4 max-sm:flex-col sm:justify-between">
+      <div>
+        <div>
+          <div class="flex w-full flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center justify-start gap-2">
+              <span class="t-muted text-sm font-medium"
+                >Was this page helpful?</span
+              ><span class="fern-button-group"
+                ><button
+                  tabindex="0"
+                  data-state="closed"
+                  aria-disabled="false"
+                  data-selected="false"
+                  type="button"
+                  aria-haspopup="dialog"
+                  aria-expanded="false"
+                  aria-controls="radix-:Rpat8um:"
+                  class="fern-button outlined normal"
+                >
+                  <span class="fern-button-content"
+                    ><svg
+                      width="1.5em"
+                      height="1.5em"
+                      stroke-width="1.5"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                      color="currentColor"
+                      class=""
+                    >
+                      <path
+                        d="M16.4724 20H4.1C3.76863 20 3.5 19.7314 3.5 19.4V9.6C3.5 9.26863 3.76863 9 4.1 9H6.86762C7.57015 9 8.22116 8.6314 8.5826 8.02899L11.293 3.51161C11.8779 2.53688 13.2554 2.44422 13.9655 3.33186C14.3002 3.75025 14.4081 4.30635 14.2541 4.81956L13.2317 8.22759C13.1162 8.61256 13.4045 9 13.8064 9H18.3815C19.7002 9 20.658 10.254 20.311 11.5262L18.4019 18.5262C18.1646 19.3964 17.3743 20 16.4724 20Z"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                      ></path>
+                      <path
+                        d="M7 20L7 9"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      ></path></svg
+                    ><span class="fern-button-text">Yes</span></span
+                  ></button
+                ><button
+                  tabindex="0"
+                  data-state="closed"
+                  aria-disabled="false"
+                  data-selected="false"
+                  type="button"
+                  aria-haspopup="dialog"
+                  aria-expanded="false"
+                  aria-controls="radix-:R19at8um:"
+                  class="fern-button outlined normal"
+                >
+                  <span class="fern-button-content"
+                    ><svg
+                      width="1.5em"
+                      height="1.5em"
+                      stroke-width="1.5"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                      color="currentColor"
+                      class=""
+                    >
+                      <path
+                        d="M16.4724 3.5H4.1C3.76863 3.5 3.5 3.76863 3.5 4.1V13.9C3.5 14.2314 3.76863 14.5 4.1 14.5H6.86762C7.57015 14.5 8.22116 14.8686 8.5826 15.471L11.293 19.9884C11.8779 20.9631 13.2554 21.0558 13.9655 20.1681C14.3002 19.7497 14.4081 19.1937 14.2541 18.6804L13.2317 15.2724C13.1162 14.8874 13.4045 14.5 13.8064 14.5H18.3815C19.7002 14.5 20.658 13.246 20.311 11.9738L18.4019 4.97376C18.1646 4.10364 17.3743 3.5 16.4724 3.5Z"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                      ></path>
+                      <path
+                        d="M7 14.5L7 3.5"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      ></path></svg
+                    ><span class="fern-button-text">No</span></span
+                  >
+                </button></span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+      <a
+        tabindex="0"
+        aria-disabled="false"
+        data-state="off"
+        class="fern-button outlined normal"
+        target="_blank"
+        rel="noreferrer"
+        href="https://github.com/deepgram/deepgram-docs/blob/main/fern/docs/live-streaming-audio.mdx?plain=1"
+        ><span class="fern-button-content"
+          ><svg
+            width="1.5em"
+            height="1.5em"
+            stroke-width="1.5"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            color="currentColor"
+          >
+            <path
+              d="M3 21L12 21H21"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            ></path>
+            <path
+              d="M12.2218 5.82839L15.0503 2.99996L20 7.94971L17.1716 10.7781M12.2218 5.82839L6.61522 11.435C6.42769 11.6225 6.32233 11.8769 6.32233 12.1421L6.32233 16.6776L10.8579 16.6776C11.1231 16.6776 11.3774 16.5723 11.565 16.3847L17.1716 10.7781M12.2218 5.82839L17.1716 10.7781"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            ></path></svg
+          ><span class="fern-button-text">Edit this page</span></span
+        ></a
+      >
+    </div>
+    <div class="not-prose grid grid-cols-1">
+      <a
+        class="fern-card interactive my-12 flex flex-1 items-center rounded-xl p-6"
+        href="/docs/stt-streaming-feature-overview"
+        ><div class="flex-1">
+          <div class="text-base font-semibold">Feature Overview</div>
+        </div>
+        <span
+          class="sm-4 t-muted sm:border-default inline-flex items-center gap-2 py-2.5 text-sm sm:ml-6 sm:border-l sm:pl-6"
+          ><span class="hidden leading-none sm:inline">Up Next</span
+          ><svg
+            width="1.5em"
+            height="1.5em"
+            stroke-width="1.5"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            color="currentColor"
+            class="size-icon"
+          >
+            <path
+              d="M9 6L15 12L9 18"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            ></path></svg></span
+      ></a>
+    </div>
+  </footer>
+  <style>
+    #builtwithfern {
+      display: flex !important;
+      opacity: 100% !important;
+    }
+
+    #builtwithfern * {
+      display: initial !important;
+      width: unset !important;
+      opacity: 100% !important;
+    }
+
+    #builtwithfern,
+    #builtwithfern * {
+      visibility: initial !important;
+      overflow: visible !important;
+      position: relative !important;
+      left: unset !important;
+      top: unset !important;
+      right: unset !important;
+      bottom: unset !important;
+      inset: unset !important;
+    }</style
+  ><a
+    id="builtwithfern"
+    class="mx-auto flex items-baseline gap-1 mx-auto my-8 w-fit"
+    href="https://buildwithfern.com/?utm_campaign=buildWith&amp;utm_medium=docs&amp;utm_source=developers.deepgram.com"
+    data-state="closed"
+    ><span class="t-muted whitespace-nowrap text-xs">Built with</span
+    ><svg
+      viewBox="0 0 604 164"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      class="transition"
+      style="aspect-ratio: 604/164; height: 14px; margin-top: -2px"
+    >
+      <path
+        fill-rule="evenodd"
+        clip-rule="evenodd"
+        d="M295.294 0H255.861H255.836C234.047 0 221.437 11.4661 221.437 33.483V47.2372H193.242V75.2033H221.437V160.5H253.547V75.2033H288.404V47.2372H253.547V37.3728C253.547 30.7118 257.208 27.9661 263.87 27.9661H295.294V0ZM345.26 43.8081C311.777 43.8081 288.844 67.1979 288.844 103.198H288.87C288.87 139.884 311.802 163.96 346.43 163.96C375.311 163.96 392.727 149.291 399.388 126.816H366.591C363.591 133.02 356.955 137.367 346.633 137.367C331.277 137.367 321.87 129.562 320.497 115.35H400.761C401.219 110.545 401.447 106.401 401.447 102.283C401.447 66.2826 378.744 43.8081 345.26 43.8081ZM369.108 90.5877V91.0453H320.269C321.184 77.7487 329.675 69.0284 345.26 69.0284C360.845 69.0284 369.108 77.7487 369.108 90.5877ZM412.668 47.2321H440.863V67.1898C443.609 54.3508 452.787 47.2321 467.227 47.2321H487.414V51.122C487.414 64.4186 476.634 75.1982 463.338 75.1982C450.727 75.1982 444.753 81.6304 444.753 94.4694V160.52H412.642V47.2321H412.668ZM526.939 47.24H498.744H498.719V160.503H530.829V96.0789C530.829 81.6382 539.321 72.6891 552.16 72.6891C564.999 72.6891 571.889 80.0366 571.889 95.1637V160.528H604V91.7315C604 61.7061 586.559 43.8078 558.821 43.8078C545.753 43.8078 533.601 48.8417 526.939 58.7061V47.24Z"
+        class="fill-grayscale-a10"
+      ></path>
+      <path
+        d="M149.383 80.2222C138.594 71.101 122.341 67.4445 107.936 78.0925C107.273 78.5747 106.449 77.751 106.952 77.1081C110.367 72.7082 114.325 67.9668 117.519 63.2053C120.774 58.3233 125.636 54.8275 131.241 53.1198C161.076 44.079 152.116 0 152.116 0C152.116 0 106.027 2.97342 111.713 42.7329C112.657 49.3829 110.889 56.1535 106.731 61.4374C101.628 67.8865 95.7008 74.0543 91.4014 78.5144C90.4973 79.4386 88.9705 78.5546 89.3321 77.309C93.4909 63.3058 96.5246 41.648 82.1195 27.685L61.848 10.849L57.9504 15.9922C46.3581 31.2812 49.7534 52.8385 65.0625 64.4108C73.8422 71.0407 77.8201 78.2533 77.1973 86.169C76.8156 90.9104 74.6659 95.3505 71.4514 98.8663C65.4041 105.496 59.7586 112.608 55.3989 120.846C54.7962 121.991 53.0483 121.549 53.1086 120.243C53.7314 106.641 52.4255 75.983 29.5221 65.0336L3.88635 55.1289L1.89737 61.0556C-4.55174 80.182 5.99588 100.614 25.1021 107.104C41.7171 112.749 47.6439 123.457 43.6458 139.51C43.465 140.092 40.572 156.627 40.9738 163.96H59.3969C60.0198 152.589 71.9536 145.115 82.3003 149.756C85.2135 151.062 88.207 152.93 91.2809 155.341C107.755 168.32 132.025 165.246 144.983 148.752L148.68 144.05L125.375 127.315C109.383 114.738 88.0463 120.424 72.255 131.192C70.929 132.096 69.2414 130.65 69.9847 129.203C89.0709 91.7542 113.883 91.8346 123.607 100.152C135.4 110.238 153.261 108.429 163.266 96.5961L166.139 93.2007L149.363 80.2222H149.383Z"
+        class="fill-grayscale-a10"
+      ></path></svg
+  ></a>
+</article>
