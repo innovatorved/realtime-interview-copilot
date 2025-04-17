@@ -3,7 +3,11 @@ import { buildPrompt, buildSummerizerPrompt } from "@/lib/utils";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { streamText } from "ai";
 
-const google = createGoogleGenerativeAI({});
+const GOOGLE_GENERATIVE_AI_API_KEY = process.env.GOOGLE_GENERATIVE_AI_API_KEY!;
+
+const google = createGoogleGenerativeAI({
+  apiKey: GOOGLE_GENERATIVE_AI_API_KEY,
+});
 export const runtime = "edge";
 
 export async function POST(req: Request) {
