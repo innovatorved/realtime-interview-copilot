@@ -132,7 +132,7 @@ export function Copilot({ addInSavedData }: CopilotProps) {
 
         // Decode the stream chunk
         const chunk = decoder.decode(value, { stream: true });
-        console.log(chunk);
+        console.log("chunk:", chunk);
 
         // Process Server-Sent Events
         const eventStrings = chunk.split("\n\n");
@@ -150,6 +150,7 @@ export function Copilot({ addInSavedData }: CopilotProps) {
 
           try {
             const parsed = JSON.parse(data);
+            console.log(parsed);
             if (parsed.error) {
               throw new Error(parsed.error);
             }
