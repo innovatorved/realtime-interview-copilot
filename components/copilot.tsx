@@ -6,26 +6,20 @@ import { Button } from "@/components/ui/button";
 import RecorderTranscriber from "@/components/recorder";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { useCompletion } from "@ai-sdk/react";
 import { FLAGS, HistoryData } from "@/lib/types";
 import { Switch } from "@/components/ui/switch";
 
 interface CopilotProps {
   addInSavedData: (data: HistoryData) => void;
 }
+
 export function Copilot({ addInSavedData }: CopilotProps) {
   const [transcribedText, setTranscribedText] = useState<string>("");
   const [flag, setFlag] = useState<FLAGS>(FLAGS.COPILOT);
   const [bg, setBg] = useState<string>("");
-
-  const { completion, stop, isLoading, error, setInput, handleSubmit } =
-    useCompletion({
-      api: "/api/completion",
-      body: {
-        bg,
-        flag,
-      },
-    });
+  const [completion, setCompletion] = useState<string>("");
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<Error | null>(null);
 
   const handleFlag = useCallback((checked: boolean) => {
     if (!checked) {
@@ -36,6 +30,8 @@ export function Copilot({ addInSavedData }: CopilotProps) {
   }, []);
 
   const formRef = useRef<HTMLFormElement>(null);
+  const controller = useRef<AbortController | null>(null);
+
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     if (event.ctrlKey) {
       switch (event.key) {
@@ -69,19 +65,112 @@ export function Copilot({ addInSavedData }: CopilotProps) {
   }, [handleKeyDown]);
 
   const addTextinTranscription = (text: string) => {
-    setInput((prev) => prev + " " + text);
     setTranscribedText((prev) => prev + " " + text);
   };
+
   const handleTranscriptionChange = (
     e: React.ChangeEvent<HTMLTextAreaElement>,
   ) => {
-    setInput(e.target.value);
     setTranscribedText(e.target.value);
   };
 
   const clearTranscriptionChange = () => {
-    setInput("");
     setTranscribedText("");
+  };
+
+  const stop = () => {
+    if (controller.current) {
+      controller.current.abort();
+      controller.current = null;
+      setIsLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    // Clear any previous state
+    setError(null);
+    setCompletion("");
+    setIsLoading(true);
+
+    // Create a new AbortController for this request
+    if (controller.current) controller.current.abort();
+    controller.current = new AbortController();
+
+    try {
+      const response = await fetch("/api/completion", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          bg,
+          flag,
+          prompt: transcribedText,
+        }),
+        signal: controller.current.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("Response body is null");
+      }
+
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) {
+          break;
+        }
+
+        // Decode the stream chunk
+        const chunk = decoder.decode(value, { stream: true });
+        console.log(chunk);
+
+        // Process Server-Sent Events
+        const eventStrings = chunk.split("\n\n");
+        for (const eventString of eventStrings) {
+          if (!eventString.trim()) continue;
+
+          // Extract the data part of the SSE
+          const dataMatch = eventString.match(/data: (.*)/);
+          if (!dataMatch) continue;
+
+          const data = dataMatch[1];
+          if (data === "[DONE]") {
+            continue;
+          }
+
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.error) {
+              throw new Error(parsed.error);
+            }
+
+            if (parsed.text) {
+              setCompletion((text) => text + parsed.text);
+            }
+          } catch (err) {
+            console.error("Error parsing SSE data:", err);
+          }
+        }
+      }
+    } catch (err: any) {
+      if (err.name !== "AbortError") {
+        console.error("Stream error:", err);
+        setError(err instanceof Error ? err : new Error(String(err)));
+      }
+    } finally {
+      setIsLoading(false);
+      controller.current = null;
+    }
   };
 
   useEffect(() => {
@@ -90,8 +179,6 @@ export function Copilot({ addInSavedData }: CopilotProps) {
       setBg(savedBg);
     }
   }, []);
-
-  useEffect(() => console.log(flag), [flag]);
 
   useEffect(() => {
     if (!bg) return;
@@ -182,8 +269,9 @@ export function Copilot({ addInSavedData }: CopilotProps) {
             variant="outline"
             disabled={isLoading}
             type="submit"
+            onClick={isLoading ? stop : undefined}
           >
-            Process
+            {isLoading ? "Stop" : "Process"}
             <span className="opacity-85 text-xs p-2"> (Ctrl + Enter)</span>
           </Button>
         </form>
