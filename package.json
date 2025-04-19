@@ -39,18 +39,12 @@
     "@types/react": "19.1.2",
     "@types/react-dom": "19.1.2",
     "autoprefixer": "^10.4.21",
-    "eslint": "^9.24.0",
+    "eslint": "^8",
     "eslint-config-next": "15.3.0",
     "eslint-plugin-next-on-pages": "^1.13.12",
     "postcss": "^8.5.3",
     "tailwindcss": "^4.1.4",
     "typescript": "^5.8.3",
     "wrangler": "^4.11.1"
-  },
-  "pnpm": {
-    "overrides": {
-      "@types/react": "19.1.2",
-      "@types/react-dom": "19.1.2"
-    }
   }
 }
