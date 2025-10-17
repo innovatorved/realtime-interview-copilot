@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import RecorderTranscriber from "@/components/recorder";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { FLAGS, HistoryData } from "@/lib/types";
+import { FLAGS, HistoryData, TranscriptionSegment } from "@/lib/types";
 import { Switch } from "@/components/ui/switch";
+import { TranscriptionDisplay } from "@/components/TranscriptionDisplay";
 
 interface CopilotProps {
   addInSavedData: (data: HistoryData) => void;
@@ -15,11 +16,22 @@ interface CopilotProps {
 
 export function Copilot({ addInSavedData }: CopilotProps) {
   const [transcribedText, setTranscribedText] = useState<string>("");
+  const [transcriptionSegments, setTranscriptionSegments] = useState<
+    TranscriptionSegment[]
+  >([]);
   const [flag, setFlag] = useState<FLAGS>(FLAGS.COPILOT);
   const [bg, setBg] = useState<string>("");
   const [completion, setCompletion] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
+  const transcriptionBoxRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll transcription box to bottom
+  useEffect(() => {
+    if (transcriptionBoxRef.current) {
+      transcriptionBoxRef.current.scrollTop = transcriptionBoxRef.current.scrollHeight;
+    }
+  }, [transcriptionSegments]);
 
   const handleFlag = useCallback((checked: boolean) => {
     if (!checked) {
@@ -68,14 +80,24 @@ export function Copilot({ addInSavedData }: CopilotProps) {
     setTranscribedText((prev) => prev + " " + text);
   };
 
-  const handleTranscriptionChange = (
-    e: React.ChangeEvent<HTMLTextAreaElement>,
-  ) => {
-    setTranscribedText(e.target.value);
+  const addTranscriptionSegment = (segment: TranscriptionSegment) => {
+    setTranscriptionSegments((prev) => {
+      // Check if this is an update to an existing interim segment or a new final segment
+      const existingIndex = prev.findIndex((s) => s.id === segment.id);
+      if (existingIndex !== -1) {
+        // Update existing segment
+        const updated = [...prev];
+        updated[existingIndex] = segment;
+        return updated;
+      }
+      // Add new segment
+      return [...prev, segment];
+    });
   };
 
   const clearTranscriptionChange = () => {
     setTranscribedText("");
+    setTranscriptionSegments([]);
   };
 
   const stop = () => {
@@ -219,6 +241,7 @@ export function Copilot({ addInSavedData }: CopilotProps) {
           />
           <RecorderTranscriber
             addTextinTranscription={addTextinTranscription}
+            addTranscriptionSegment={addTranscriptionSegment}
           />
         </div>
 
@@ -233,13 +256,14 @@ export function Copilot({ addInSavedData }: CopilotProps) {
               clear
             </button>
           </Label>
-          <Textarea
-            id="transcription"
-            className="h-[100px] min-h-[100px] mt-2"
-            placeholder="Your transcribed text will appear here."
-            value={transcribedText}
-            onChange={handleTranscriptionChange}
-          />
+          <div 
+            ref={transcriptionBoxRef}
+            className="mt-2 h-[225px] overflow-y-auto border border-gray-200 rounded-lg p-2 bg-white"
+          >
+            <TranscriptionDisplay
+              segments={transcriptionSegments}
+            />
+          </div>
         </div>
       </div>
       <div>
@@ -278,7 +302,8 @@ export function Copilot({ addInSavedData }: CopilotProps) {
         </form>
       </div>
 
-      <div className="mx-2 md:mx-10 mt-4 mb-8">
+      {/* AI Completion Section */}
+      <div className="mx-2 md:mx-10 mt-8 mb-8">
         {completion && (
           <button
             type="button"

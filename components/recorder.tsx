@@ -12,13 +12,16 @@ import { MicIcon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { MicOffIcon } from "lucide-react";
+import { TranscriptionSegment, TranscriptionWord } from "@/lib/types";
 
 interface RecorderTranscriberProps {
   addTextinTranscription: (text: string) => void;
+  addTranscriptionSegment?: (segment: TranscriptionSegment) => void;
 }
 
 export default function RecorderTranscriber({
   addTextinTranscription,
+  addTranscriptionSegment,
 }: RecorderTranscriberProps) {
   const isRendered = useRef(false);
   const { add, remove, first, size, queue } = useQueue<any>([]);
@@ -33,6 +36,7 @@ export default function RecorderTranscriber({
   const [userMedia, setUserMedia] = useState<MediaStream | null>();
 
   const [caption, setCaption] = useState<string | null>();
+  const segmentCounterRef = useRef<number>(0);
 
   const toggleRecorderTranscriber = useCallback(async () => {
     let currentMedia = userMedia;
@@ -121,6 +125,37 @@ export default function RecorderTranscriber({
         if (caption !== "") {
           setCaption(caption);
           addTextinTranscription(caption);
+
+          // Extract detailed segment data if callback is provided
+          if (addTranscriptionSegment) {
+            const startTime =
+              words.length > 0 ? (words[0].start ?? 0) : 0;
+            const endTime =
+              words.length > 0 ? (words[words.length - 1].end ?? 0) : 0;
+
+            const wordsData: TranscriptionWord[] = words.map((word: any) => ({
+              word: word.word,
+              punctuated_word: word.punctuated_word,
+              start: word.start,
+              end: word.end,
+              confidence: word.confidence,
+              speaker: data.channel.speaker,
+            }));
+
+            const segment: TranscriptionSegment = {
+              id: `segment-${segmentCounterRef.current++}`,
+              text: caption,
+              words: wordsData,
+              startTime,
+              endTime,
+              confidence: words.reduce((acc: number, w: any) => acc + (w.confidence ?? 0), 0) / words.length,
+              speaker: data.channel.speaker,
+              isFinal: data.is_final ?? false,
+              timestamp: new Date().toISOString(),
+            };
+
+            addTranscriptionSegment(segment);
+          }
         }
       });
 
