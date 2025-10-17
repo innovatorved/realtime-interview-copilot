@@ -6,26 +6,32 @@ import { Button } from "@/components/ui/button";
 import RecorderTranscriber from "@/components/recorder";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { useCompletion } from "ai/react";
-import { FLAGS, HistoryData } from "@/lib/types";
+import { FLAGS, HistoryData, TranscriptionSegment } from "@/lib/types";
 import { Switch } from "@/components/ui/switch";
+import { TranscriptionDisplay } from "@/components/TranscriptionDisplay";
 
 interface CopilotProps {
   addInSavedData: (data: HistoryData) => void;
 }
+
 export function Copilot({ addInSavedData }: CopilotProps) {
   const [transcribedText, setTranscribedText] = useState<string>("");
+  const [transcriptionSegments, setTranscriptionSegments] = useState<
+    TranscriptionSegment[]
+  >([]);
   const [flag, setFlag] = useState<FLAGS>(FLAGS.COPILOT);
   const [bg, setBg] = useState<string>("");
+  const [completion, setCompletion] = useState<string>("");
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<Error | null>(null);
+  const transcriptionBoxRef = useRef<HTMLDivElement>(null);
 
-  const { completion, stop, isLoading, error, setInput, handleSubmit } =
-    useCompletion({
-      api: "/api/completion",
-      body: {
-        bg,
-        flag,
-      },
-    });
+  // Auto-scroll transcription box to bottom
+  useEffect(() => {
+    if (transcriptionBoxRef.current) {
+      transcriptionBoxRef.current.scrollTop = transcriptionBoxRef.current.scrollHeight;
+    }
+  }, [transcriptionSegments]);
 
   const handleFlag = useCallback((checked: boolean) => {
     if (!checked) {
@@ -36,6 +42,8 @@ export function Copilot({ addInSavedData }: CopilotProps) {
   }, []);
 
   const formRef = useRef<HTMLFormElement>(null);
+  const controller = useRef<AbortController | null>(null);
+
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     if (event.ctrlKey) {
       switch (event.key) {
@@ -69,19 +77,123 @@ export function Copilot({ addInSavedData }: CopilotProps) {
   }, [handleKeyDown]);
 
   const addTextinTranscription = (text: string) => {
-    setInput((prev) => prev + " " + text);
     setTranscribedText((prev) => prev + " " + text);
   };
-  const handleTranscriptionChange = (
-    e: React.ChangeEvent<HTMLTextAreaElement>,
-  ) => {
-    setInput(e.target.value);
-    setTranscribedText(e.target.value);
+
+  const addTranscriptionSegment = (segment: TranscriptionSegment) => {
+    setTranscriptionSegments((prev) => {
+      // Check if this is an update to an existing interim segment or a new final segment
+      const existingIndex = prev.findIndex((s) => s.id === segment.id);
+      if (existingIndex !== -1) {
+        // Update existing segment
+        const updated = [...prev];
+        updated[existingIndex] = segment;
+        return updated;
+      }
+      // Add new segment
+      return [...prev, segment];
+    });
   };
 
   const clearTranscriptionChange = () => {
-    setInput("");
     setTranscribedText("");
+    setTranscriptionSegments([]);
+  };
+
+  const stop = () => {
+    if (controller.current) {
+      controller.current.abort();
+      controller.current = null;
+      setIsLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    // Clear any previous state
+    setError(null);
+    setCompletion("");
+    setIsLoading(true);
+
+    // Create a new AbortController for this request
+    if (controller.current) controller.current.abort();
+    controller.current = new AbortController();
+
+    try {
+      const response = await fetch("/api/completion", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          bg,
+          flag,
+          prompt: transcribedText,
+        }),
+        signal: controller.current.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("Response body is null");
+      }
+
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) {
+          break;
+        }
+
+        // Decode the stream chunk
+        const chunk = decoder.decode(value, { stream: true });
+        console.log("chunk:", chunk);
+
+        // Process Server-Sent Events
+        const eventStrings = chunk.split("\n\n");
+        for (const eventString of eventStrings) {
+          if (!eventString.trim()) continue;
+
+          // Extract the data part of the SSE
+          const dataMatch = eventString.match(/data: (.*)/);
+          if (!dataMatch) continue;
+
+          const data = dataMatch[1];
+          if (data === "[DONE]") {
+            continue;
+          }
+
+          try {
+            const parsed = JSON.parse(data);
+            console.log(parsed);
+            if (parsed.error) {
+              throw new Error(parsed.error);
+            }
+
+            if (parsed.text) {
+              setCompletion((text) => text + parsed.text);
+            }
+          } catch (err) {
+            console.error("Error parsing SSE data:", err);
+          }
+        }
+      }
+    } catch (err: any) {
+      if (err.name !== "AbortError") {
+        console.error("Stream error:", err);
+        setError(err instanceof Error ? err : new Error(String(err)));
+      }
+    } finally {
+      setIsLoading(false);
+      controller.current = null;
+    }
   };
 
   useEffect(() => {
@@ -90,8 +202,6 @@ export function Copilot({ addInSavedData }: CopilotProps) {
       setBg(savedBg);
     }
   }, []);
-
-  useEffect(() => console.log(flag), [flag]);
 
   useEffect(() => {
     if (!bg) return;
@@ -131,6 +241,7 @@ export function Copilot({ addInSavedData }: CopilotProps) {
           />
           <RecorderTranscriber
             addTextinTranscription={addTextinTranscription}
+            addTranscriptionSegment={addTranscriptionSegment}
           />
         </div>
 
@@ -145,13 +256,14 @@ export function Copilot({ addInSavedData }: CopilotProps) {
               clear
             </button>
           </Label>
-          <Textarea
-            id="transcription"
-            className="h-[100px] min-h-[100px] mt-2"
-            placeholder="Your transcribed text will appear here."
-            value={transcribedText}
-            onChange={handleTranscriptionChange}
-          />
+          <div 
+            ref={transcriptionBoxRef}
+            className="mt-2 h-[225px] overflow-y-auto border border-gray-200 rounded-lg p-2 bg-white"
+          >
+            <TranscriptionDisplay
+              segments={transcriptionSegments}
+            />
+          </div>
         </div>
       </div>
       <div>
@@ -182,14 +294,16 @@ export function Copilot({ addInSavedData }: CopilotProps) {
             variant="outline"
             disabled={isLoading}
             type="submit"
+            onClick={isLoading ? stop : undefined}
           >
-            Process
+            {isLoading ? "Stop" : "Process"}
             <span className="opacity-85 text-xs p-2"> (Ctrl + Enter)</span>
           </Button>
         </form>
       </div>
 
-      <div className="mx-2 md:mx-10 mt-4 mb-8">
+      {/* AI Completion Section */}
+      <div className="mx-2 md:mx-10 mt-8 mb-8">
         {completion && (
           <button
             type="button"

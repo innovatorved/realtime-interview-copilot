@@ -16,7 +16,7 @@
     "indentWidth": 2,
     "lineWidth": 80,
     "lineEnding": "lf",
-    "ignore": [".next/*", "node_modules/*"]
+    "ignore": [".next/*", "node_modules/*", ".vercel/*", ".wrangler/*"]
   },
   "javascript": {
     "formatter": {

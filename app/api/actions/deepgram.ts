@@ -1,12 +1,8 @@
-import { NextResponse } from "next/server";
+"use server";
 
 const DEEPGRAM_APIKEY = process.env.DEEPGRAM_API_KEY!;
 
-export const runtime = "edge";
-
-export async function GET(request: Request) {
-  const url = request.url;
-
+const getTempDeepgramAPIKEY = async () => {
   const projectsResponse = await fetch("https://api.deepgram.com/v1/projects", {
     method: "GET",
     headers: {
@@ -18,15 +14,16 @@ export async function GET(request: Request) {
   const projectsResult = await projectsResponse.json();
 
   if (!projectsResponse.ok) {
-    return NextResponse.json(projectsResult);
+    return projectsResult;
   }
 
   const project = projectsResult.projects[0];
 
+  console.log(project);
   if (!project) {
-    return NextResponse.json({
+    return {
       error: "Cannot find a Deepgram project. Please create a project first.",
-    });
+    };
   }
 
   const newKeyResponse = await fetch(
@@ -50,8 +47,8 @@ export async function GET(request: Request) {
   const newKeyResult = await newKeyResponse.json();
 
   if (!newKeyResponse.ok) {
-    return NextResponse.json(newKeyResult);
+    return newKeyResult;
   }
 
-  return NextResponse.json({ ...newKeyResult, url });
-}
+  return { ...newKeyResult };
+};
