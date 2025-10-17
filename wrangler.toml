@@ -1,0 +1,7 @@
+name = "copilot"
+compatibility_date = "2024-10-17"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = ".vercel/output/static"
+
+[observability]
+enabled = true
