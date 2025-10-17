@@ -36,10 +36,12 @@ export default function RecorderTranscriber({
 
   const toggleRecorderTranscriber = useCallback(async () => {
     let currentMedia = userMedia;
-    if (microphone && userMedia) {
-      microphone.stop();
+    if (micOpen) {
+      // Stop listening
+      microphone?.stop();
       setRecorderTranscriber(null);
     } else {
+      // Start listening
       if (!userMedia) {
         const media = await navigator.mediaDevices.getDisplayMedia({
           video: true,
@@ -51,6 +53,7 @@ export default function RecorderTranscriber({
       }
 
       if (!currentMedia) return;
+      // Create a fresh MediaRecorder instance
       const mic = new MediaRecorder(currentMedia);
       mic.start(500);
 
@@ -68,7 +71,7 @@ export default function RecorderTranscriber({
 
       setRecorderTranscriber((_) => mic);
     }
-  }, [add, microphone, userMedia]);
+  }, [add, micOpen, userMedia]);
 
   useEffect(() => {
     if (apiKey) return;
