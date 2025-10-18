@@ -11,7 +11,9 @@ const getTempDeepgramAPIKEY = async () => {
     },
   });
 
-  const projectsResult = await projectsResponse.json();
+  const projectsResult = (await projectsResponse.json()) as {
+    projects: Array<{ project_id: string }>;
+  };
 
   if (!projectsResponse.ok) {
     return projectsResult;
@@ -44,7 +46,7 @@ const getTempDeepgramAPIKEY = async () => {
     },
   );
 
-  const newKeyResult = await newKeyResponse.json();
+  const newKeyResult = (await newKeyResponse.json()) as Record<string, unknown>;
 
   if (!newKeyResponse.ok) {
     return newKeyResult;

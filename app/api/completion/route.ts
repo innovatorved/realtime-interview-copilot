@@ -1,7 +1,7 @@
 import { FLAGS } from "@/lib/types";
 import { buildPrompt, buildSummerizerPrompt } from "@/lib/utils";
 
-export const runtime = "edge";
+// export const runtime = "edge";
 
 export async function POST(req: Request) {
   const {

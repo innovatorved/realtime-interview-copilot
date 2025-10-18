@@ -84,10 +84,11 @@ export default function RecorderTranscriber({
     console.log("getting a new api key");
     fetch("/api/deepgram", { cache: "no-store" })
       .then((res) => res.json())
-      .then((object) => {
-        if (!("key" in object)) throw new Error("No api key returned");
+      .then((object: unknown) => {
+        if (typeof object !== "object" || object === null || !("key" in object))
+          throw new Error("No api key returned");
 
-        setApiKey(object);
+        setApiKey(object as CreateProjectKeyResponse);
         setLoadingKey(false);
       })
       .catch((e) => {
@@ -128,8 +129,7 @@ export default function RecorderTranscriber({
 
           // Extract detailed segment data if callback is provided
           if (addTranscriptionSegment) {
-            const startTime =
-              words.length > 0 ? (words[0].start ?? 0) : 0;
+            const startTime = words.length > 0 ? (words[0].start ?? 0) : 0;
             const endTime =
               words.length > 0 ? (words[words.length - 1].end ?? 0) : 0;
 
@@ -148,7 +148,11 @@ export default function RecorderTranscriber({
               words: wordsData,
               startTime,
               endTime,
-              confidence: words.reduce((acc: number, w: any) => acc + (w.confidence ?? 0), 0) / words.length,
+              confidence:
+                words.reduce(
+                  (acc: number, w: any) => acc + (w.confidence ?? 0),
+                  0,
+                ) / words.length,
               speaker: data.channel.speaker,
               isFinal: data.is_final ?? false,
               timestamp: new Date().toISOString(),
