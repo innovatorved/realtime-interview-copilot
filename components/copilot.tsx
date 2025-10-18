@@ -46,7 +46,7 @@ export function Copilot({ addInSavedData }: CopilotProps) {
   const controller = useRef<AbortController | null>(null);
 
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    if (event.ctrlKey) {
+    if (event.ctrlKey || event.metaKey) {
       switch (event.key) {
         case "Enter":
           event.preventDefault();
