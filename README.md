@@ -2,55 +2,73 @@
 
 ## Description
 
-Realtime Interview Copilot is a web application that assists users in crafting responses during interviews. It leverages real-time audio transcription and AI-powered response generation to provide relevant and concise answers.
+Realtime Interview Copilot is a web application that provides real-time AI assistance during interviews. It transcribes audio in real-time using Deepgram, allows users to ask questions to an AI assistant, and generates AI-powered responses based on interview context and transcription.
 
 ## Technologies
 
 - Frontend: React, TypeScript, Next.js, Tailwind CSS, Shadcn/UI
 - Backend: Node.js
-- APIs: Deepgram (transcription), Google Generative AI (response generation)
+- APIs: Deepgram (real-time transcription), Google Generative AI (response generation)
 
-## Features
-
-- Real-time audio transcription using Deepgram
-- AI-powered response generation using Google Generative AI
-- Customizable interview background information
-- Transcription text editing
-- Toggle between Copilot and Summerizer modes
 
 ## Installation and Setup
 
-1. Clone the repository:
+### Prerequisites
+- Node.js 16+
+- pnpm (or npm/yarn)
+- API Keys:
+  - Deepgram API key
+  - Google Generative AI API key
 
+### Steps
+
+1. Clone the repository:
     ```bash
     git clone https://github.com/innovatorved/realtime-interview-copilot.git
+    cd realtime-interview-copilot
     ```
 
 2. Install dependencies:
-
     ```bash
-    yarn install
+    pnpm install
     ```
 
-3. Create a `.env.local` file in the project root and add the following environment variables:
+3. Create a `.env.local` file:
+    ```
+    DEEPGRAM_API_KEY=your_deepgram_api_key
+    GOOGLE_GENERATIVE_AI_API_KEY=your_google_ai_api_key
+    ```
 
-    - `DEEPGRAM_API_KEY`: Your Deepgram API key
-    - `GOOGLE_GENERATIVE_AI_API_KEY`: Your Google Generative AI API key
-
-## Usage
-
-1. Run the development server:
-
+4. Run the development server:
     ```bash
     pnpm dev
     ```
 
-2. Access the application in your browser at http://localhost:3000.
-3. Provide interview background information in the "Interview Background" section.
-4. Start listening to the interview conversation by clicking the "Start listening" button.
-5. The transcribed text will appear in the "Transcription" section. You can edit it if needed.
-6. Choose between Copilot or Summerizer mode using the toggle switch.
-7. Click the "Process" button to generate AI-powered responses based on the transcribed text and background information.
+5. Access at `http://localhost:3000`
+
+## How It Works
+
+### Workflow
+1. User enters interview background information
+2. Click microphone to start recording/transcription
+3. Deepgram API transcribes audio in real-time
+4. User chooses Copilot or Summerizer mode
+5. Click Process to generate AI response
+6. Use AI Assistant box to ask questions anytime
+7. Save important responses to history
+
+### AI Assistant Workflow
+1. Type question in floating Ask AI box
+2. Submit with Enter or click send
+3. AI generates detailed answer
+4. Minimize box when not needed
+5. Drag box to reposition on screen
+
+## API Routes
+
+- `POST /api/completion` - Generate AI responses
+- `POST /api/deepgram` - Handle Deepgram transcription
+- `POST /api/actions/deepgram` - Background transcription tasks
 
 ## Contributing
 
