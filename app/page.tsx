@@ -1,6 +1,6 @@
 import MainPage from "@/components/main";
 
-export const runtime = "edge";
+// export const runtime = "edge";
 
 export default function Home() {
   return (

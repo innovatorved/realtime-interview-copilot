@@ -1,7 +1,16 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.4.1/schema.json",
-  "organizeImports": {
-    "enabled": true
+  "$schema": "https://biomejs.dev/schemas/2.2.6/schema.json",
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "**",
+      "!.next",
+      "!.open-next",
+      "!node_modules",
+      "!.vercel",
+      "!.wrangler",
+      "!.github"
+    ]
   },
   "linter": {
     "enabled": true,
@@ -15,8 +24,7 @@
     "indentStyle": "space",
     "indentWidth": 2,
     "lineWidth": 80,
-    "lineEnding": "lf",
-    "ignore": [".next/*", "node_modules/*", ".vercel/*", ".wrangler/*"]
+    "lineEnding": "lf"
   },
   "javascript": {
     "formatter": {

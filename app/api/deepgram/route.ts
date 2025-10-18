@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 const DEEPGRAM_APIKEY = process.env.DEEPGRAM_API_KEY!;
 
-export const runtime = "edge";
+// export const runtime = "edge";
 
 export async function GET(request: Request) {
   const url = request.url;
@@ -15,7 +15,9 @@ export async function GET(request: Request) {
     },
   });
 
-  const projectsResult = await projectsResponse.json();
+  const projectsResult = (await projectsResponse.json()) as {
+    projects: Array<{ project_id: string }>;
+  };
 
   if (!projectsResponse.ok) {
     return NextResponse.json(projectsResult);
@@ -47,7 +49,7 @@ export async function GET(request: Request) {
     },
   );
 
-  const newKeyResult = await newKeyResponse.json();
+  const newKeyResult = (await newKeyResponse.json()) as Record<string, unknown>;
 
   if (!newKeyResponse.ok) {
     return NextResponse.json(newKeyResult);

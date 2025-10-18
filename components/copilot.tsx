@@ -29,7 +29,8 @@ export function Copilot({ addInSavedData }: CopilotProps) {
   // Auto-scroll transcription box to bottom
   useEffect(() => {
     if (transcriptionBoxRef.current) {
-      transcriptionBoxRef.current.scrollTop = transcriptionBoxRef.current.scrollHeight;
+      transcriptionBoxRef.current.scrollTop =
+        transcriptionBoxRef.current.scrollHeight;
     }
   }, [transcriptionSegments]);
 
@@ -256,13 +257,11 @@ export function Copilot({ addInSavedData }: CopilotProps) {
               clear
             </button>
           </Label>
-          <div 
+          <div
             ref={transcriptionBoxRef}
             className="mt-2 h-[225px] overflow-y-auto border border-gray-200 rounded-lg p-2 bg-white"
           >
-            <TranscriptionDisplay
-              segments={transcriptionSegments}
-            />
+            <TranscriptionDisplay segments={transcriptionSegments} />
           </div>
         </div>
       </div>
