@@ -159,8 +159,6 @@ async function streamDirectlyWithFetch(
       // signal: controller.signal
     });
 
-    console.log("Fetch Response Status:", response.status);
-
     if (!response.ok) {
       // Attempt to read error details from the response body
       let errorBody = "Could not read error body";
@@ -191,7 +189,6 @@ async function streamDirectlyWithFetch(
       const { done, value } = await reader.read();
 
       if (done) {
-        console.log("Stream finished.");
         // Process any remaining data in the buffer (unlikely for valid SSE but good practice)
         if (buffer.trim()) {
           console.warn("Trailing data in buffer after stream end:", buffer);
@@ -217,7 +214,6 @@ async function streamDirectlyWithFetch(
             if (text !== null && text !== "") {
               // Check for non-empty text
               const sseData = JSON.stringify({ text });
-              console.log("Sending SSE Data:", sseData); // Your original log
               await writer.write(encoder.encode(`data: ${sseData}\n\n`));
             } else {
               // console.log("Chunk contained no text or was a non-text chunk."); // Optional: Log empty chunks
@@ -239,7 +235,6 @@ async function streamDirectlyWithFetch(
 
     // Send the final [DONE] marker
     await writer.write(encoder.encode("data: [DONE]\n\n"));
-    console.log("Sent [DONE] marker.");
   } catch (error: any) {
     console.error("Error streaming directly from Gemini API:", error);
     // Ensure error is stringified correctly for SSE
@@ -262,7 +257,6 @@ async function streamDirectlyWithFetch(
   } finally {
     try {
       await writer.close();
-      console.log("Writer closed.");
     } catch (closeError) {
       console.error("Failed to close writer:", closeError);
     }
