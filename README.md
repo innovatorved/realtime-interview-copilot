@@ -64,6 +64,18 @@ Realtime Interview Copilot is a web application that provides real-time AI assis
 4. Minimize box when not needed
 5. Drag box to reposition on screen
 
+## Keyboard shortcuts
+
+Realtime Interview Copilot includes several single-key shortcuts to speed up common actions. These shortcuts are disabled while you're typing in any input or textarea so they won't interfere with normal typing.
+
+- K — Focus the floating Ask AI input box
+- S — Switch to "Summerizer" mode
+- C — Switch to "Copilot" mode
+- Enter — Submit / Process (when not focused inside an input/textarea)
+- Escape — Clear the current AI answer
+
+Note: Shortcuts are intentionally ignored when an input or textarea has focus to allow normal typing (including using Enter inside inputs).
+
 ## API Routes
 
 - `POST /api/completion` - Generate AI responses

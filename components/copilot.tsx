@@ -46,9 +46,15 @@ export function Copilot({ addInSavedData }: CopilotProps) {
   const controller = useRef<AbortController | null>(null);
 
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    if (event.ctrlKey || event.metaKey) {
-      switch (event.key) {
-        case "Enter":
+    // Check if user is typing in an input or textarea
+    const target = event.target as HTMLElement;
+    const isTypingInInput =
+      target.tagName === "INPUT" || target.tagName === "TEXTAREA";
+
+    switch (event.key.toLowerCase()) {
+      case "enter":
+        // Only trigger global Enter if NOT in an input/textarea
+        if (!isTypingInInput) {
           event.preventDefault();
           if (formRef.current) {
             const submitEvent = new Event("submit", {
@@ -57,16 +63,20 @@ export function Copilot({ addInSavedData }: CopilotProps) {
             });
             formRef.current.dispatchEvent(submitEvent);
           }
-          break;
-        case "s":
+        }
+        break;
+      case "s":
+        if (!isTypingInInput) {
           event.preventDefault();
           setFlag(FLAGS.SUMMERIZER);
-          break;
-        case "c":
+        }
+        break;
+      case "c":
+        if (!isTypingInInput) {
           event.preventDefault();
           setFlag(FLAGS.COPILOT);
-          break;
-      }
+        }
+        break;
     }
   }, []);
 
@@ -272,7 +282,7 @@ export function Copilot({ addInSavedData }: CopilotProps) {
           <div className="flex items-center justify-center w-full border">
             <Label className="text-green-800  transition-opacity duration-300">
               Summerizer
-              <span className="opacity-85 text-xs p-2"> (Ctrl + s)</span>
+              <span className="opacity-85 text-xs p-2"> (S)</span>
             </Label>
             <Switch
               className="data-[state=checked]:bg-green-600 data-[state=unchecked]:bg-gray-200 m-2"
@@ -281,7 +291,7 @@ export function Copilot({ addInSavedData }: CopilotProps) {
               checked={flag === FLAGS.COPILOT}
             />
             <Label className="text-green-800  transition-opacity duration-300">
-              Copilot<span className="opacity-85 text-xs p-2"> (Ctrl + c)</span>
+              Copilot<span className="opacity-85 text-xs p-2"> (C)</span>
             </Label>
           </div>
 
@@ -294,7 +304,7 @@ export function Copilot({ addInSavedData }: CopilotProps) {
             onClick={isLoading ? stop : undefined}
           >
             {isLoading ? "Stop" : "Process"}
-            <span className="opacity-85 text-xs p-2"> (Ctrl + Enter)</span>
+            <span className="opacity-85 text-xs p-2"> (Enter)</span>
           </Button>
         </form>
       </div>

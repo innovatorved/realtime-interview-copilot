@@ -156,7 +156,9 @@ export function AIAssistant() {
             {messages.length === 0 && (
               <div className="flex items-center justify-center h-full text-center">
                 <div className="text-gray-500">
-                  <p className="text-sm font-medium">Ask me anything about your interview!</p>
+                  <p className="text-sm font-medium">
+                    Ask me anything about your interview!
+                  </p>
                   <p className="text-xs text-gray-400 mt-2">
                     Tips, strategies, or clarifications
                   </p>
@@ -179,9 +181,7 @@ export function AIAssistant() {
                   <p className="text-sm break-words">{msg.content}</p>
                   <span
                     className={`text-xs mt-1 block ${
-                      msg.role === "user"
-                        ? "text-green-100"
-                        : "text-gray-600"
+                      msg.role === "user" ? "text-green-100" : "text-gray-600"
                     }`}
                   >
                     {new Date(msg.timestamp).toLocaleTimeString([], {
