@@ -15,7 +15,7 @@ export function QuestionAssistant({ onQuestionSubmit }: QuestionAssistantProps) 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
-  const [position, setPosition] = useState({ x: 0, y: 80 });
+  const [position, setPosition] = useState({ x: window.innerWidth - 320, y: 80 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isMinimized, setIsMinimized] = useState(false);
