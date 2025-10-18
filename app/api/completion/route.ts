@@ -116,7 +116,7 @@ async function streamDirectlyWithFetch(
       "Missing GOOGLE_GENERATIVE_AI_API_KEY environment variable",
     );
   }
-  const MODEL_NAME = "gemini-flash-lite-latest"; 
+  const MODEL_NAME = "gemini-flash-lite-latest";
 
   // const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:streamGenerateContent?alt=sse&key=${API_KEY}`;
   const url = `https://gateway.ai.cloudflare.com/v1/b4ca0337fb21e846c53e1f2611ba436c/gateway04/google-ai-studio/v1beta/models/${MODEL_NAME}:streamGenerateContent?alt=sse&key=${API_KEY}`;

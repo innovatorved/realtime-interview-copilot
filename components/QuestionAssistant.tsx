@@ -9,7 +9,9 @@ interface QuestionAssistantProps {
   onQuestionSubmit?: (question: string) => void;
 }
 
-export function QuestionAssistant({ onQuestionSubmit }: QuestionAssistantProps) {
+export function QuestionAssistant({
+  onQuestionSubmit,
+}: QuestionAssistantProps) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -26,8 +28,13 @@ export function QuestionAssistant({ onQuestionSubmit }: QuestionAssistantProps) 
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl/Cmd + K to focus input
-      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+      // Check if user is typing in an input or textarea
+      const target = e.target as HTMLElement;
+      const isTypingInInput =
+        target.tagName === "INPUT" || target.tagName === "TEXTAREA";
+
+      // K to focus input (only if not already typing)
+      if (e.key.toLowerCase() === "k" && !isTypingInInput) {
         e.preventDefault();
         inputRef.current?.focus();
       }
@@ -270,7 +277,9 @@ Guidelines:
             <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse animation-delay-100" />
             <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse animation-delay-200" />
           </div>
-          <span className="text-white text-xs font-medium flex-1">Listening...</span>
+          <span className="text-white text-xs font-medium flex-1">
+            Listening...
+          </span>
         </div>
       )}
 
@@ -296,15 +305,18 @@ Guidelines:
 
         {/* Compact Input Area */}
         {!isMinimized && (
-          <form onSubmit={handleSubmit} className="flex items-center gap-1.5 p-2.5">
+          <form
+            onSubmit={handleSubmit}
+            className="flex items-center gap-1.5 p-2.5"
+          >
             <Input
               ref={inputRef}
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Ask... (Ctrl+K)"
+              placeholder="Ask... (K)"
               disabled={isLoading}
               className="flex-1 border-0 text-xs h-7 placeholder-gray-400 focus:ring-1 focus:ring-green-500 bg-white text-gray-900"
-              title="Press Escape to clear answer, Ctrl+K to focus"
+              title="Press Escape to clear answer, K to focus"
             />
             <Button
               type="submit"
