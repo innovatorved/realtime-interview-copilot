@@ -2,6 +2,7 @@
 
 import { Copilot } from "@/components/copilot";
 import History from "@/components/History";
+import { QuestionAssistant } from "@/components/QuestionAssistant";
 import { HistoryData } from "@/lib/types";
 import { useEffect, useRef, useState } from "react";
 
@@ -37,6 +38,7 @@ export default function MainPage() {
   return (
     <main className="m-2 overscroll-none">
       <Copilot addInSavedData={addInSavedData} />
+      <QuestionAssistant />
       <History data={savedData} deleteData={deleteData} />
     </main>
   );
