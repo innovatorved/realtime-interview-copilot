@@ -8,12 +8,12 @@ Realtime Interview Copilot is a web application that assists users in crafting r
 
 - Frontend: React, TypeScript, Next.js, Tailwind CSS, Shadcn/UI
 - Backend: Node.js
-- APIs: Deepgram (transcription), OpenAI/Groq/Mistral (response generation)
+- APIs: Deepgram (transcription), Google Generative AI (response generation)
 
 ## Features
 
 - Real-time audio transcription using Deepgram
-- AI-powered response generation using OpenAI/Groq/Mistral
+- AI-powered response generation using Google Generative AI
 - Customizable interview background information
 - Transcription text editing
 - Toggle between Copilot and Summerizer modes
@@ -35,14 +35,14 @@ Realtime Interview Copilot is a web application that assists users in crafting r
 3. Create a `.env.local` file in the project root and add the following environment variables:
 
     - `DEEPGRAM_API_KEY`: Your Deepgram API key
-    - `OPENAI_API_KEY`: Your OpenAI API key (or GROQ_API_KEY or MISTRAL_API_KEY if using those services)
+    - `GOOGLE_GENERATIVE_AI_API_KEY`: Your Google Generative AI API key
 
 ## Usage
 
 1. Run the development server:
 
     ```bash
-    yarn dev
+    pnpm dev
     ```
 
 2. Access the application in your browser at http://localhost:3000.
