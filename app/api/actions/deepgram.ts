@@ -21,7 +21,6 @@ const getTempDeepgramAPIKEY = async () => {
 
   const project = projectsResult.projects[0];
 
-  console.log(project);
   if (!project) {
     return {
       error: "Cannot find a Deepgram project. Please create a project first.",

@@ -28,8 +28,8 @@ export default function RecorderTranscriber({
   const [apiKey, setApiKey] = useState<CreateProjectKeyResponse | null>();
   const [connection, setConnection] = useState<LiveClient | null>();
   const [isListening, setListening] = useState(false);
-  const [isLoadingKey, setLoadingKey] = useState(true);
-  const [isLoading, setLoading] = useState(true);
+  const [isLoadingKey, setLoadingKey] = useState(false);
+  const [isLoading, setLoading] = useState(false);
   const [isProcessing, setProcessing] = useState(false);
   const [micOpen, setMicOpen] = useState(false);
   const [microphone, setRecorderTranscriber] = useState<MediaRecorder | null>();
@@ -37,6 +37,7 @@ export default function RecorderTranscriber({
 
   const [caption, setCaption] = useState<string | null>();
   const segmentCounterRef = useRef<number>(0);
+  const connectionRef = useRef<LiveClient | null>(null);
 
   const toggleRecorderTranscriber = useCallback(async () => {
     let currentMedia = userMedia;
@@ -44,6 +45,14 @@ export default function RecorderTranscriber({
       // Stop listening
       microphone?.stop();
       setRecorderTranscriber(null);
+
+      // Close Deepgram connection
+      if (connectionRef.current) {
+        connectionRef.current.finish();
+        connectionRef.current = null;
+        setConnection(null);
+        setListening(false);
+      }
     } else {
       // Start listening
       if (!userMedia) {
@@ -57,6 +66,28 @@ export default function RecorderTranscriber({
       }
 
       if (!currentMedia) return;
+
+      // Get API key if we don't have one
+      if (!apiKey) {
+        setLoadingKey(true);
+        try {
+          const res = await fetch("/api/deepgram", { cache: "no-store" });
+          const object = await res.json();
+          if (
+            typeof object !== "object" ||
+            object === null ||
+            !("key" in object)
+          )
+            throw new Error("No api key returned");
+          setApiKey(object as CreateProjectKeyResponse);
+        } catch (e) {
+          console.error("Failed to get API key:", e);
+          setLoadingKey(false);
+          return;
+        }
+        setLoadingKey(false);
+      }
+
       // Create a fresh MediaRecorder instance
       const mic = new MediaRecorder(currentMedia);
       mic.start(500);
@@ -75,98 +106,86 @@ export default function RecorderTranscriber({
 
       setRecorderTranscriber((_) => mic);
     }
-  }, [add, micOpen, userMedia]);
+  }, [add, micOpen, userMedia, apiKey]);
 
+  // Fetch API key only when component mounts
   useEffect(() => {
-    if (apiKey) return;
-    // if (isRendered.current) return;
+    if (isRendered.current) return;
     isRendered.current = true;
-    console.log("getting a new api key");
-    fetch("/api/deepgram", { cache: "no-store" })
-      .then((res) => res.json())
-      .then((object: unknown) => {
-        if (typeof object !== "object" || object === null || !("key" in object))
-          throw new Error("No api key returned");
+    // API key will be fetched when user starts listening, not on mount
+  }, []);
 
-        setApiKey(object as CreateProjectKeyResponse);
-        setLoadingKey(false);
-      })
-      .catch((e) => {
-        console.error(e);
-      });
-  }, [apiKey]);
-
+  // Establish Deepgram connection only when user has clicked start AND we have an API key
   useEffect(() => {
-    if (apiKey && "key" in apiKey) {
-      console.log("connecting to deepgram");
-      const deepgram = createClient(apiKey?.key ?? "");
-      const connection = deepgram.listen.live({
-        model: "nova-2",
-        interim_results: true,
-        smart_format: true,
-      });
+    if (!apiKey || !micOpen || connectionRef.current) return;
 
-      connection.on(LiveTranscriptionEvents.Open, () => {
-        console.log("connection established");
-        setListening(true);
-      });
+    setLoading(true);
+    const deepgram = createClient(apiKey?.key ?? "");
+    const newConnection = deepgram.listen.live({
+      model: "nova-2",
+      interim_results: true,
+      smart_format: true,
+    });
 
-      connection.on(LiveTranscriptionEvents.Close, () => {
-        console.log("connection closed");
-        setListening(false);
-        setApiKey(null);
-        setConnection(null);
-      });
-
-      connection.on(LiveTranscriptionEvents.Transcript, (data) => {
-        const words = data.channel.alternatives[0].words;
-        const caption = words
-          .map((word: any) => word.punctuated_word ?? word.word)
-          .join(" ");
-        if (caption !== "") {
-          setCaption(caption);
-          addTextinTranscription(caption);
-
-          // Extract detailed segment data if callback is provided
-          if (addTranscriptionSegment) {
-            const startTime = words.length > 0 ? (words[0].start ?? 0) : 0;
-            const endTime =
-              words.length > 0 ? (words[words.length - 1].end ?? 0) : 0;
-
-            const wordsData: TranscriptionWord[] = words.map((word: any) => ({
-              word: word.word,
-              punctuated_word: word.punctuated_word,
-              start: word.start,
-              end: word.end,
-              confidence: word.confidence,
-              speaker: data.channel.speaker,
-            }));
-
-            const segment: TranscriptionSegment = {
-              id: `segment-${segmentCounterRef.current++}`,
-              text: caption,
-              words: wordsData,
-              startTime,
-              endTime,
-              confidence:
-                words.reduce(
-                  (acc: number, w: any) => acc + (w.confidence ?? 0),
-                  0,
-                ) / words.length,
-              speaker: data.channel.speaker,
-              isFinal: data.is_final ?? false,
-              timestamp: new Date().toISOString(),
-            };
-
-            addTranscriptionSegment(segment);
-          }
-        }
-      });
-
-      setConnection(connection);
+    newConnection.on(LiveTranscriptionEvents.Open, () => {
+      setListening(true);
       setLoading(false);
-    }
-  }, [apiKey]);
+    });
+
+    newConnection.on(LiveTranscriptionEvents.Close, () => {
+      setListening(false);
+      setConnection(null);
+      connectionRef.current = null;
+    });
+
+    newConnection.on(LiveTranscriptionEvents.Transcript, (data) => {
+      const words = data.channel.alternatives[0].words;
+      const caption = words
+        .map((word: any) => word.punctuated_word ?? word.word)
+        .join(" ");
+      if (caption !== "") {
+        setCaption(caption);
+        addTextinTranscription(caption);
+
+        // Extract detailed segment data if callback is provided
+        if (addTranscriptionSegment) {
+          const startTime = words.length > 0 ? (words[0].start ?? 0) : 0;
+          const endTime =
+            words.length > 0 ? (words[words.length - 1].end ?? 0) : 0;
+
+          const wordsData: TranscriptionWord[] = words.map((word: any) => ({
+            word: word.word,
+            punctuated_word: word.punctuated_word,
+            start: word.start,
+            end: word.end,
+            confidence: word.confidence,
+            speaker: data.channel.speaker,
+          }));
+
+          const segment: TranscriptionSegment = {
+            id: `segment-${segmentCounterRef.current++}`,
+            text: caption,
+            words: wordsData,
+            startTime,
+            endTime,
+            confidence:
+              words.reduce(
+                (acc: number, w: any) => acc + (w.confidence ?? 0),
+                0,
+              ) / words.length,
+            speaker: data.channel.speaker,
+            isFinal: data.is_final ?? false,
+            timestamp: new Date().toISOString(),
+          };
+
+          addTranscriptionSegment(segment);
+        }
+      }
+    });
+
+    connectionRef.current = newConnection;
+    setConnection(newConnection);
+  }, [apiKey, micOpen, addTextinTranscription, addTranscriptionSegment]);
 
   useEffect(() => {
     const processQueue = async () => {
@@ -192,13 +211,13 @@ export default function RecorderTranscriber({
   if (isLoadingKey)
     return (
       <span className="w-full p-2 text-center text-xs bg-red-500 text-white">
-        Loading temporary API key...
+        Fetching API key...
       </span>
     );
   if (isLoading)
     return (
       <span className="w-full p-2 text-center text-xs bg-red-500 text-white">
-        Loading the app...
+        Connecting to Deepgram...
       </span>
     );
 
@@ -230,13 +249,16 @@ export default function RecorderTranscriber({
       >
         <span className="text-sm text-gray-400">
           {isListening
-            ? "Deepgram connection open!"
-            : "Deepgram is connecting..."}
+            ? "✓ Connected to server"
+            : !micOpen
+              ? "Start listening to connect"
+              : "Connecting..."}
         </span>
         <MicIcon
           className={cn("h-4 w-4 -translate-x-0.5 mr-2", {
             "fill-green-400 drop-shadow-glowBlue": isListening,
-            "fill-green-600": !isListening,
+            "fill-yellow-400": micOpen && !isListening,
+            "fill-gray-400": !micOpen,
           })}
         />
       </div>
