@@ -56,9 +56,21 @@ export default function RecorderTranscriber({
     } else {
       // Start listening
       if (!userMedia) {
-        const media = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: true,
+        const sources = await window.electron.getSources();
+        const source = sources[0]; // For now, just grab the first source
+        const media = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            mandatory: {
+              chromeMediaSource: 'desktop',
+              chromeMediaSourceId: source.id,
+            },
+          },
+          video: {
+            mandatory: {
+              chromeMediaSource: 'desktop',
+              chromeMediaSourceId: source.id,
+            },
+          },
         });
         media.getVideoTracks().forEach((track) => track.stop());
         currentMedia = media;
@@ -71,7 +83,7 @@ export default function RecorderTranscriber({
       if (!apiKey) {
         setLoadingKey(true);
         try {
-          const res = await fetch("/api/deepgram", { cache: "no-store" });
+          const res = await fetch("https://realtime-worker-api.innovatorved.workers.dev/api/deepgram", { cache: "no-store" });
           const object = await res.json();
           if (
             typeof object !== "object" ||
