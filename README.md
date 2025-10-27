@@ -15,7 +15,7 @@ Realtime Interview Copilot is a Progressive Web Application (PWA) that provides 
 ## Installation and Setup
 
 ### Prerequisites
-- Node.js 16+
+- Node.js 20+
 - pnpm (or npm/yarn)
 - API Keys:
   - Deepgram API key
@@ -46,31 +46,6 @@ Realtime Interview Copilot is a Progressive Web Application (PWA) that provides 
     ```
 
 5. Access at `http://localhost:3000`
-
-## PWA Features
-
-This application is now a fully-featured Progressive Web App (PWA):
-
-### Installation
-- **Desktop**: Visit the app and click the install button in your browser's address bar
-- **Android**: Tap "Add to Home Screen" when prompted or from the browser menu
-- **iOS**: Tap the share button and select "Add to Home Screen"
-
-### PWA Capabilities
-- 🚀 **Offline Support**: Basic caching for essential resources
-- 📱 **App-like Experience**: Runs in standalone mode without browser UI
-- 🎨 **Custom Theme**: Brand color (#2f855a) applied across the app
-- 📲 **Installable**: Add to home screen on mobile and desktop
-- 🔔 **Push Notifications**: Ready for future notification features
-- ⚡ **Fast Loading**: Service worker caching for improved performance
-
-### Files Added/Modified for PWA
-- `app/manifest.ts` - Web app manifest configuration
-- `public/sw.js` - Service worker for caching and offline support
-- `components/PWARegister.tsx` - Service worker registration
-- `components/InstallPWA.tsx` - Optional install prompt component
-- `next.config.mjs` - Security headers and PWA optimizations
-- `app/layout.tsx` - PWA metadata and viewport configuration
 
 ## How It Works
 
@@ -105,8 +80,7 @@ Note: Shortcuts are intentionally ignored when an input or textarea has focus to
 ## API Routes
 
 - `POST /api/completion` - Generate AI responses
-- `POST /api/deepgram` - Handle Deepgram transcription
-- `POST /api/actions/deepgram` - Background transcription tasks
+- `POST /api/deepgram` - Handle Deepgram key generations
 
 ## Contributing
 
