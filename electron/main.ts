@@ -127,12 +127,9 @@ async function createWindow() {
 
   setTimeout(() => {
     mainWindow?.webContents.reloadIgnoringCache();
-  }, 100);
+  }, 200);
 
   mainWindow.once("ready-to-show", () => {
-    setTimeout(() => {
-      mainWindow?.webContents.reloadIgnoringCache();
-    }, 100);
     mainWindow?.show();
   });
 
