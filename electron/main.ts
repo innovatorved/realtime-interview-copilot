@@ -36,25 +36,23 @@ async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 900,
     height: 700,
-    frame: false, // Remove default title bar
-    transparent: true, // Make window transparent
-    alwaysOnTop: true, // Start always on top
-    backgroundColor: "#00000000", // Fully transparent background
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    backgroundColor: "#00000000",
     hasShadow: true,
-    vibrancy: "under-window", // macOS only - creates a blur effect
+    vibrancy: "under-window",
     visualEffectState: "active",
-    icon: iconPath, // Set app icon
+    icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,
       contextIsolation: true,
       webSecurity: true,
-      // Enable web audio for system audio capture
       backgroundThrottling: false,
     },
-    // Make window invisible to screen recording
     skipTaskbar: false,
-    show: false, // Don't show until ready
+    show: false,
   });
 
   // Configure CSP to allow the hosted API
@@ -64,7 +62,7 @@ async function createWindow() {
         responseHeaders: {
           ...details.responseHeaders,
           "Content-Security-Policy": [
-            "default-src 'self'; connect-src 'self' https://realtime-worker-api.innovatorved.workers.dev https://*.deepgram.com https://api.deepgram.com wss://*.deepgram.com ws://localhost:* ws://127.0.0.1:*; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:;",
+            "default-src 'self'; connect-src 'self' https://copilot.vedgupta.in/ https://realtime-worker-api.innovatorved.workers.dev https://*.deepgram.com https://api.deepgram.com wss://*.deepgram.com ws://localhost:* ws://127.0.0.1:*; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:;",
           ],
         },
       });
@@ -124,9 +122,15 @@ async function createWindow() {
   if (isDev) {
     const devUrl = `http://localhost:3000`;
     await mainWindow.loadURL(devUrl);
+    setTimeout(() => {
+      mainWindow?.webContents.reloadIgnoringCache();
+    }, 100);
   } else {
     const indexFile = path.join(buildPath, "index.html");
     await mainWindow.loadFile(indexFile);
+    setTimeout(() => {
+      mainWindow?.webContents.reloadIgnoringCache();
+    }, 100);
   }
 
   // Show window when ready
