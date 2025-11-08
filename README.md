@@ -4,6 +4,9 @@
 
 Realtime Interview Copilot is a Progressive Web Application (PWA) that provides real-time AI assistance during interviews. It transcribes audio in real-time using Deepgram, allows users to ask questions to an AI assistant, and generates AI-powered responses based on interview context and transcription. The app can be installed on any device for offline access and a native app-like experience.
 
+> **📱 Looking for the Desktop App?**  
+> If you're looking for the desktop application code, please check the [`desktop-app`](https://github.com/innovatorved/realtime-interview-copilot/tree/desktop-app) branch.
+
 ## Technologies
 
 - Frontend: React, TypeScript, Next.js, Tailwind CSS, Shadcn/UI
