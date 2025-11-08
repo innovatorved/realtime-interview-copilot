@@ -132,18 +132,21 @@ export function Copilot({ addInSavedData }: CopilotProps) {
     controller.current = new AbortController();
 
     try {
-      const response = await fetch("/api/completion", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetch(
+        "https://realtime-worker-api.innovatorved.workers.dev/completion",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            bg,
+            flag,
+            prompt: transcribedText,
+          }),
+          signal: controller.current.signal,
         },
-        body: JSON.stringify({
-          bg,
-          flag,
-          prompt: transcribedText,
-        }),
-        signal: controller.current.signal,
-      });
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -227,7 +230,7 @@ export function Copilot({ addInSavedData }: CopilotProps) {
 
   return (
     <div className="grid w-full gap-4 mt-12">
-      <h2 className="text-3xl underline text-green-700">
+      <h2 className="text-3xl underline text-green-600 font-bold drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
         Realtime Interview Copilot
       </h2>
       {error && (
@@ -237,13 +240,16 @@ export function Copilot({ addInSavedData }: CopilotProps) {
       )}
       <div className="grid gap-4 md:grid-cols-2">
         <div className="grid gap-1.5">
-          <Label htmlFor="system_prompt" className="text-green-800">
+          <Label
+            htmlFor="system_prompt"
+            className="text-white font-semibold drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
+          >
             Interview Background
           </Label>
           <Textarea
             id="system_prompt"
             placeholder="Type or paste your text here."
-            className="resize-none h-[50px] overflow-hidden"
+            className="resize-none h-[50px] overflow-hidden bg-gray-900/60 backdrop-blur-md border-gray-600/50 text-white placeholder:text-gray-400"
             style={{ lineHeight: "1.5", maxHeight: "150px" }}
             value={bg}
             onChange={(e) => setBg(e.target.value)}
@@ -255,11 +261,14 @@ export function Copilot({ addInSavedData }: CopilotProps) {
         </div>
 
         <div className="grid gap-1.5 my-2">
-          <Label htmlFor="transcription" className="text-green-800">
+          <Label
+            htmlFor="transcription"
+            className="text-white font-semibold drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
+          >
             Transcription{" "}
             <button
               type="button"
-              className="text-xs text-red-500 hover:text-red-800 underline"
+              className="text-xs text-red-400 hover:text-red-300 underline"
               onClick={clearTranscriptionChange}
             >
               clear
@@ -267,7 +276,7 @@ export function Copilot({ addInSavedData }: CopilotProps) {
           </Label>
           <div
             ref={transcriptionBoxRef}
-            className="mt-2 h-[225px] overflow-y-auto border border-gray-200 rounded-lg p-2 bg-white"
+            className="mt-2 h-[225px] overflow-y-auto border border-gray-600/50 rounded-lg p-2 bg-gray-900/60 backdrop-blur-md"
           >
             <TranscriptionDisplay segments={transcriptionSegments} />
           </div>
@@ -279,24 +288,24 @@ export function Copilot({ addInSavedData }: CopilotProps) {
           onSubmit={handleSubmit}
           className="grid md:grid-cols-2 gap-2"
         >
-          <div className="flex items-center justify-center w-full border">
-            <Label className="text-green-800  transition-opacity duration-300">
+          <div className="flex items-center justify-center w-full border border-gray-600/50 bg-gray-900/40 backdrop-blur-sm rounded px-2 py-1">
+            <Label className="text-white font-medium drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] transition-opacity duration-300">
               Summerizer
               <span className="opacity-85 text-xs p-2"> (S)</span>
             </Label>
             <Switch
-              className="data-[state=checked]:bg-green-600 data-[state=unchecked]:bg-gray-200 m-2"
+              className="data-[state=checked]:bg-green-600 data-[state=unchecked]:bg-gray-600 m-2"
               onCheckedChange={handleFlag}
               defaultChecked
               checked={flag === FLAGS.COPILOT}
             />
-            <Label className="text-green-800  transition-opacity duration-300">
+            <Label className="text-white font-medium drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] transition-opacity duration-300">
               Copilot<span className="opacity-85 text-xs p-2"> (C)</span>
             </Label>
           </div>
 
           <Button
-            className="h-9 w-full bg-green-600 hover:bg-green-800 text-white transition-opacity duration-300"
+            className="h-9 w-full bg-green-600 hover:bg-green-700 text-white transition-opacity duration-300 font-semibold"
             size="sm"
             variant="outline"
             disabled={isLoading}
@@ -314,13 +323,15 @@ export function Copilot({ addInSavedData }: CopilotProps) {
         {completion && (
           <button
             type="button"
-            className="text-xs text-green-500 hover:text-green-800 underline"
+            className="text-xs text-green-400 hover:text-green-300 underline font-medium"
             onClick={handleSave}
           >
             save
           </button>
         )}
-        <div className="flex whitespace-pre-wrap">{completion}</div>
+        <div className="flex whitespace-pre-wrap text-white bg-gray-900/60 backdrop-blur-md rounded-lg p-4 border border-gray-600/50">
+          {completion}
+        </div>
       </div>
     </div>
   );

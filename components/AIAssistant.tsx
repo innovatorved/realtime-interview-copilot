@@ -51,18 +51,21 @@ export function AIAssistant() {
     controller.current = new AbortController();
 
     try {
-      const response = await fetch("/api/completion", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetch(
+        "https://realtime-worker-api.innovatorved.workers.dev/completion",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            prompt: input,
+            flag: "copilot",
+            bg: "You are a direct, no-nonsense interview assistant. Answer questions with straight, concise facts. Do not use filler words like 'alright', 'umm', 'ha', 'you know', 'basically', or 'like'. Get directly to the point. Be professional and precise. Answer exactly what is asked without extra fluff.",
+          }),
+          signal: controller.current.signal,
         },
-        body: JSON.stringify({
-          prompt: input,
-          flag: "copilot",
-          bg: "You are a direct, no-nonsense interview assistant. Answer questions with straight, concise facts. Do not use filler words like 'alright', 'umm', 'ha', 'you know', 'basically', or 'like'. Get directly to the point. Be professional and precise. Answer exactly what is asked without extra fluff.",
-        }),
-        signal: controller.current.signal,
-      });
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -139,7 +142,7 @@ export function AIAssistant() {
     <div className="fixed bottom-6 right-6 z-50">
       {/* Chat Window */}
       {isOpen && (
-        <Card className="absolute bottom-20 right-0 w-96 h-[500px] flex flex-col shadow-2xl border border-green-200 bg-white rounded-lg overflow-hidden">
+        <Card className="absolute bottom-20 right-0 w-96 h-[500px] flex flex-col shadow-2xl border border-gray-600/50 bg-gray-900/80 backdrop-blur-md rounded-lg overflow-hidden">
           {/* Header */}
           <div className="bg-gradient-to-r from-green-600 to-green-700 text-white p-4 flex justify-between items-center">
             <h3 className="font-bold text-lg">Interview Assistant</h3>
@@ -152,10 +155,10 @@ export function AIAssistant() {
           </div>
 
           {/* Messages Container */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-800/50">
             {messages.length === 0 && (
               <div className="flex items-center justify-center h-full text-center">
-                <div className="text-gray-500">
+                <div className="text-gray-300">
                   <p className="text-sm font-medium">
                     Ask me anything about your interview!
                   </p>
@@ -175,13 +178,13 @@ export function AIAssistant() {
                   className={`max-w-xs px-4 py-2 rounded-lg ${
                     msg.role === "user"
                       ? "bg-green-600 text-white rounded-br-none"
-                      : "bg-gray-200 text-gray-900 rounded-bl-none"
+                      : "bg-gray-700/80 text-white rounded-bl-none"
                   }`}
                 >
                   <p className="text-sm break-words">{msg.content}</p>
                   <span
                     className={`text-xs mt-1 block ${
-                      msg.role === "user" ? "text-green-100" : "text-gray-600"
+                      msg.role === "user" ? "text-green-100" : "text-gray-400"
                     }`}
                   >
                     {new Date(msg.timestamp).toLocaleTimeString([], {
@@ -195,7 +198,7 @@ export function AIAssistant() {
 
             {isLoading && (
               <div className="flex justify-start">
-                <div className="bg-gray-200 text-gray-900 px-4 py-2 rounded-lg rounded-bl-none flex items-center gap-2">
+                <div className="bg-gray-700/80 text-white px-4 py-2 rounded-lg rounded-bl-none flex items-center gap-2">
                   <div className="w-4 h-4 animate-spin rounded-full border-2 border-green-600 border-t-transparent" />
                   <span className="text-sm">Thinking...</span>
                 </div>
@@ -208,14 +211,14 @@ export function AIAssistant() {
           {/* Input Form */}
           <form
             onSubmit={handleSubmit}
-            className="border-t border-gray-200 p-4 bg-white flex gap-2"
+            className="border-t border-gray-700/50 p-4 bg-gray-800/60 flex gap-2"
           >
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask a question..."
               disabled={isLoading}
-              className="flex-1 text-sm border-gray-300 focus:border-green-500 focus:ring-green-500"
+              className="flex-1 text-sm border-gray-600/50 bg-gray-900/60 text-white placeholder:text-gray-400 focus:border-green-500 focus:ring-green-500"
             />
             <Button
               type="submit"

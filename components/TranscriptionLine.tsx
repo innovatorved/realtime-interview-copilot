@@ -26,9 +26,7 @@ export function TranscriptionLine({
     <div
       className={cn(
         " px-2 text-sm leading-tight break-words transition-colors",
-        isFinal || segment.isFinal
-          ? "text-gray-900"
-          : "text-gray-600 opacity-75",
+        isFinal || segment.isFinal ? "text-white" : "text-gray-300 opacity-75",
         className,
       )}
     >

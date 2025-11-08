@@ -6,18 +6,26 @@
     "dev": "next dev",
     "dev:https": "next dev --experimental-https",
     "build": "next build",
+    "build:static": "next build && next export",
     "start": "next start",
     "lint": "next lint",
     "fix": "npx @biomejs/biome format --write .",
     "cf-preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "cf-deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "build:electron": "node scripts/build-electron.js",
+    "electron:dev": "pnpm run build:electron && concurrently \"PORT=3000 pnpm run dev\" \"wait-on http://localhost:3000 && DEV_PORT=3000 npx --yes electron@latest .\"",
+    "electron:debug": "ELECTRON_DEBUG=true pnpm run build:electron && concurrently \"PORT=3000 pnpm run dev\" \"wait-on http://localhost:3000 && DEV_PORT=3000 npx --yes electron@latest .\"",
+    "electron:build": "pnpm run build:electron && pnpm run build && npx electron-builder",
+    "electron:start": "pnpm run build:electron && npx --yes electron@latest .",
+    "clean": "rm -rf .next out dist electron/*.js electron/*.js.map"
   },
   "dependencies": {
     "@deepgram/sdk": "^4.11.2",
     "@opennextjs/cloudflare": "^1.11.0",
     "@radix-ui/react-icons": "^1.3.2",
     "@radix-ui/react-label": "^2.1.7",
+    "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-switch": "^1.2.6",
     "@tailwindcss/postcss": "^4.1.14",
@@ -39,11 +47,51 @@
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "autoprefixer": "^10.4.21",
+    "concurrently": "^8.2.2",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
     "eslint": "^9.38.0",
     "eslint-config-next": "^15.5.6",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.14",
     "typescript": "^5.9.3",
+    "wait-on": "^7.2.0",
     "wrangler": "^4.43.0"
+  },
+  "main": "electron/main.js",
+  "build": {
+    "appId": "com.realtime.interview.copilot",
+    "productName": "Realtime Interview Copilot",
+    "files": [
+      "out/**/*",
+      "electron/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "public"
+    },
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "public/icons/android-chrome-512x512.png",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "icon": "public/icons/favicon.ico",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "linux": {
+      "icon": "public/icons/android-chrome-512x512.png",
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    }
   }
 }

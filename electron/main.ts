@@ -1,0 +1,231 @@
+import { app, BrowserWindow, ipcMain, screen } from "electron";
+import * as path from "path";
+import * as url from "url";
+
+let mainWindow: BrowserWindow | null = null;
+
+// Hide from screen share and screen recording on macOS
+if (process.platform === "darwin") {
+  app.commandLine.appendSwitch(
+    "disable-features",
+    "MediaFoundationVideoCapture",
+  );
+}
+
+function createWindow() {
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+
+  // Determine icon path based on platform
+  let iconPath: string;
+  if (process.platform === "darwin") {
+    // macOS - use larger PNG or .icns if available
+    iconPath = path.join(
+      __dirname,
+      "../public/icons/android-chrome-512x512.png",
+    );
+  } else if (process.platform === "win32") {
+    // Windows - use .ico
+    iconPath = path.join(__dirname, "../public/icons/favicon.ico");
+  } else {
+    // Linux - use PNG
+    iconPath = path.join(
+      __dirname,
+      "../public/icons/android-chrome-512x512.png",
+    );
+  }
+
+  mainWindow = new BrowserWindow({
+    width: 900,
+    height: 700,
+    frame: false, // Remove default title bar
+    transparent: true, // Make window transparent
+    alwaysOnTop: true, // Start always on top
+    backgroundColor: "#00000000", // Fully transparent background
+    hasShadow: true,
+    vibrancy: "under-window", // macOS only - creates a blur effect
+    visualEffectState: "active",
+    icon: iconPath, // Set app icon
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      nodeIntegration: false,
+      contextIsolation: true,
+      webSecurity: true,
+      // Enable web audio for system audio capture
+      backgroundThrottling: false,
+    },
+    // Make window invisible to screen recording
+    skipTaskbar: false,
+    show: false, // Don't show until ready
+  });
+
+  // Configure CSP to allow the hosted API
+  mainWindow.webContents.session.webRequest.onHeadersReceived(
+    (details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          "Content-Security-Policy": [
+            "default-src 'self'; connect-src 'self' https://realtime-worker-api.innovatorved.workers.dev https://*.deepgram.com https://api.deepgram.com wss://*.deepgram.com ws://localhost:* ws://127.0.0.1:*; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:;",
+          ],
+        },
+      });
+    },
+  );
+
+  // Hide from screen capture on macOS
+  if (process.platform === "darwin") {
+    mainWindow.setWindowButtonVisibility(false);
+
+    // Method 1: Set sharing type to none (macOS 10.15+)
+    // @ts-ignore - setSharingType is not in Electron types but exists
+    if (mainWindow.setSharingType) {
+      // @ts-ignore
+      mainWindow.setSharingType("none");
+    }
+
+    // Method 2: Additional macOS content protection
+    try {
+      // This makes the window content not capturable
+      mainWindow.setContentProtection(true);
+    } catch (e) {
+      console.log("Content protection not available:", e);
+    }
+  }
+
+  // Prevent window from being shown in screen shares (Windows)
+  if (process.platform === "win32") {
+    mainWindow.setContentProtection(true);
+
+    // Additional Windows protection - set window to be excluded from capture
+    try {
+      // @ts-ignore - Windows-specific API
+      if (mainWindow.setSkipTaskbar) {
+        // This helps hide from certain screen capture tools
+        mainWindow.setContentProtection(true);
+      }
+    } catch (e) {
+      console.log("Additional Windows protection not available:", e);
+    }
+  }
+
+  // Linux protection
+  if (process.platform === "linux") {
+    try {
+      mainWindow.setContentProtection(true);
+    } catch (e) {
+      console.log("Content protection not available on Linux:", e);
+    }
+  }
+
+  // Load the app
+  const isDev = process.env.NODE_ENV !== "production";
+  const isDebug =
+    process.argv.includes("--inspect") || process.env.ELECTRON_DEBUG === "true";
+
+  if (isDev) {
+    // Support dynamic port for Next.js dev server
+    const devPort = process.env.DEV_PORT || "3000";
+    const devUrl = `http://localhost:${devPort}`;
+    mainWindow.loadURL(devUrl);
+    // Always open DevTools in development
+    mainWindow.webContents.openDevTools();
+  } else {
+    mainWindow.loadURL(
+      url.format({
+        pathname: path.join(__dirname, "../out/index.html"),
+        protocol: "file:",
+        slashes: true,
+      }),
+    );
+  }
+
+  // Show window when ready
+  mainWindow.once("ready-to-show", () => {
+    mainWindow?.show();
+  });
+
+  // Handle window closed
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+  });
+}
+
+// App lifecycle
+app.whenReady().then(() => {
+  createWindow();
+
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
+  });
+});
+
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") {
+    app.quit();
+  }
+});
+
+// IPC Handlers
+ipcMain.handle("window-minimize", () => {
+  mainWindow?.minimize();
+});
+
+ipcMain.handle("window-maximize", () => {
+  if (mainWindow?.isMaximized()) {
+    mainWindow.unmaximize();
+    return false;
+  } else {
+    mainWindow?.maximize();
+    return true;
+  }
+});
+
+ipcMain.handle("window-close", () => {
+  mainWindow?.close();
+});
+
+ipcMain.handle("window-always-on-top", (_, flag: boolean) => {
+  mainWindow?.setAlwaysOnTop(flag);
+  return flag;
+});
+
+ipcMain.handle("window-set-opacity", (_, opacity: number) => {
+  // Opacity should be between 0 and 1
+  const clampedOpacity = Math.max(0.1, Math.min(1, opacity));
+  mainWindow?.setOpacity(clampedOpacity);
+  return clampedOpacity;
+});
+
+ipcMain.handle("window-get-opacity", () => {
+  return mainWindow?.getOpacity() || 1;
+});
+
+ipcMain.handle("window-is-always-on-top", () => {
+  return mainWindow?.isAlwaysOnTop() || false;
+});
+
+ipcMain.handle("window-is-maximized", () => {
+  return mainWindow?.isMaximized() || false;
+});
+
+// Get available audio devices
+ipcMain.handle("get-audio-devices", async () => {
+  try {
+    // This will be called from the renderer process
+    // The actual enumeration happens in the renderer due to security
+    return { success: true };
+  } catch (error) {
+    console.error("Error getting audio devices:", error);
+    return { success: false, error };
+  }
+});
+
+// Handle app quit
+ipcMain.handle("app-quit", () => {
+  app.quit();
+});
+
+// Handle deep link (if needed for OAuth or other purposes)
+app.setAsDefaultProtocolClient("realtime-copilot");

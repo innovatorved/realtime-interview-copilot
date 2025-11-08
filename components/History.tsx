@@ -15,11 +15,14 @@ export default function History({ data: savedData, deleteData }: HistoryProps) {
       <main className="overflow-auto p-4 space-y-4">
         {savedData &&
           savedData?.map((data, index) => (
-            <Card key={index} className="p-4 bg-green-100">
-              <div className="flex mt-2 text-xs">
+            <Card
+              key={index}
+              className="p-4 bg-gray-900/60 backdrop-blur-md border-gray-600/50"
+            >
+              <div className="flex mt-2 text-xs text-gray-300">
                 {data.tag} • {data.createdAt} •{" "}
                 <button
-                  className="text-xs text-red-500 hover:text-red-800 underline"
+                  className="text-xs text-red-400 hover:text-red-300 underline ml-1"
                   onClick={() => {
                     deleteData(data.createdAt);
                   }}
@@ -27,7 +30,10 @@ export default function History({ data: savedData, deleteData }: HistoryProps) {
                   Delete
                 </button>
               </div>
-              <ContentData className="mt-2 text-sm" contentMaxLength={100}>
+              <ContentData
+                className="mt-2 text-sm text-white"
+                contentMaxLength={100}
+              >
                 {data.data}
               </ContentData>
             </Card>
