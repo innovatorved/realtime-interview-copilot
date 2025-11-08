@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, screen } from "electron";
 import * as path from "path";
+import * as fs from "fs";
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -116,22 +117,48 @@ async function createWindow() {
 
   const buildPath = path.join(app.getAppPath(), "out");
   console.log("Build path:", buildPath);
-  const isDev = process.env.NODE_ENV !== "production";
-  if (isDev) {
-    const devUrl = `http://localhost:3000`;
-    await mainWindow.loadURL(devUrl);
-  } else {
-    const indexFile = path.join(buildPath, "index.html");
-    await mainWindow.loadFile(indexFile);
-  }
+  console.log("Is packaged:", app.isPackaged);
+  console.log("App path:", app.getAppPath());
 
-  setTimeout(() => {
-    mainWindow?.webContents.reloadIgnoringCache();
-  }, 200);
+  const isDev = !app.isPackaged || process.env.DEV_PORT;
+
+  try {
+    if (isDev) {
+      const devPort = process.env.DEV_PORT || "3000";
+      const devUrl = `http://localhost:${devPort}`;
+      console.log("Loading development URL:", devUrl);
+      await mainWindow.loadURL(devUrl);
+
+      setTimeout(() => {
+        mainWindow?.webContents.reloadIgnoringCache();
+      }, 200);
+    } else {
+      const indexFile = path.join(buildPath, "index.html");
+      await mainWindow.loadFile(indexFile);
+
+      setTimeout(() => {
+        mainWindow?.webContents.reloadIgnoringCache();
+      }, 200);
+    }
+  } catch (error) {
+    console.error("Error loading window content:", error);
+    mainWindow.show();
+    mainWindow.loadURL(
+      `data:text/html,<html><body><h1>Error loading application</h1><p>${error}</p></body></html>`,
+    );
+  }
 
   mainWindow.once("ready-to-show", () => {
     mainWindow?.show();
   });
+
+  // Fallback: show window after 3 seconds if it hasn't shown yet
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isVisible()) {
+      console.log("Window not visible after 3 seconds, forcing show");
+      mainWindow.show();
+    }
+  }, 3000);
 
   mainWindow.on("closed", () => {
     mainWindow = null;
