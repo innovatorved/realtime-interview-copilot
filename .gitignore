@@ -40,3 +40,13 @@ yarn-error.log*
 next-env.d.ts
 
 .dev.vars
+
+# electron
+/dist
+/electron/*.js
+/electron/*.js.map
+*.dmg
+*.exe
+*.AppImage
+*.deb
+*.rpm

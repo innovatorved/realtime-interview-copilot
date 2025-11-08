@@ -62,15 +62,17 @@ export function QuestionAssistant({
     controller.current = new AbortController();
 
     try {
-      const response = await fetch("/api/completion", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt: question,
-          flag: "copilot",
-          bg: `You are a professional interview coach helping candidates ace technical and behavioral interviews.
+      const response = await fetch(
+        "https://realtime-worker-api.innovatorved.workers.dev/completion",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            prompt: question,
+            flag: "copilot",
+            bg: `You are a professional interview coach helping candidates ace technical and behavioral interviews.
 
 IMPORTANT: Provide DETAILED, COMPREHENSIVE, INTERVIEW-READY answers. This is NOT for simple definitions - it's to help candidates answer interview questions perfectly.
 
@@ -89,9 +91,10 @@ Guidelines:
 - Include examples they can mention
 - Professional and authoritative tone
 - Structure answer for easy reference during interview`,
-        }),
-        signal: controller.current.signal,
-      });
+          }),
+          signal: controller.current.signal,
+        },
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -284,7 +287,7 @@ Guidelines:
       )}
 
       {/* Main Box */}
-      <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
+      <div className="bg-gray-900/70 backdrop-blur-md rounded-lg shadow-md border border-gray-600/50 overflow-hidden">
         {/* Drag Handle Header */}
         <div
           onMouseDown={handleMouseDown}
@@ -315,7 +318,7 @@ Guidelines:
               onChange={(e) => setQuestion(e.target.value)}
               placeholder="Ask... (K)"
               disabled={isLoading}
-              className="flex-1 border-0 text-xs h-7 placeholder-gray-400 focus:ring-1 focus:ring-green-500 bg-white text-gray-900"
+              className="flex-1 border-0 text-xs h-7 placeholder-gray-400 focus:ring-1 focus:ring-green-500 bg-gray-800/60 text-white"
               title="Press Escape to clear answer, K to focus"
             />
             <Button
@@ -336,7 +339,7 @@ Guidelines:
 
         {/* Loading State - Skeleton Loader */}
         {!isMinimized && isLoading && !answer && (
-          <div className="px-2.5 py-2 border-t border-gray-100 bg-gray-50">
+          <div className="px-2.5 py-2 border-t border-gray-700/50 bg-gray-800/50">
             <div className="space-y-2">
               <div className="h-3 w-full animate-skeleton rounded" />
               <div className="h-3 w-5/6 animate-skeleton rounded" />
@@ -347,15 +350,15 @@ Guidelines:
 
         {/* Error */}
         {!isMinimized && error && (
-          <div className="px-2.5 py-1.5 border-t border-gray-100 bg-red-50 text-red-600 text-xs">
+          <div className="px-2.5 py-1.5 border-t border-gray-700/50 bg-red-900/30 text-red-300 text-xs">
             {error}
           </div>
         )}
 
         {/* Answer */}
         {!isMinimized && answer && (
-          <div className="px-2.5 py-2 border-t border-gray-100 bg-gradient-to-b from-green-50 to-white max-h-48 overflow-y-auto fade-in-answer">
-            <div className="text-gray-800 text-xs leading-relaxed whitespace-pre-wrap">
+          <div className="px-2.5 py-2 border-t border-gray-700/50 bg-gradient-to-b from-gray-800/60 to-gray-900/60 backdrop-blur-sm max-h-48 overflow-y-auto fade-in-answer">
+            <div className="text-white text-xs leading-relaxed whitespace-pre-wrap">
               {answer}
             </div>
           </div>
