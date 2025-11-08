@@ -62,7 +62,7 @@ async function createWindow() {
         responseHeaders: {
           ...details.responseHeaders,
           "Content-Security-Policy": [
-            "default-src 'self'; connect-src 'self' https://copilot.vedgupta.in/ https://realtime-worker-api.innovatorved.workers.dev https://*.deepgram.com https://api.deepgram.com wss://*.deepgram.com ws://localhost:* ws://127.0.0.1:*; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:;",
+            "default-src 'self'; connect-src 'self' https://copilot.vedgupta.in https://realtime-worker-api.innovatorved.workers.dev https://*.deepgram.com https://api.deepgram.com wss://*.deepgram.com ws://localhost:* ws://127.0.0.1:*; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:;",
           ],
         },
       });
@@ -114,31 +114,28 @@ async function createWindow() {
     }
   }
 
-  // Load the app
-
   const buildPath = path.join(app.getAppPath(), "out");
   console.log("Build path:", buildPath);
   const isDev = process.env.NODE_ENV !== "production";
   if (isDev) {
     const devUrl = `http://localhost:3000`;
     await mainWindow.loadURL(devUrl);
-    setTimeout(() => {
-      mainWindow?.webContents.reloadIgnoringCache();
-    }, 100);
   } else {
     const indexFile = path.join(buildPath, "index.html");
     await mainWindow.loadFile(indexFile);
+  }
+
+  setTimeout(() => {
+    mainWindow?.webContents.reloadIgnoringCache();
+  }, 100);
+
+  mainWindow.once("ready-to-show", () => {
     setTimeout(() => {
       mainWindow?.webContents.reloadIgnoringCache();
     }, 100);
-  }
-
-  // Show window when ready
-  mainWindow.once("ready-to-show", () => {
     mainWindow?.show();
   });
 
-  // Handle window closed
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
