@@ -1,9 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 
-// Expose protected methods that allow the renderer process to use
-// the ipcRenderer without exposing the entire object
 contextBridge.exposeInMainWorld("electronAPI", {
-  // Window controls
   windowMinimize: () => ipcRenderer.invoke("window-minimize"),
   windowMaximize: () => ipcRenderer.invoke("window-maximize"),
   windowClose: () => ipcRenderer.invoke("window-close"),
@@ -14,17 +11,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   windowGetOpacity: () => ipcRenderer.invoke("window-get-opacity"),
   windowIsAlwaysOnTop: () => ipcRenderer.invoke("window-is-always-on-top"),
   windowIsMaximized: () => ipcRenderer.invoke("window-is-maximized"),
-
-  // App controls
   appQuit: () => ipcRenderer.invoke("app-quit"),
-
-  // Audio device enumeration
   getAudioDevices: () => ipcRenderer.invoke("get-audio-devices"),
-
-  // Platform info
   platform: process.platform,
-
-  // Check if running in Electron
   isElectron: true,
 });
 
