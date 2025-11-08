@@ -9,7 +9,10 @@
       "!node_modules",
       "!.vercel",
       "!.wrangler",
-      "!.github"
+      "!.github",
+      "!.vscode",
+      "!dist",
+      "!out"
     ]
   },
   "linter": {
