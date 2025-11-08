@@ -3,18 +3,25 @@
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import RecorderTranscriber from "@/components/recorder";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { FLAGS, HistoryData, TranscriptionSegment } from "@/lib/types";
 import { Switch } from "@/components/ui/switch";
 import { TranscriptionDisplay } from "@/components/TranscriptionDisplay";
+import { useClientReady } from "@/hooks/useClientReady";
+
+const RecorderTranscriber = dynamic(() => import("@/components/recorder"), {
+  ssr: false,
+  loading: () => <RecorderFallback />,
+});
 
 interface CopilotProps {
   addInSavedData: (data: HistoryData) => void;
 }
 
 export function Copilot({ addInSavedData }: CopilotProps) {
+  const isClientReady = useClientReady();
   const [transcribedText, setTranscribedText] = useState<string>("");
   const [transcriptionSegments, setTranscriptionSegments] = useState<
     TranscriptionSegment[]
@@ -228,6 +235,10 @@ export function Copilot({ addInSavedData }: CopilotProps) {
     });
   };
 
+  if (!isClientReady) {
+    return <CopilotSkeleton />;
+  }
+
   return (
     <div className="grid w-full gap-4 mt-12">
       <h2 className="text-3xl underline text-green-600 font-bold drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
@@ -333,6 +344,38 @@ export function Copilot({ addInSavedData }: CopilotProps) {
           {completion}
         </div>
       </div>
+    </div>
+  );
+}
+
+function CopilotSkeleton() {
+  return (
+    <div className="grid w-full gap-4 mt-12 animate-pulse">
+      <div className="h-8 w-64 bg-gray-800/60 rounded" />
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-3">
+          <div className="h-4 w-40 bg-gray-800/60 rounded" />
+          <div className="h-[150px] bg-gray-800/60 rounded" />
+          <div className="h-9 bg-gray-800/60 rounded" />
+        </div>
+        <div className="space-y-3">
+          <div className="h-4 w-32 bg-gray-800/60 rounded" />
+          <div className="h-[225px] bg-gray-800/60 rounded" />
+        </div>
+      </div>
+      <div className="grid md:grid-cols-2 gap-2">
+        <div className="h-9 bg-gray-800/60 rounded" />
+        <div className="h-9 bg-gray-800/60 rounded" />
+      </div>
+      <div className="h-40 bg-gray-800/60 rounded" />
+    </div>
+  );
+}
+
+function RecorderFallback() {
+  return (
+    <div className="flex h-9 items-center justify-center rounded bg-gray-900/40 text-xs text-gray-400">
+      Initializing recorder...
     </div>
   );
 }

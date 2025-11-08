@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { useClientReady } from "@/hooks/useClientReady";
 
 interface RecorderTranscriberProps {
   addTextinTranscription: (text: string) => void;
@@ -37,17 +38,20 @@ export default function RecorderTranscriber({
   addTextinTranscription,
   addTranscriptionSegment,
 }: RecorderTranscriberProps) {
+  const isClientReady = useClientReady();
   const isRendered = useRef(false);
   const { add, remove, first, size, queue } = useQueue<any>([]);
-  const [apiKey, setApiKey] = useState<CreateProjectKeyResponse | null>();
-  const [connection, setConnection] = useState<LiveClient | null>();
+  const [apiKey, setApiKey] = useState<CreateProjectKeyResponse | null>(null);
+  const [connection, setConnection] = useState<LiveClient | null>(null);
   const [isListening, setListening] = useState(false);
   const [isLoadingKey, setLoadingKey] = useState(false);
   const [isLoading, setLoading] = useState(false);
   const [isProcessing, setProcessing] = useState(false);
   const [micOpen, setMicOpen] = useState(false);
-  const [microphone, setRecorderTranscriber] = useState<MediaRecorder | null>();
-  const [userMedia, setUserMedia] = useState<MediaStream | null>();
+  const [microphone, setRecorderTranscriber] = useState<MediaRecorder | null>(
+    null,
+  );
+  const [userMedia, setUserMedia] = useState<MediaStream | null>(null);
 
   // Audio device selection states
   const [audioDevices, setAudioDevices] = useState<AudioDeviceInfo[]>([]);
@@ -55,7 +59,7 @@ export default function RecorderTranscriber({
   const [isLoadingDevices, setIsLoadingDevices] = useState(false);
   const [isElectron, setIsElectron] = useState<boolean | null>(null); // null initially to prevent hydration mismatch
 
-  const [caption, setCaption] = useState<string | null>();
+  const [caption, setCaption] = useState<string | null>(null);
   const segmentCounterRef = useRef<number>(0);
   const connectionRef = useRef<LiveClient | null>(null);
 
@@ -476,6 +480,9 @@ export default function RecorderTranscriber({
         Connecting to Deepgram...
       </span>
     );
+  if (!isClientReady) {
+    return <RecorderSkeleton />;
+  }
 
   return (
     <div className="w-full relative">
@@ -553,6 +560,14 @@ export default function RecorderTranscriber({
           })}
         />
       </div>
+    </div>
+  );
+}
+
+function RecorderSkeleton() {
+  return (
+    <div className="w-full">
+      <div className="mt-2 h-9 w-full animate-pulse rounded bg-gray-900/40" />
     </div>
   );
 }

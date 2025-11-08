@@ -1,6 +1,5 @@
 import { app, BrowserWindow, ipcMain, screen } from "electron";
 import * as path from "path";
-import * as url from "url";
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -12,7 +11,7 @@ if (process.platform === "darwin") {
   );
 }
 
-function createWindow() {
+async function createWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
 
   // Determine icon path based on platform
@@ -118,25 +117,16 @@ function createWindow() {
   }
 
   // Load the app
-  const isDev = process.env.NODE_ENV !== "production";
-  const isDebug =
-    process.argv.includes("--inspect") || process.env.ELECTRON_DEBUG === "true";
 
+  const buildPath = path.join(app.getAppPath(), "out");
+  console.log("Build path:", buildPath);
+  const isDev = process.env.NODE_ENV !== "production";
   if (isDev) {
-    // Support dynamic port for Next.js dev server
-    const devPort = process.env.DEV_PORT || "3000";
-    const devUrl = `http://localhost:${devPort}`;
-    mainWindow.loadURL(devUrl);
-    // Always open DevTools in development
-    mainWindow.webContents.openDevTools();
+    const devUrl = `http://localhost:3000`;
+    await mainWindow.loadURL(devUrl);
   } else {
-    mainWindow.loadURL(
-      url.format({
-        pathname: path.join(__dirname, "../out/index.html"),
-        protocol: "file:",
-        slashes: true,
-      }),
-    );
+    const indexFile = path.join(buildPath, "index.html");
+    await mainWindow.loadFile(indexFile);
   }
 
   // Show window when ready
@@ -152,7 +142,10 @@ function createWindow() {
 
 // App lifecycle
 app.whenReady().then(() => {
-  createWindow();
+  createWindow().catch((error) => {
+    console.error("Failed to create Electron window:", error);
+    app.quit();
+  });
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
