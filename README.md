@@ -1,15 +1,14 @@
-# Realtime Interview Copilot
+# Realtime Interview Copilot - Desktop App
 
 ## Description
 
-Realtime Interview Copilot is a Progressive Web Application (PWA) that provides real-time AI assistance during interviews. It transcribes audio in real-time using Deepgram, allows users to ask questions to an AI assistant, and generates AI-powered responses based on interview context and transcription. The app can be installed on any device for offline access and a native app-like experience.
+Realtime Interview Copilot is an Electron desktop application that provides real-time AI assistance during interviews. It transcribes audio in real-time using Deepgram, allows users to ask questions to an AI assistant, and generates AI-powered responses based on interview context and transcription.
 
 ## Technologies
 
 - Frontend: React, TypeScript, Next.js, Tailwind CSS, Shadcn/UI
-- Backend: Node.js
+- Desktop: Electron
 - APIs: Deepgram (real-time transcription), Google Generative AI (response generation)
-- PWA: Service Worker, Web App Manifest
 
 
 ## Installation and Setup
@@ -40,12 +39,15 @@ Realtime Interview Copilot is a Progressive Web Application (PWA) that provides 
     GOOGLE_GENERATIVE_AI_API_KEY=your_google_ai_api_key
     ```
 
-4. Run the development server:
+4. Run the Electron app in development mode:
     ```bash
-    pnpm dev
+    pnpm electron:dev
     ```
 
-5. Access at `http://localhost:3000`
+5. Build the Electron app for production:
+    ```bash
+    pnpm electron:build
+    ```
 
 ## How It Works
 
