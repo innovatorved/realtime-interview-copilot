@@ -10,9 +10,6 @@
     "start": "next start",
     "lint": "next lint",
     "fix": "npx @biomejs/biome format --write .",
-    "cf-preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "cf-deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "build:electron": "node scripts/build-electron.js",
     "electron:dev": "pnpm run build:electron && concurrently \"PORT=3000 pnpm run dev\" \"wait-on http://localhost:3000 && DEV_PORT=3000 npx --yes electron@latest .\"",
     "electron:debug": "ELECTRON_DEBUG=true pnpm run build:electron && concurrently \"PORT=3000 pnpm run dev\" \"wait-on http://localhost:3000 && DEV_PORT=3000 npx --yes electron@latest .\"",
@@ -22,7 +19,6 @@
   },
   "dependencies": {
     "@deepgram/sdk": "^4.11.2",
-    "@opennextjs/cloudflare": "^1.11.0",
     "@radix-ui/react-icons": "^1.3.2",
     "@radix-ui/react-label": "^2.1.7",
     "@radix-ui/react-select": "^2.2.6",
