@@ -14,5 +14,5 @@
     "types": ["node"]
   },
   "include": ["electron/**/*"],
-  "exclude": ["node_modules", "**/*.spec.ts"]
+  "exclude": ["node_modules", "**/*.spec.ts", "realtime-worker-api/**/*"]
 }
