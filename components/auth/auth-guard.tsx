@@ -3,33 +3,35 @@
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { AuthWizard } from "./auth-wizard";
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const { data: session, isPending, error } = authClient.useSession();
   const [authenticated, setAuthenticated] = useState(false);
 
   useEffect(() => {
-    const checkSession = async () => {
-      try {
-        const session = await authClient.getSession();
-        if (!session.data) {
-          router.push("/login");
-        } else {
-          setAuthenticated(true);
-        }
-      } catch (error) {
-        console.error("Auth check failed", error);
-        router.push("/login");
-      } finally {
-        setLoading(false);
+    if (!isPending) {
+      if (session) {
+        setAuthenticated(true);
+      } else {
+        setAuthenticated(false);
       }
+    }
+  }, [session, isPending]);
+
+  useEffect(() => {
+    const handleLogout = () => {
+      setAuthenticated(false);
     };
 
-    checkSession();
-  }, [router]);
+    window.addEventListener("auth:logout", handleLogout);
+    return () => {
+      window.removeEventListener("auth:logout", handleLogout);
+    };
+  }, []);
 
-  if (loading) {
+  if (isPending) {
     return (
       <div className="flex items-center justify-center min-h-screen text-white">
         Loading...
@@ -38,7 +40,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   if (!authenticated) {
-    return null;
+    return <AuthWizard onSuccess={() => setAuthenticated(true)} />;
   }
 
   return <>{children}</>;
