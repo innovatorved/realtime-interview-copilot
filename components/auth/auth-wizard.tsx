@@ -19,9 +19,13 @@ import { Loader2 } from "lucide-react";
 
 interface AuthWizardProps {
   initialStep?: "welcome" | "signup" | "signin";
+  onSuccess?: () => void;
 }
 
-export function AuthWizard({ initialStep = "welcome" }: AuthWizardProps) {
+export function AuthWizard({
+  initialStep = "welcome",
+  onSuccess,
+}: AuthWizardProps) {
   const [step, setStep] = useState<"welcome" | "signup" | "signin">(
     initialStep,
   );
@@ -41,6 +45,14 @@ export function AuthWizard({ initialStep = "welcome" }: AuthWizardProps) {
     setModalTitle(title);
     setModalMessage(message);
     setModalOpen(true);
+  };
+
+  const handleSuccess = () => {
+    if (onSuccess) {
+      onSuccess();
+    } else {
+      router.push("/");
+    }
   };
 
   const handleSignup = async () => {
@@ -63,7 +75,7 @@ export function AuthWizard({ initialStep = "welcome" }: AuthWizardProps) {
               "Success",
               "Account created successfully! Redirecting...",
             );
-            setTimeout(() => router.push("/"), 1500);
+            setTimeout(() => handleSuccess(), 1500);
           },
           onError: (ctx) => {
             console.error("Signup error context:", ctx);
@@ -95,7 +107,7 @@ export function AuthWizard({ initialStep = "welcome" }: AuthWizardProps) {
           onSuccess: () => {
             console.log("Signin successful");
             // Optional: Show success modal or just redirect
-            router.push("/");
+            handleSuccess();
           },
           onError: (ctx) => {
             console.error("Signin error context:", ctx);

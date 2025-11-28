@@ -73,6 +73,23 @@ async function createWindow() {
     },
   );
 
+  // Inject Origin header for API requests to fix "Missing or null Origin" error
+  // This is required because Electron sends "file://" or "null" as origin for local files
+  mainWindow.webContents.session.webRequest.onBeforeSendHeaders(
+    {
+      urls: [
+        "https://realtime-worker-api.innovatorved.workers.dev/*",
+        "https://realtime-worker-api-prod.vedgupta.in/*",
+        "https://*.deepgram.com/*",
+        "https://api.deepgram.com/*",
+      ],
+    },
+    (details, callback) => {
+      details.requestHeaders["Origin"] = "http://localhost:3000"; // Mimic development origin which is likely whitelisted
+      callback({ requestHeaders: details.requestHeaders });
+    },
+  );
+
   // Hide from screen capture on macOS
   if (process.platform === "darwin") {
     mainWindow.setWindowButtonVisibility(false);

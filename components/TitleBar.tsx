@@ -73,13 +73,20 @@ export default function TitleBar() {
   };
 
   const handleLogout = async () => {
-    await authClient.signOut({
-      fetchOptions: {
-        onSuccess: () => {
-          router.push("/login"); // Redirect to login page
+    try {
+      await authClient.signOut({
+        fetchOptions: {
+          onSuccess: () => {
+            window.dispatchEvent(new Event("auth:logout"));
+          },
         },
-      },
-    });
+      });
+      // Fallback
+      window.dispatchEvent(new Event("auth:logout"));
+    } catch (error) {
+      console.error("Sign out failed", error);
+      window.dispatchEvent(new Event("auth:logout"));
+    }
   };
 
   // Don't render in browser mode
