@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { SendIcon } from "lucide-react";
+import { BACKEND_API_URL } from "@/lib/constant";
 
 interface Message {
   id: string;
@@ -51,21 +52,19 @@ export function AIAssistant() {
     controller.current = new AbortController();
 
     try {
-      const response = await fetch(
-        "https://realtime-worker-api.innovatorved.workers.dev/completion",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            prompt: input,
-            flag: "copilot",
-            bg: "You are a direct, no-nonsense interview assistant. Answer questions with straight, concise facts. Do not use filler words like 'alright', 'umm', 'ha', 'you know', 'basically', or 'like'. Get directly to the point. Be professional and precise. Answer exactly what is asked without extra fluff.",
-          }),
-          signal: controller.current.signal,
+      const response = await fetch(`${BACKEND_API_URL}/completion`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify({
+          prompt: input,
+          flag: "copilot",
+          bg: "You are a direct, no-nonsense interview assistant. Answer questions with straight, concise facts. Do not use filler words like 'alright', 'umm', 'ha', 'you know', 'basically', or 'like'. Get directly to the point. Be professional and precise. Answer exactly what is asked without extra fluff.",
+        }),
+        signal: controller.current.signal,
+        credentials: "include",
+      });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

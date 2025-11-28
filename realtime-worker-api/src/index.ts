@@ -1,3 +1,5 @@
+import { auth } from "./auth";
+
 enum FLAGS {
   COPILOT = "copilot",
   SUMMERIZER = "summerizer",
@@ -7,6 +9,9 @@ interface Env {
   DEEPGRAM_API_KEY: string;
   GOOGLE_GENERATIVE_AI_API_KEY: string;
   GEMINI_MODEL?: string;
+  BETTER_AUTH_SECRET: string;
+  BETTER_AUTH_URL: string;
+  DB: D1Database;
 }
 
 interface CompletionRequestBody {
@@ -38,6 +43,7 @@ function buildCorsHeaders(request: Request) {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Methods": ALLOWED_METHODS,
     "Access-Control-Allow-Headers": ALLOWED_HEADERS,
+    "Access-Control-Allow-Credentials": "true",
     "Access-Control-Max-Age": CORS_MAX_AGE,
     Vary: "Origin",
   } satisfies Record<string, string>;
@@ -60,7 +66,7 @@ function withCors(response: Response, request: Request): Response {
 function handleOptions(request: Request): Response {
   const headers = buildCorsHeaders(request);
   return new Response(null, {
-    status: 204,
+    status: 200,
     headers,
   });
 }
@@ -100,6 +106,8 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/$/, "");
 
+    console.log(`[Worker] Incoming request: ${request.method} ${path}`);
+
     if (request.method === "OPTIONS") {
       return handleOptions(request);
     }
@@ -118,6 +126,24 @@ export default {
     ) {
       const response = await handleCompletion(request, env, ctx);
       return withCors(response, request);
+    }
+
+    if (path.startsWith("/api/auth")) {
+      console.log("[Worker] Handling auth request");
+      try {
+        const response = await auth(env).handler(request);
+        console.log(`[Worker] Auth response status: ${response.status}`);
+        return withCors(response, request);
+      } catch (e) {
+        console.error("[Worker] Auth error:", e);
+        return withCors(
+          new Response(JSON.stringify({ error: String(e) }), {
+            status: 500,
+            headers: jsonHeaders,
+          }),
+          request,
+        );
+      }
     }
 
     return withCors(

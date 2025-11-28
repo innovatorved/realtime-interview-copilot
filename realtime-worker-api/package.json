@@ -1,5 +1,5 @@
 {
-  "name": "realtime-worker",
+  "name": "realtime-worker-api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,7 +8,13 @@
     "deploy": "wrangler deploy"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251128.0",
+    "drizzle-kit": "^0.31.7",
     "typescript": "^5.9.3",
     "wrangler": "^4.46.0"
+  },
+  "dependencies": {
+    "better-auth": "^1.4.3",
+    "drizzle-orm": "^0.44.7"
   }
 }

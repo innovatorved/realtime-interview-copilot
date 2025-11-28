@@ -10,14 +10,19 @@ import {
   PinOff,
   Minus,
   Plus,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { authClient } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
 
 export default function TitleBar() {
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(true);
   const [opacity, setOpacity] = useState(1);
   const [isMaximized, setIsMaximized] = useState(false);
   const [isElectron, setIsElectron] = useState(false);
+  const { data: session } = authClient.useSession();
+  const router = useRouter();
 
   useEffect(() => {
     // Check if running in Electron
@@ -67,6 +72,16 @@ export default function TitleBar() {
     }
   };
 
+  const handleLogout = async () => {
+    await authClient.signOut({
+      fetchOptions: {
+        onSuccess: () => {
+          router.push("/login"); // Redirect to login page
+        },
+      },
+    });
+  };
+
   // Don't render in browser mode
   if (!isElectron) {
     return null;
@@ -100,6 +115,24 @@ export default function TitleBar() {
           } as React.CSSProperties
         }
       >
+        {/* Logout Button - Only show if logged in */}
+        {session && (
+          <div className="flex items-center mr-2">
+            <span className="text-xs text-gray-400 mr-2 font-medium">
+              {session.user.name}
+            </span>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 p-0 hover:bg-red-500/20 text-gray-300 hover:text-red-400"
+              onClick={handleLogout}
+              title="Sign Out"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
+
         {/* Opacity controls */}
         <div className="flex items-center space-x-1 mr-2 bg-gray-800/40 backdrop-blur-sm rounded px-2 py-1 border border-gray-700/30">
           <Button

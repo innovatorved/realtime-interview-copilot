@@ -10,6 +10,7 @@ import { FLAGS, HistoryData, TranscriptionSegment } from "@/lib/types";
 import { Switch } from "@/components/ui/switch";
 import { TranscriptionDisplay } from "@/components/TranscriptionDisplay";
 import { useClientReady } from "@/hooks/useClientReady";
+import { BACKEND_API_URL } from "@/lib/constant";
 
 const RecorderTranscriber = dynamic(() => import("@/components/recorder"), {
   ssr: false,
@@ -139,21 +140,19 @@ export function Copilot({ addInSavedData }: CopilotProps) {
     controller.current = new AbortController();
 
     try {
-      const response = await fetch(
-        "https://realtime-worker-api.innovatorved.workers.dev/completion",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            bg,
-            flag,
-            prompt: transcribedText,
-          }),
-          signal: controller.current.signal,
+      const response = await fetch(`${BACKEND_API_URL}/api/completion`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify({
+          bg,
+          flag,
+          prompt: transcribedText,
+        }),
+        signal: controller.current.signal,
+        credentials: "include",
+      });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useClientReady } from "@/hooks/useClientReady";
+import { BACKEND_API_URL } from "@/lib/constant";
 
 interface RecorderTranscriberProps {
   addTextinTranscription: (text: string) => void;
@@ -292,10 +293,10 @@ export default function RecorderTranscriber({
       setLoadingKey(true);
       try {
         console.log("🔑 Fetching fresh API key...");
-        const res = await fetch(
-          "https://realtime-worker-api.innovatorved.workers.dev/deepgram",
-          { cache: "no-store" },
-        );
+        const res = await fetch(`${BACKEND_API_URL}/api/deepgram`, {
+          cache: "no-store",
+          credentials: "include", // Important: Send cookies for auth
+        });
         const object = await res.json();
         if (typeof object !== "object" || object === null || !("key" in object))
           throw new Error("No api key returned");

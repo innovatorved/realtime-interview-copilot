@@ -12,7 +12,8 @@
       "!.github",
       "!.vscode",
       "!dist",
-      "!out"
+      "!out",
+      "!realtime-worker-api/.wrangler"
     ]
   },
   "linter": {
