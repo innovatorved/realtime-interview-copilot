@@ -13,7 +13,8 @@
       "!.vscode",
       "!dist",
       "!out",
-      "!realtime-worker-api/.wrangler"
+      "!realtime-worker-api/.wrangler",
+      "!realtime-worker-api"
     ]
   },
   "linter": {
