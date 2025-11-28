@@ -1,7 +1,13 @@
-name = "realtime-worker-api"
+name = "realtime-worker-api-prod"
 main = "src/index.ts"
 compatibility_date = "2025-03-25"
 compatibility_flags = ["nodejs_compat"]
 
 [observability]
 enabled = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "realtime-interview-copilot-db"
+database_id = "836c3d2f-b104-419d-ad77-e1ac5c38a397"
+migrations_dir = "drizzle"

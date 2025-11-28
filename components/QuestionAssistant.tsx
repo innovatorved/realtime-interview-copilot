@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SendIcon, GripHorizontal, ChevronDown, ChevronUp } from "lucide-react";
+import { BACKEND_API_URL } from "@/lib/constant";
 
 interface QuestionAssistantProps {
   onQuestionSubmit?: (question: string) => void;
@@ -62,17 +63,15 @@ export function QuestionAssistant({
     controller.current = new AbortController();
 
     try {
-      const response = await fetch(
-        "https://realtime-worker-api.innovatorved.workers.dev/completion",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            prompt: question,
-            flag: "copilot",
-            bg: `You are a professional interview coach helping candidates ace technical and behavioral interviews.
+      const response = await fetch(`${BACKEND_API_URL}/completion`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: question,
+          flag: "copilot",
+          bg: `You are a professional interview coach helping candidates ace technical and behavioral interviews.
 
 IMPORTANT: Provide DETAILED, COMPREHENSIVE, INTERVIEW-READY answers. This is NOT for simple definitions - it's to help candidates answer interview questions perfectly.
 
@@ -91,10 +90,10 @@ Guidelines:
 - Include examples they can mention
 - Professional and authoritative tone
 - Structure answer for easy reference during interview`,
-          }),
-          signal: controller.current.signal,
-        },
-      );
+        }),
+        signal: controller.current.signal,
+        credentials: "include",
+      });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

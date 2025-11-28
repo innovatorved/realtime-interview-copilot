@@ -56,6 +56,9 @@ async function createWindow() {
     show: false,
   });
 
+  // Open DevTools for debugging
+  // mainWindow.webContents.openDevTools();
+
   // Configure CSP to allow the hosted API
   mainWindow.webContents.session.webRequest.onHeadersReceived(
     (details, callback) => {
@@ -63,7 +66,7 @@ async function createWindow() {
         responseHeaders: {
           ...details.responseHeaders,
           "Content-Security-Policy": [
-            "default-src 'self'; connect-src 'self' https://copilot.vedgupta.in https://realtime-worker-api.innovatorved.workers.dev https://*.deepgram.com https://api.deepgram.com wss://*.deepgram.com ws://localhost:* ws://127.0.0.1:*; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:;",
+            "default-src 'self'; connect-src 'self' http://localhost:8787 https://copilot.vedgupta.in https://realtime-worker-api.innovatorved.workers.dev https://realtime-worker-api-prod.vedgupta.in https://*.deepgram.com https://api.deepgram.com wss://*.deepgram.com ws://localhost:* ws://127.0.0.1:*; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:;",
           ],
         },
       });

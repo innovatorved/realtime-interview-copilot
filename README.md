@@ -23,7 +23,7 @@ Realtime Interview Copilot is an Electron desktop application that provides real
 
 - **Frontend**: React, TypeScript, Next.js, Tailwind CSS, Shadcn/UI
 - **Desktop**: Electron
-- **APIs**: Current APIs used are Deepgram for transcription and Google Generative AI. Backend API is hosted on https://realtime-worker-api.innovatorved.workers.dev/
+- **APIs**: Current APIs used are Deepgram for transcription and Google Generative AI. Backend API is hosted on https://realtime-worker-api.innovatorved.workers.dev/ and https://realtime-worker-api-prod.vedgupta.in/
 
 ## Prerequisites
 
@@ -136,6 +136,48 @@ The built application will be in the `dist` directory:
 - **macOS**: `.dmg` and `.zip` files
 - **Windows**: `.exe` installer and portable version
 - **Linux**: `.AppImage` and `.deb` packages
+
+## Authentication & Database Setup
+
+This project uses **Better Auth** for authentication and **Cloudflare D1** as the database.
+
+### 1. Database Setup (Cloudflare D1)
+
+The application requires a Cloudflare D1 database to store user and session data.
+
+1.  **Create a new D1 database**:
+    ```bash
+    npx wrangler d1 create realtime-interview-copilot-db
+    ```
+
+2.  **Update Configuration**:
+    Copy the `database_id` from the output of the previous command and update `realtime-worker-api/wrangler.toml`:
+    ```toml
+    [[d1_databases]]
+    binding = "DB"
+    database_name = "realtime-interview-copilot-db"
+    database_id = "YOUR_DATABASE_ID_HERE" # <--- Update this
+    migrations_dir = "drizzle"
+    ```
+
+3.  **Generate Migrations**:
+    Navigate to the worker directory and generate the database schema migrations:
+    ```bash
+    cd realtime-worker-api
+    pnpm install
+    npx drizzle-kit generate
+    ```
+
+4.  **Apply Migrations**:
+    Apply the migrations to your remote Cloudflare D1 database:
+    ```bash
+    npx wrangler d1 migrations apply realtime-interview-copilot-db --remote
+    ```
+    *(For local development, you can use `npx wrangler d1 migrations apply realtime-interview-copilot-db --local`)*
+
+### 2. Authentication Setup
+
+The authentication is handled by the `realtime-worker-api`. Ensure you have configured the necessary environment variables if you are using social providers (e.g., Google, GitHub).
 
 ## Usage Guide
 

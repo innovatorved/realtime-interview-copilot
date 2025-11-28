@@ -27,6 +27,7 @@
     "@tailwindcss/postcss": "^4.1.14",
     "@uidotdev/usehooks": "^2.4.1",
     "ai": "^5.0.76",
+    "better-auth": "^1.4.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.546.0",
