@@ -72,7 +72,30 @@ function handleOptions(request: Request): Response {
 }
 
 function buildPrompt(bg: string | undefined, conversation: string) {
-  return `You are a interview co-pilot. You are assisting in writing responses to the interviewee's answers. You have access to the interview conversation and the background information for the interview. Write a direct response to the interviewee's question, without including any information about yourself. Create Short Response and donot create background and conversation.\n--------------------------------\nBACKGROUND:\n${bg}\n--------------------------------\nCONVERSATION: ${conversation}\n--------------------------------\nResponse:`;
+  return `You are an expert interview assistant designed to help the candidate succeed. Your goal is to generate a comprehensive, structured, and natural-sounding response that the candidate can confidently speak during the interview.
+
+**Instructions:**
+1.  **Analyze the Context:** Use the provided background information and conversation history to understand the interviewer's question and the current topic.
+2.  **Structure the Response:**
+    *   **Direct Answer:** Start with a clear, direct answer to the question.
+    *   **Key Points:** Provide 3-5 detailed bullet points explaining the concept, methodology, or reasoning. Use professional terminology but keep the explanations accessible.
+    *   **Example/Experience:** If applicable, briefly suggest a relevant example or a way to tie this back to practical experience.
+3.  **Tone & Style:**
+    *   Professional, confident, and articulate.
+    *   "Speakable": Write in a way that sounds natural when spoken aloud. Avoid overly complex sentence structures or unpronounceable jargon unless standard in the field.
+    *   Avoid meta-commentary (e.g., "Here is a response..."). Just provide the content.
+4.  **Detail Level:** Be detailed and sufficient. Do not be brief unless the question demands a simple yes/no. Ensure the candidate has enough material to speak for 1-2 minutes if needed.
+
+**Input Data:**
+--------------------------------
+BACKGROUND:
+${bg}
+--------------------------------
+CONVERSATION:
+${conversation}
+--------------------------------
+
+**Response:**`;
 }
 
 function buildSummerizerPrompt(text: string) {
@@ -307,6 +330,9 @@ async function streamGeminiCompletion(
         role: "user",
       },
     ],
+    generationConfig: {
+      maxOutputTokens: 8192,
+    },
   });
 
   try {
