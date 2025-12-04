@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { TranscriptionDisplay } from "@/components/TranscriptionDisplay";
 import { useClientReady } from "@/hooks/useClientReady";
 import { BACKEND_API_URL } from "@/lib/constant";
+import { sendGTMEvent } from "@next/third-parties/google";
 
 const RecorderTranscriber = dynamic(() => import("@/components/recorder"), {
   ssr: false,
@@ -45,8 +46,10 @@ export function Copilot({ addInSavedData }: CopilotProps) {
   const handleFlag = useCallback((checked: boolean) => {
     if (!checked) {
       setFlag(FLAGS.SUMMERIZER);
+      sendGTMEvent({ event: "switch_mode", mode: "summerizer" });
     } else {
       setFlag(FLAGS.COPILOT);
+      sendGTMEvent({ event: "switch_mode", mode: "copilot" });
     }
   }, []);
 
@@ -139,6 +142,8 @@ export function Copilot({ addInSavedData }: CopilotProps) {
     if (controller.current) controller.current.abort();
     controller.current = new AbortController();
 
+    sendGTMEvent({ event: "generate_completion", flag: flag });
+
     try {
       const response = await fetch(`${BACKEND_API_URL}/api/completion`, {
         method: "POST",
@@ -230,6 +235,10 @@ export function Copilot({ addInSavedData }: CopilotProps) {
     addInSavedData({
       createdAt: new Date().toISOString(),
       data: completion,
+      tag: flag === FLAGS.COPILOT ? "Copilot" : "Summerizer",
+    });
+    sendGTMEvent({
+      event: "save_completion",
       tag: flag === FLAGS.COPILOT ? "Copilot" : "Summerizer",
     });
   };

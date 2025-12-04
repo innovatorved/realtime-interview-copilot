@@ -18,6 +18,15 @@ export const auth = (env: Env) => {
         verify: verifyPassword,
       },
     },
+    user: {
+      additionalFields: {
+        isApproved: {
+          type: "boolean",
+          required: false,
+          defaultValue: false,
+        },
+      },
+    },
     trustedOrigins: [
       "http://localhost:3000",
       "https://realtime-worker-api-prod.vedgupta.in",

@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@deepgram/sdk": "^4.11.2",
+    "@next/third-parties": "^16.0.7",
     "@radix-ui/react-icons": "^1.3.2",
     "@radix-ui/react-label": "^2.1.7",
     "@radix-ui/react-select": "^2.2.6",
@@ -53,12 +54,12 @@
     "tailwindcss": "^4.1.14",
     "typescript": "^5.9.3",
     "wait-on": "^7.2.0",
-    "wrangler": "^4.43.0"
+    "wrangler": "^4.52.1"
   },
   "main": "electron/main.js",
   "build": {
-    "appId": "com.realtime.interview.copilot",
-    "productName": "Realtime Interview Copilot",
+    "appId": "com.realtime.interview.copilot.nightly",
+    "productName": "Realtime Interview Copilot Nightly",
     "files": [
       "out/**/*",
       "electron/**/*",

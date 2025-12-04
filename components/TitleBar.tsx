@@ -15,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
+import { sendGTMEvent } from "@next/third-parties/google";
 
 export default function TitleBar() {
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(true);
@@ -77,6 +78,7 @@ export default function TitleBar() {
       await authClient.signOut({
         fetchOptions: {
           onSuccess: () => {
+            sendGTMEvent({ event: "logout" });
             window.dispatchEvent(new Event("auth:logout"));
           },
         },
