@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import TitleBar from "@/components/TitleBar";
+import { GoogleTagManager } from "@next/third-parties/google";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -43,6 +44,7 @@ export default function RootLayout({
         <meta name="referrer" content="strict-origin-when-cross-origin" />
       </head>
       <body className={`${inter.className} bg-transparent`}>
+        <GoogleTagManager gtmId="GTM-TD6DHJZZ" />
         <TitleBar />
         {children}
       </body>

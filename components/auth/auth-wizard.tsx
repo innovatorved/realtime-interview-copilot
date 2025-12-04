@@ -16,6 +16,7 @@ import {
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { Loader2 } from "lucide-react";
+import { sendGTMEvent } from "@next/third-parties/google";
 
 interface AuthWizardProps {
   initialStep?: "welcome" | "signup" | "signin";
@@ -71,6 +72,7 @@ export function AuthWizard({
         {
           onSuccess: () => {
             console.log("Signup successful");
+            sendGTMEvent({ event: "signup", value: "email" });
             showModal(
               "Success",
               "Account created successfully! Redirecting...",
@@ -79,6 +81,7 @@ export function AuthWizard({
           },
           onError: (ctx) => {
             console.error("Signup error context:", ctx);
+            sendGTMEvent({ event: "signup_error", error: ctx.error.message });
             showModal("Sign Up Failed", ctx.error.message);
             setLoading(false);
           },
@@ -106,11 +109,13 @@ export function AuthWizard({
         {
           onSuccess: () => {
             console.log("Signin successful");
+            sendGTMEvent({ event: "login", value: "email" });
             // Optional: Show success modal or just redirect
             handleSuccess();
           },
           onError: (ctx) => {
             console.error("Signin error context:", ctx);
+            sendGTMEvent({ event: "login_error", error: ctx.error.message });
             showModal("Sign In Failed", ctx.error.message);
             setLoading(false);
           },
