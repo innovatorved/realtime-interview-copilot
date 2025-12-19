@@ -16,7 +16,7 @@ Cloudflare Worker that exposes two endpoints equivalent to the Next.js APIs in `
    - `GOOGLE_GENERATIVE_AI_API_KEY`
 
    Optional overrides:
-   - `GEMINI_MODEL` (defaults to `gemini-flash-lite-latest`)
+   - `GEMINI_MODEL` (defaults to `gemini-3-flash-preview`)
 
 3. Start a local dev server:
    ```bash

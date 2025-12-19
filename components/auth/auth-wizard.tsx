@@ -259,7 +259,7 @@ export function AuthWizard({
                 />
               </div>
               <div className="text-xs text-center text-gray-400">
-                Don't have an account?{" "}
+                Don&apos;t have an account?{" "}
                 <button
                   className="text-green-400 hover:text-green-300 hover:underline transition-colors pointer"
                   onClick={() => setStep("signup")}

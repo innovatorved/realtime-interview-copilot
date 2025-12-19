@@ -8,7 +8,7 @@
     "build": "next build",
     "build:static": "next build && next export",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "fix": "npx @biomejs/biome format --write .",
     "build:electron": "node scripts/build-electron.js",
     "electron:dev": "pnpm run build:electron && concurrently \"PORT=3000 pnpm run dev\" \"wait-on http://localhost:3000 && DEV_PORT=3000 npx --yes electron@latest .\"",
@@ -40,6 +40,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.8",
+    "@eslint/eslintrc": "^3.3.3",
     "@types/node": "^24.10.4",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",

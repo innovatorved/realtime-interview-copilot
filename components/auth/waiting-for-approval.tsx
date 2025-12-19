@@ -36,7 +36,7 @@ export function WaitingForApproval({ email }: { email?: string }) {
         <CardContent className="space-y-6 pt-6">
           <div className="rounded-xl bg-green-500/5 border border-green-500/10 p-4 text-sm text-green-200/80 text-center leading-relaxed">
             <p>
-              We've sent your request to the admin for{" "}
+              We&apos;ve sent your request to the admin for{" "}
               <strong className="text-green-300">{email}</strong>. Please check
               back later or contact support if this persists.
             </p>
