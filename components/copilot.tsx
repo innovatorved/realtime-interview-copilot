@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { TranscriptionDisplay } from "@/components/TranscriptionDisplay";
 import { useClientReady } from "@/hooks/useClientReady";
 import { BACKEND_API_URL } from "@/lib/constant";
+import { authClient } from "@/lib/auth-client";
 import { sendGTMEvent } from "@next/third-parties/google";
 
 const RecorderTranscriber = dynamic(() => import("@/components/recorder"), {
@@ -20,10 +21,12 @@ const RecorderTranscriber = dynamic(() => import("@/components/recorder"), {
 
 interface CopilotProps {
   addInSavedData: (data: HistoryData) => void;
+  isActive?: boolean;
 }
 
-export function Copilot({ addInSavedData }: CopilotProps) {
+export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
   const isClientReady = useClientReady();
+  const { data: session } = authClient.useSession();
   const [transcribedText, setTranscribedText] = useState<string>("");
   const [transcriptionSegments, setTranscriptionSegments] = useState<
     TranscriptionSegment[]
@@ -92,11 +95,12 @@ export function Copilot({ addInSavedData }: CopilotProps) {
   }, []);
 
   useEffect(() => {
+    if (!isActive) return;
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [handleKeyDown]);
+  }, [handleKeyDown, isActive]);
 
   const addTextinTranscription = (text: string) => {
     setTranscribedText((prev) => prev + " " + text);
@@ -243,17 +247,23 @@ export function Copilot({ addInSavedData }: CopilotProps) {
     });
   };
 
+  // Dynamic Window Resizing
+  useEffect(() => {
+    if (!isActive) return;
+    if (typeof window !== "undefined" && window.electronAPI && session) {
+      // Keep window at expanded size
+      window.electronAPI.windowSetSize(1000, 600);
+    }
+  }, [session, isActive]);
+
   if (!isClientReady) {
     return <CopilotSkeleton />;
   }
 
   return (
-    <div className="grid w-full gap-4 mt-12">
-      <h2 className="text-3xl underline text-green-600 font-bold drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
-        Realtime Interview Copilot
-      </h2>
+    <div className="grid w-full gap-3 mt-4">
       {error && (
-        <div className="fixed top-0 left-0 w-full p-4 text-center text-xs bg-red-500 text-white">
+        <div className="fixed top-8 left-0 w-full p-2 text-center text-[10px] bg-red-500/80 backdrop-blur-md text-white z-[60]">
           {error.message}
         </div>
       )}
@@ -267,9 +277,9 @@ export function Copilot({ addInSavedData }: CopilotProps) {
           </Label>
           <Textarea
             id="system_prompt"
-            placeholder="Type or paste your text here."
-            className="resize-none h-[50px] overflow-hidden bg-gray-900/60 backdrop-blur-md border-gray-600/50 text-white placeholder:text-gray-400"
-            style={{ lineHeight: "1.5", maxHeight: "150px" }}
+            placeholder="Interview context..."
+            className="resize-none h-[40px] overflow-hidden glass-input placeholder:text-gray-400 text-xs border-0"
+            style={{ lineHeight: "1.2", maxHeight: "150px" }}
             value={bg}
             onChange={(e) => setBg(e.target.value)}
           />
@@ -295,7 +305,7 @@ export function Copilot({ addInSavedData }: CopilotProps) {
           </Label>
           <div
             ref={transcriptionBoxRef}
-            className="mt-2 h-[225px] overflow-y-auto border border-gray-600/50 rounded-lg p-2 bg-gray-900/60 backdrop-blur-md"
+            className="mt-1 h-[150px] overflow-y-auto rounded-lg p-2 glass border-0"
           >
             <TranscriptionDisplay segments={transcriptionSegments} />
           </div>
@@ -307,19 +317,18 @@ export function Copilot({ addInSavedData }: CopilotProps) {
           onSubmit={handleSubmit}
           className="grid md:grid-cols-2 gap-2"
         >
-          <div className="flex items-center justify-center w-full border border-gray-600/50 bg-gray-900/40 backdrop-blur-sm rounded px-2 py-1">
-            <Label className="text-white font-medium drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] transition-opacity duration-300">
-              Summerizer
-              <span className="opacity-85 text-xs p-2"> (S)</span>
+          <div className="flex items-center justify-center w-full glass rounded px-2 py-0.5">
+            <Label className="text-white text-[10px] font-medium drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] transition-opacity duration-300">
+              Summ. <span className="opacity-70">(S)</span>
             </Label>
             <Switch
-              className="data-[state=checked]:bg-green-600 data-[state=unchecked]:bg-gray-600 m-2"
+              className="scale-75 data-[state=checked]:bg-green-600 data-[state=unchecked]:bg-gray-600 mx-1"
               onCheckedChange={handleFlag}
               defaultChecked
               checked={flag === FLAGS.COPILOT}
             />
-            <Label className="text-white font-medium drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] transition-opacity duration-300">
-              Copilot<span className="opacity-85 text-xs p-2"> (C)</span>
+            <Label className="text-white text-[10px] font-medium drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] transition-opacity duration-300">
+              Copilot <span className="opacity-70">(C)</span>
             </Label>
           </div>
 
@@ -348,8 +357,8 @@ export function Copilot({ addInSavedData }: CopilotProps) {
             save
           </button>
         )}
-        <div className="flex whitespace-pre-wrap text-white bg-gray-900/60 backdrop-blur-md rounded-lg p-4 border border-gray-600/50">
-          {completion}
+        <div className="flex whitespace-pre-wrap text-white glass rounded-lg p-3 text-sm min-h-[100px]">
+          {completion || "Awaiting input..."}
         </div>
       </div>
     </div>

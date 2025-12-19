@@ -6,7 +6,7 @@ import { AuthGuard } from "@/components/auth/auth-guard";
 export default function Home() {
   return (
     <AuthGuard>
-      <main className="mt-12 m-2 overscroll-none">
+      <main className="mt-8 overscroll-none">
         <MainPage />
       </main>
     </AuthGuard>

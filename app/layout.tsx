@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import TitleBar from "@/components/TitleBar";
 import { GoogleTagManager } from "@next/third-parties/google";
+import { TabProvider } from "@/components/TabContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -45,8 +46,10 @@ export default function RootLayout({
       </head>
       <body className={`${inter.className} bg-transparent`}>
         <GoogleTagManager gtmId="GTM-TD6DHJZZ" />
-        <TitleBar />
-        {children}
+        <TabProvider>
+          <TitleBar />
+          {children}
+        </TabProvider>
       </body>
     </html>
   );

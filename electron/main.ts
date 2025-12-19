@@ -35,9 +35,12 @@ async function createWindow() {
   }
 
   mainWindow = new BrowserWindow({
-    width: 900,
-    height: 700,
+    width: 1000,
+    height: 600,
+    x: Math.floor((width - 1000) / 2),
+    y: 0,
     frame: false,
+    resizable: true,
     transparent: true,
     alwaysOnTop: true,
     backgroundColor: "#00000000",
@@ -234,6 +237,18 @@ ipcMain.handle("window-set-opacity", (_, opacity: number) => {
   const clampedOpacity = Math.max(0.1, Math.min(1, opacity));
   mainWindow?.setOpacity(clampedOpacity);
   return clampedOpacity;
+});
+
+ipcMain.handle("window-set-size", (_, width: number, height: number) => {
+  if (mainWindow) {
+    const [currentWidth, currentHeight] = mainWindow.getSize();
+    const newWidth = width || currentWidth;
+    const newHeight = height || currentHeight;
+
+    if (newWidth !== currentWidth || newHeight !== currentHeight) {
+      mainWindow.setSize(newWidth, newHeight, false);
+    }
+  }
 });
 
 ipcMain.handle("window-get-opacity", () => {
