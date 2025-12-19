@@ -3,11 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "pnpm": {
-    "overrides": {
-      "esbuild": "^0.25.0"
-    }
-  },
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy"
