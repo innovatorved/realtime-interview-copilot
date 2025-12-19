@@ -17,6 +17,8 @@ import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { sendGTMEvent } from "@next/third-parties/google";
 
+import { useTab } from "@/components/TabContext";
+
 export default function TitleBar() {
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(true);
   const [opacity, setOpacity] = useState(1);
@@ -24,6 +26,7 @@ export default function TitleBar() {
   const [isElectron, setIsElectron] = useState(false);
   const { data: session } = authClient.useSession();
   const router = useRouter();
+  const { activeTab, setActiveTab } = useTab();
 
   useEffect(() => {
     // Check if running in Electron
@@ -98,9 +101,8 @@ export default function TitleBar() {
 
   return (
     <div
-      className="fixed top-0 left-0 right-0 h-10 bg-gray-900/30
-                    backdrop-blur-md border-b border-gray-700/30 z-50 flex items-center justify-between px-3
-                    select-none shadow-lg"
+      className="fixed top-0 left-0 right-0 h-8 glass z-50 flex items-center justify-between px-3
+                    select-none shadow-sm"
       style={
         {
           WebkitAppRegion: "drag",
@@ -115,6 +117,35 @@ export default function TitleBar() {
         </span>
       </div>
 
+      {/* Center - Tab Switcher */}
+      <div
+        className="absolute left-1/2 transform -translate-x-1/2 flex items-center space-x-1"
+        style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+      >
+        <button
+          onClick={() => setActiveTab("copilot")}
+          className={cn(
+            "px-3 py-0.5 rounded text-[10px] font-medium transition-all duration-200",
+            activeTab === "copilot"
+              ? "bg-green-600 text-white shadow-sm"
+              : "text-gray-400 hover:text-white",
+          )}
+        >
+          Copilot
+        </button>
+        <button
+          onClick={() => setActiveTab("ask-ai")}
+          className={cn(
+            "px-3 py-0.5 rounded text-[10px] font-medium transition-all duration-200",
+            activeTab === "ask-ai"
+              ? "bg-green-600 text-white shadow-sm"
+              : "text-gray-400 hover:text-white",
+          )}
+        >
+          Ask AI
+        </button>
+      </div>
+
       {/* Right side - Controls */}
       <div
         className="flex items-center space-x-1"
@@ -127,17 +158,17 @@ export default function TitleBar() {
         {/* Logout Button - Only show if logged in */}
         {session && (
           <div className="flex items-center mr-2">
-            <span className="text-xs text-gray-400 mr-2 font-medium">
+            <span className="text-[10px] text-gray-400 mr-2 font-medium">
               {session.user.name}
             </span>
             <Button
               size="sm"
               variant="ghost"
-              className="h-7 w-7 p-0 hover:bg-red-500/20 text-gray-300 hover:text-red-400"
+              className="h-6 w-6 p-0 hover:bg-red-500/20 text-gray-300 hover:text-red-400"
               onClick={handleLogout}
               title="Sign Out"
             >
-              <LogOut className="h-3.5 w-3.5" />
+              <LogOut className="h-3 w-3" />
             </Button>
           </div>
         )}
@@ -194,29 +225,29 @@ export default function TitleBar() {
           <Button
             size="sm"
             variant="ghost"
-            className="h-7 w-7 p-0 hover:bg-gray-700/50 text-gray-200 hover:text-white"
+            className="h-6 w-6 p-0 hover:bg-gray-700/50 text-gray-200 hover:text-white"
             onClick={handleMinimize}
             title="Minimize"
           >
-            <Minimize2 className="h-3.5 w-3.5" />
+            <Minimize2 className="h-3 w-3" />
           </Button>
           <Button
             size="sm"
             variant="ghost"
-            className="h-7 w-7 p-0 hover:bg-gray-700/50 text-gray-200 hover:text-white"
+            className="h-6 w-6 p-0 hover:bg-gray-700/50 text-gray-200 hover:text-white"
             onClick={handleMaximize}
             title={isMaximized ? "Restore" : "Maximize"}
           >
-            <Maximize2 className="h-3.5 w-3.5" />
+            <Maximize2 className="h-3 w-3" />
           </Button>
           <Button
             size="sm"
             variant="ghost"
-            className="h-7 w-7 p-0 hover:bg-red-600/80 text-gray-200 hover:text-white"
+            className="h-6 w-6 p-0 hover:bg-red-600/80 text-gray-200 hover:text-white"
             onClick={handleClose}
             title="Close"
           >
-            <X className="h-3.5 w-3.5" />
+            <X className="h-3 w-3" />
           </Button>
         </div>
       </div>

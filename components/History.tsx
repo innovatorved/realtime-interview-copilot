@@ -15,10 +15,7 @@ export default function History({ data: savedData, deleteData }: HistoryProps) {
       <main className="overflow-auto p-4 space-y-4">
         {savedData &&
           savedData?.map((data, index) => (
-            <Card
-              key={index}
-              className="p-4 bg-gray-900/60 backdrop-blur-md border-gray-600/50"
-            >
+            <Card key={index} className="p-4 glass border-0 shadow-none">
               <div className="flex mt-2 text-xs text-gray-300">
                 {data.tag} • {data.createdAt} •{" "}
                 <button

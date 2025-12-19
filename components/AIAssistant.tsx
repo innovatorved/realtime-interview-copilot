@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { SendIcon } from "lucide-react";
 import { BACKEND_API_URL } from "@/lib/constant";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface Message {
   id: string;
@@ -180,7 +182,11 @@ export function AIAssistant() {
                       : "bg-gray-700/80 text-white rounded-bl-none"
                   }`}
                 >
-                  <p className="text-sm break-words">{msg.content}</p>
+                  <div className="text-sm break-words prose prose-invert prose-sm max-w-none">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
                   <span
                     className={`text-xs mt-1 block ${
                       msg.role === "user" ? "text-green-100" : "text-gray-400"

@@ -4,11 +4,15 @@ import { Copilot } from "@/components/copilot";
 import History from "@/components/History";
 import { QuestionAssistant } from "@/components/QuestionAssistant";
 import { HistoryData } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
+
+import { useTab } from "@/components/TabContext";
 
 export default function MainPage() {
   const isRendered = useRef(false);
   const [savedData, setSavedData] = useState<HistoryData[]>([]);
+  const { activeTab } = useTab();
 
   const addInSavedData = (data: HistoryData) => {
     setSavedData((prevData) => [data, ...prevData]);
@@ -37,9 +41,18 @@ export default function MainPage() {
 
   return (
     <main className="m-2 overscroll-none">
-      <Copilot addInSavedData={addInSavedData} />
-      <QuestionAssistant />
-      <History data={savedData} deleteData={deleteData} />
+      <div className="mt-10">
+        <div className={activeTab === "copilot" ? "block" : "hidden"}>
+          <Copilot
+            addInSavedData={addInSavedData}
+            isActive={activeTab === "copilot"}
+          />
+          <History data={savedData} deleteData={deleteData} />
+        </div>
+        <div className={activeTab === "ask-ai" ? "block" : "hidden"}>
+          <QuestionAssistant isActive={activeTab === "ask-ai"} />
+        </div>
+      </div>
     </main>
   );
 }
