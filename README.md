@@ -4,6 +4,11 @@
 
 Realtime Interview Copilot is an Electron desktop application that provides real-time AI assistance during interviews. It transcribes audio in real-time using Deepgram, allows users to ask questions to an AI assistant, and generates AI-powered responses based on interview context and transcription.
 
+
+## 📥 Downloads
+
+Download the latest version associated with the release tag `v0.1.0` from our [Releases Page](https://github.com/innovatorved/realtime-interview-copilot/releases/tag/v0.1.0).
+
 ## Features
 
 - 🎤 **Real-time Audio Transcription** - Capture and transcribe interview audio using Deepgram
