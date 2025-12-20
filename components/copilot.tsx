@@ -261,104 +261,149 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
   }
 
   return (
-    <div className="grid w-full gap-3 mt-4">
+    <div className="flex flex-col h-full gap-4 pt-4 px-2 overflow-hidden">
       {error && (
-        <div className="fixed top-8 left-0 w-full p-2 text-center text-[10px] bg-red-500/80 backdrop-blur-md text-white z-[60]">
+        <div className="fixed top-8 left-0 w-full p-2 text-center text-[10px] bg-red-500/80 backdrop-blur-md text-white z-[60] animate-fade-in-scale">
           {error.message}
         </div>
       )}
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="grid gap-1.5">
-          <Label
-            htmlFor="system_prompt"
-            className="text-white font-semibold drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
-          >
-            Interview Background
-          </Label>
+
+      {/* Top Section: Context & Transcription */}
+      <div className="grid gap-4 md:grid-cols-2 h-[45%] min-h-[320px] shrink-0">
+        {/* Context & Controls Card */}
+        <div className="glass-card p-4 flex flex-col gap-3 h-full">
+          <div className="flex items-center justify-between shrink-0">
+            <Label
+              htmlFor="system_prompt"
+              className="text-zinc-400 font-semibold tracking-wide text-[10px] uppercase"
+            >
+              Interview Context
+            </Label>
+          </div>
+
           <Textarea
             id="system_prompt"
-            placeholder="Interview context..."
-            className="resize-none h-[40px] overflow-hidden glass-input placeholder:text-gray-400 text-xs border-0"
-            style={{ lineHeight: "1.2", maxHeight: "150px" }}
+            placeholder="Paste job description, resume, or interview topic here..."
+            className="flex-1 min-h-[80px] resize-none bg-transparent border-0 focus-visible:ring-0 p-0 text-zinc-100 placeholder:text-zinc-600 text-xs leading-relaxed"
             value={bg}
             onChange={(e) => setBg(e.target.value)}
           />
-          <RecorderTranscriber
-            addTextinTranscription={addTextinTranscription}
-            addTranscriptionSegment={addTranscriptionSegment}
-          />
+
+          <div className="pt-3 border-t border-white/5 space-y-3">
+            <RecorderTranscriber
+              addTextinTranscription={addTextinTranscription}
+              addTranscriptionSegment={addTranscriptionSegment}
+            />
+
+            <form
+              ref={formRef}
+              onSubmit={handleSubmit}
+              className="w-full flex items-center justify-between gap-4"
+            >
+              {/* Mode Switcher */}
+              <div className="flex items-center gap-2 bg-black/20 rounded-full px-3 py-1 border border-white/5">
+                <span
+                  className={`text-[10px] font-medium transition-colors ${flag === FLAGS.SUMMERIZER ? "text-green-400" : "text-zinc-500"}`}
+                >
+                  Summarizer
+                </span>
+                <Switch
+                  className="scale-75 data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-zinc-700"
+                  onCheckedChange={handleFlag}
+                  defaultChecked
+                  checked={flag === FLAGS.COPILOT}
+                />
+                <span
+                  className={`text-[10px] font-medium transition-colors ${flag === FLAGS.COPILOT ? "text-green-400" : "text-zinc-500"}`}
+                >
+                  Copilot
+                </span>
+              </div>
+
+              <Button
+                className="w-40 h-8 bg-green-600 hover:bg-green-500 text-white font-medium shadow-[0_0_15px_rgba(22,163,74,0.3)] transition-all active:scale-[0.98] text-[10px] uppercase tracking-wider"
+                disabled={isLoading}
+                type="submit"
+                onClick={isLoading ? stop : undefined}
+              >
+                {isLoading ? (
+                  <div className="flex items-center gap-1">
+                    <span
+                      className="w-1 h-1 bg-white rounded-full animate-bounce"
+                      style={{ animationDelay: "0ms" }}
+                    />
+                    <span
+                      className="w-1 h-1 bg-white rounded-full animate-bounce"
+                      style={{ animationDelay: "150ms" }}
+                    />
+                    <span
+                      className="w-1 h-1 bg-white rounded-full animate-bounce"
+                      style={{ animationDelay: "300ms" }}
+                    />
+                  </div>
+                ) : (
+                  <span>Enter ↵</span>
+                )}
+              </Button>
+            </form>
+          </div>
         </div>
 
-        <div className="grid gap-1.5 my-2">
-          <Label
-            htmlFor="transcription"
-            className="text-white font-semibold drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
-          >
-            Transcription{" "}
+        {/* Transcription Card */}
+        <div className="glass-card p-4 flex flex-col h-full min-h-[180px]">
+          <div className="flex items-center justify-between mb-2 shrink-0">
+            <Label
+              htmlFor="transcription"
+              className="text-zinc-400 font-semibold tracking-wide text-[10px] uppercase"
+            >
+              Live Transcription
+            </Label>
             <button
               type="button"
-              className="text-xs text-red-400 hover:text-red-300 underline"
+              className="text-[10px] text-zinc-500 hover:text-red-400 transition-colors uppercase font-medium tracking-wide"
               onClick={clearTranscriptionChange}
             >
-              clear
+              Clear
             </button>
-          </Label>
+          </div>
           <div
             ref={transcriptionBoxRef}
-            className="mt-1 h-[150px] overflow-y-auto rounded-lg p-2 glass border-0"
+            className="flex-1 min-h-0 max-h-[250px] overflow-y-auto rounded-lg custom-scrollbar -mr-2 pr-2"
           >
             <TranscriptionDisplay segments={transcriptionSegments} />
           </div>
         </div>
       </div>
-      <div>
-        <form
-          ref={formRef}
-          onSubmit={handleSubmit}
-          className="grid md:grid-cols-2 gap-2"
-        >
-          <div className="flex items-center justify-center w-full glass rounded px-2 py-0.5">
-            <Label className="text-white text-[10px] font-medium drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] transition-opacity duration-300">
-              Summ. <span className="opacity-70">(S)</span>
-            </Label>
-            <Switch
-              className="scale-75 data-[state=checked]:bg-green-600 data-[state=unchecked]:bg-gray-600 mx-1"
-              onCheckedChange={handleFlag}
-              defaultChecked
-              checked={flag === FLAGS.COPILOT}
-            />
-            <Label className="text-white text-[10px] font-medium drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] transition-opacity duration-300">
-              Copilot <span className="opacity-70">(C)</span>
-            </Label>
-          </div>
 
-          <Button
-            className="h-9 w-full bg-green-600 hover:bg-green-700 text-white transition-opacity duration-300 font-semibold"
-            size="sm"
-            variant="outline"
-            disabled={isLoading}
-            type="submit"
-            onClick={isLoading ? stop : undefined}
-          >
-            {isLoading ? "Stop" : "Process"}
-            <span className="opacity-85 text-xs p-2"> (Enter)</span>
-          </Button>
-        </form>
-      </div>
+      {/* AI Output Section */}
+      <div className="flex-1 min-h-0 relative group">
+        <div className="absolute top-3 right-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+          {completion && (
+            <button
+              type="button"
+              className="text-xs bg-green-900/40 text-green-400 hover:bg-green-900/600 px-3 py-1 rounded-full border border-green-500/20 transition-colors"
+              onClick={handleSave}
+            >
+              Save Note
+            </button>
+          )}
+        </div>
 
-      {/* AI Completion Section */}
-      <div className="mx-2 md:mx-10 mt-8 mb-8">
-        {completion && (
-          <button
-            type="button"
-            className="text-xs text-green-400 hover:text-green-300 underline font-medium"
-            onClick={handleSave}
-          >
-            save
-          </button>
-        )}
-        <div className="flex whitespace-pre-wrap text-white glass rounded-lg p-3 text-sm min-h-[100px]">
-          {completion || "Awaiting input..."}
+        <div className="glass-card w-full h-full p-6 overflow-y-auto custom-scrollbar relative">
+          {!completion ? (
+            <div className="h-full flex flex-col items-center justify-center text-zinc-600 space-y-2">
+              <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center">
+                <span className="text-2xl animate-pulse">✨</span>
+              </div>
+              <p className="text-sm">
+                Ready to assist. Start recording or type context.
+              </p>
+            </div>
+          ) : (
+            <div className="whitespace-pre-wrap text-zinc-100 text-sm leading-relaxed prose prose-invert max-w-none">
+              {completion}
+            </div>
+          )}
         </div>
       </div>
     </div>

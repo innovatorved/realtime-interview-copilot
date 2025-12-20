@@ -56,26 +56,42 @@
 }
 
 @layer components {
+  /* Ultra-modern Glass Effect */
   .glass {
-    background: rgba(17, 24, 39, 0.15) !important;
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    @apply bg-zinc-900/40 backdrop-blur-xl border border-white/10 shadow-lg;
+  }
+
+  .glass-card {
+    @apply bg-zinc-900/60 backdrop-blur-2xl border border-white/10 shadow-xl rounded-xl transition-all duration-300;
+  }
+
+  .glass-panel {
+    @apply bg-zinc-950/40 backdrop-blur-md border border-white/5 rounded-lg;
   }
 
   .glass-light {
-    background: rgba(255, 255, 255, 0.02) !important;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.03) !important;
+    @apply bg-white/5 backdrop-blur-md border border-white/10 shadow-sm;
   }
 
   .glass-input {
-    background: rgba(0, 0, 0, 0.12) !important;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    color: white !important;
+    @apply bg-zinc-950/50 backdrop-blur-md border border-white/10 text-zinc-100 placeholder:text-zinc-500 focus:border-green-500/50 focus:ring-1 focus:ring-green-500/50 transition-all duration-300 rounded-lg;
+  }
+
+  .glass-button {
+    @apply bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-white backdrop-blur-sm transition-all duration-200;
+  }
+
+  /* Scrollbar Styling */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-white/10 rounded-full hover:bg-white/20 transition-colors;
   }
 }
 
