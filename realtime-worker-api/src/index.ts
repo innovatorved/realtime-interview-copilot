@@ -320,7 +320,7 @@ async function streamGeminiCompletion(
     throw new Error("Missing GOOGLE_GENERATIVE_AI_API_KEY binding");
   }
 
-  const DEFAULT_MODEL = "gemini-3-flash-preview";
+  const DEFAULT_MODEL = "gemini-flash-lite-latest";
   const modelName = env.GEMINI_MODEL || DEFAULT_MODEL;
   const url = `https://gateway.ai.cloudflare.com/v1/b4ca0337fb21e846c53e1f2611ba436c/gateway04/google-ai-studio/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${apiKey}`;
 
