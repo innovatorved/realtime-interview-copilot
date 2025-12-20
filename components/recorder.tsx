@@ -487,79 +487,107 @@ export default function RecorderTranscriber({
 
   return (
     <div className="w-full relative">
-      <div className="flex mt-2 items-center gap-2">
-        {/* Compact Audio Device Selector - only show in Electron */}
-        {isElectron && (
-          <Select
-            value={selectedDeviceId}
-            onValueChange={setSelectedDeviceId}
-            disabled={micOpen || isLoadingDevices}
-          >
-            <SelectTrigger className="h-9 max-w-[200px] bg-gray-900/60 backdrop-blur-md border-gray-600/50 text-white text-xs hover:bg-gray-900/80 focus:ring-2 focus:ring-green-500/50 transition-all">
-              <SelectValue placeholder="🎤 Select device..." />
-            </SelectTrigger>
-            <SelectContent className="bg-gray-900/95 backdrop-blur-lg border-gray-700/70">
-              {audioDevices.map((device) => (
-                <SelectItem
-                  key={device.deviceId}
-                  value={device.deviceId}
-                  className="text-white text-xs hover:bg-green-600/30 focus:bg-green-600/40 cursor-pointer transition-colors"
-                >
-                  <div className="flex items-center gap-1.5">
-                    {(device.label.toLowerCase().includes("blackhole") ||
-                      device.label.toLowerCase().includes("vb-audio") ||
-                      device.label.toLowerCase().includes("virtual cable") ||
-                      device.label.toLowerCase().includes("loopback")) && (
-                      <span className="text-green-400 text-xs">✓</span>
-                    )}
-                    <span className="truncate max-w-[180px]">
-                      {device.label}
+      <div className="flex flex-col gap-2">
+        {/* Controls Row */}
+        <div className="flex items-center gap-2 p-1 bg-zinc-950/50 rounded-lg border border-white/5">
+          {/* Compact Audio Device Selector - only show in Electron */}
+          {isElectron && (
+            <div className="relative flex-1 min-w-0">
+              <Select
+                value={selectedDeviceId}
+                onValueChange={setSelectedDeviceId}
+                disabled={micOpen || isLoadingDevices}
+              >
+                <SelectTrigger className="h-8 bg-transparent border-0 text-zinc-300 text-xs hover:text-white focus:ring-0 px-2 shadow-none w-full">
+                  <div className="flex items-center gap-2 truncate">
+                    <span className="text-zinc-500 text-[10px] uppercase tracking-wider font-semibold">
+                      Input
                     </span>
+                    <SelectValue placeholder="Select device..." />
                   </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-
-        <Button
-          className="h-9 bg-green-600 hover:bg-green-800 text-white flex-1"
-          size="sm"
-          variant="outline"
-          onClick={() => toggleRecorderTranscriber()}
-          disabled={isElectron === true && !selectedDeviceId}
-        >
-          {!micOpen ? (
-            <div className="flex items-center">
-              <MicIcon className="h-4 w-4 -translate-x-0.5 mr-2" />
-              Start listening
-            </div>
-          ) : (
-            <div className="flex items-center">
-              <MicOffIcon className="h-4 w-4 -translate-x-0.5 mr-2" />
-              Stop listening
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-white/10 text-zinc-100">
+                  {audioDevices.map((device) => (
+                    <SelectItem
+                      key={device.deviceId}
+                      value={device.deviceId}
+                      className="text-white text-xs"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        {(device.label.toLowerCase().includes("blackhole") ||
+                          device.label.toLowerCase().includes("vb-audio") ||
+                          device.label
+                            .toLowerCase()
+                            .includes("virtual cable") ||
+                          device.label.toLowerCase().includes("loopback")) && (
+                          <span className="text-green-400 text-xs">✓</span>
+                        )}
+                        <span className="truncate max-w-[180px]">
+                          {device.label}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
-        </Button>
-      </div>
-      <div
-        className="z-20 text-white flex shrink-0 grow-0 justify-around items-center 
-                  fixed bottom-0 right-5 rounded-lg mr-1 mb-5 lg:mr-5 lg:mb-5 xl:mr-10 xl:mb-10 gap-5"
-      >
-        <span className="text-xs text-gray-400">
-          {isListening
-            ? "✓ Connected to server"
-            : !micOpen
-              ? "Start listening to connect"
-              : "Connecting..."}
-        </span>
-        <MicIcon
-          className={cn("h-4 w-4 -translate-x-0.5 mr-2", {
-            "fill-green-400 drop-shadow-glowBlue": isListening,
-            "fill-yellow-400": micOpen && !isListening,
-            "fill-gray-400": !micOpen,
-          })}
-        />
+
+          {/* Divider if selector is present */}
+          {isElectron && <div className="w-px h-4 bg-white/10 mx-1" />}
+
+          <Button
+            className={cn(
+              "h-8 px-4 text-xs font-medium transition-all duration-300",
+              isListening
+                ? "bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 border border-red-500/20"
+                : "bg-green-500/10 text-green-400 hover:bg-green-500/20 hover:text-green-300 border border-green-500/20",
+            )}
+            size="sm"
+            onClick={() => toggleRecorderTranscriber()}
+            disabled={isElectron === true && !selectedDeviceId}
+          >
+            {!micOpen ? (
+              <div className="flex items-center gap-2">
+                <MicIcon className="h-3 w-3" />
+                Start Listening
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <MicOffIcon className="h-3 w-3" />
+                Stop
+              </div>
+            )}
+          </Button>
+        </div>
+
+        {/* Status Line - Integrated below controls instead of fixed */}
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-2">
+            <div
+              className={cn(
+                "w-1.5 h-1.5 rounded-full transition-colors",
+                isListening
+                  ? "bg-green-500 animate-pulse"
+                  : micOpen
+                    ? "bg-yellow-500"
+                    : "bg-zinc-700",
+              )}
+            />
+            <span className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">
+              {isListening
+                ? "Live & Connected"
+                : !micOpen
+                  ? "Ready"
+                  : "Connecting..."}
+            </span>
+          </div>
+          {isListening && (
+            <span className="text-[10px] text-green-500/70 font-mono animate-pulse">
+              REC
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
