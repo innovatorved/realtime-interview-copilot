@@ -3,6 +3,7 @@
 import { Card } from "@/components/ui/card";
 import { ContentData } from "./ui/content";
 import { HistoryData } from "@/lib/types";
+import posthog from "posthog-js";
 
 interface HistoryProps {
   data: HistoryData[];
@@ -21,6 +22,10 @@ export default function History({ data: savedData, deleteData }: HistoryProps) {
                 <button
                   className="text-xs text-red-400 hover:text-red-300 underline ml-1"
                   onClick={() => {
+                    // Capture history item deleted event with PostHog
+                    posthog.capture("history_item_deleted", {
+                      tag: data.tag,
+                    });
                     deleteData(data.createdAt);
                   }}
                 >

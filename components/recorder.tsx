@@ -23,6 +23,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { useClientReady } from "@/hooks/useClientReady";
 import { BACKEND_API_URL } from "@/lib/constant";
+import posthog from "posthog-js";
 
 interface RecorderTranscriberProps {
   addTextinTranscription: (text: string) => void;
@@ -170,6 +171,11 @@ export default function RecorderTranscriber({
 
       // Clear the API key so a fresh one is fetched next time
       setApiKey(null);
+
+      // Capture recording stopped event with PostHog
+      posthog.capture("recording_stopped", {
+        platform: isElectron ? "electron" : "browser",
+      });
 
       console.log("✅ Recording stopped and device released");
     } else {
@@ -322,6 +328,11 @@ export default function RecorderTranscriber({
       mic.onstart = () => {
         console.log("🎙️ MediaRecorder started");
         setMicOpen((_) => true);
+        // Capture recording started event with PostHog
+        posthog.capture("recording_started", {
+          platform: isElectron ? "electron" : "browser",
+          device_label: isElectron ? audioDevices.find((d) => d.deviceId === selectedDeviceId)?.label : "screen_capture",
+        });
       };
 
       mic.onstop = () => {

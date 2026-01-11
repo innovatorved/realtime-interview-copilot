@@ -8,6 +8,7 @@ import { BACKEND_API_URL } from "@/lib/constant";
 import { Label } from "@/components/ui/label";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import posthog from "posthog-js";
 
 interface QuestionAssistantProps {
   onQuestionSubmit?: (question: string) => void;
@@ -66,6 +67,11 @@ export function QuestionAssistant({
     if (controller.current) controller.current.abort();
     controller.current = new AbortController();
 
+    // Capture question asked event with PostHog
+    posthog.capture("question_asked", {
+      question_length: question.length,
+    });
+
     try {
       const response = await fetch(`${BACKEND_API_URL}/api/completion`, {
         method: "POST",
@@ -119,6 +125,8 @@ export function QuestionAssistant({
       if (err.name !== "AbortError") {
         console.error("Error:", err);
         setError("Failed to get answer. Please try again.");
+        // Capture error with PostHog
+        posthog.captureException(err instanceof Error ? err : new Error(String(err)));
       }
     } finally {
       setIsLoading(false);

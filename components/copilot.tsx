@@ -13,6 +13,7 @@ import { useClientReady } from "@/hooks/useClientReady";
 import { BACKEND_API_URL } from "@/lib/constant";
 import { authClient } from "@/lib/auth-client";
 import { sendGTMEvent } from "@next/third-parties/google";
+import posthog from "posthog-js";
 
 const RecorderTranscriber = dynamic(() => import("@/components/recorder"), {
   ssr: false,
@@ -50,9 +51,19 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
     if (!checked) {
       setFlag(FLAGS.SUMMERIZER);
       sendGTMEvent({ event: "switch_mode", mode: "summerizer" });
+      // Capture mode switch with PostHog
+      posthog.capture("mode_switched", {
+        mode: "summarizer",
+        previous_mode: "copilot",
+      });
     } else {
       setFlag(FLAGS.COPILOT);
       sendGTMEvent({ event: "switch_mode", mode: "copilot" });
+      // Capture mode switch with PostHog
+      posthog.capture("mode_switched", {
+        mode: "copilot",
+        previous_mode: "summarizer",
+      });
     }
   }, []);
 
@@ -147,6 +158,12 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
     controller.current = new AbortController();
 
     sendGTMEvent({ event: "generate_completion", flag: flag });
+    // Capture completion generation request with PostHog
+    posthog.capture("completion_generated", {
+      mode: flag === FLAGS.COPILOT ? "copilot" : "summarizer",
+      has_context: bg.length > 0,
+      transcription_length: transcribedText.length,
+    });
 
     try {
       const response = await fetch(`${BACKEND_API_URL}/api/completion`, {
@@ -216,6 +233,8 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
       if (err.name !== "AbortError") {
         console.error("Stream error:", err);
         setError(err instanceof Error ? err : new Error(String(err)));
+        // Capture error with PostHog
+        posthog.captureException(err instanceof Error ? err : new Error(String(err)));
       }
     } finally {
       setIsLoading(false);
@@ -244,6 +263,11 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
     sendGTMEvent({
       event: "save_completion",
       tag: flag === FLAGS.COPILOT ? "Copilot" : "Summerizer",
+    });
+    // Capture completion saved event with PostHog
+    posthog.capture("completion_saved", {
+      mode: flag === FLAGS.COPILOT ? "copilot" : "summarizer",
+      completion_length: completion.length,
     });
   };
 
