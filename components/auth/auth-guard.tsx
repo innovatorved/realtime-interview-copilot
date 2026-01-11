@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AuthWizard } from "./auth-wizard";
 import { WaitingForApproval } from "./waiting-for-approval";
+import posthog from "posthog-js";
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -14,6 +15,14 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!isPending) {
       if (session) {
+        // Identify user in PostHog when session is available (app load or login)
+        // This ensures all events are associated with the user, even across sessions
+        if (session.user) {
+          posthog.identify(session.user.id, {
+            email: session.user.email,
+            name: session.user.name,
+          });
+        }
         setAuthenticated(true);
       } else {
         setAuthenticated(false);
@@ -23,6 +32,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const handleLogout = () => {
+      // Capture logout event and reset PostHog before clearing authentication
+      // Pass true to also reset device_id so the device is considered new
+      posthog.capture("user_logged_out");
+      posthog.reset(true);
       setAuthenticated(false);
     };
 

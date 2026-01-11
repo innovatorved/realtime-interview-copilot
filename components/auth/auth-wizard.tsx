@@ -17,6 +17,7 @@ import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { Loader2 } from "lucide-react";
 import { sendGTMEvent } from "@next/third-parties/google";
+import posthog from "posthog-js";
 
 interface AuthWizardProps {
   initialStep?: "welcome" | "signup" | "signin";
@@ -73,6 +74,16 @@ export function AuthWizard({
           onSuccess: () => {
             console.log("Signup successful");
             sendGTMEvent({ event: "signup", value: "email" });
+            // Identify user in PostHog using email as distinct ID
+            posthog.identify(email, {
+              email: email,
+              name: name,
+            });
+            // Capture signup event with PostHog
+            posthog.capture("user_signed_up", {
+              method: "email",
+              email: email,
+            });
             showModal(
               "Success",
               "Account created successfully! Redirecting...",
@@ -82,6 +93,12 @@ export function AuthWizard({
           onError: (ctx) => {
             console.error("Signup error context:", ctx);
             sendGTMEvent({ event: "signup_error", error: ctx.error.message });
+            // Capture signup error with PostHog
+            posthog.capture("signup_error", {
+              error_message: ctx.error.message,
+              email: email,
+            });
+            posthog.captureException(new Error(ctx.error.message));
             showModal("Sign Up Failed", ctx.error.message);
             setLoading(false);
           },
@@ -110,12 +127,27 @@ export function AuthWizard({
           onSuccess: () => {
             console.log("Signin successful");
             sendGTMEvent({ event: "login", value: "email" });
+            // Identify user in PostHog using email as distinct ID
+            posthog.identify(email, {
+              email: email,
+            });
+            // Capture signin event with PostHog
+            posthog.capture("user_signed_in", {
+              method: "email",
+              email: email,
+            });
             // Optional: Show success modal or just redirect
             handleSuccess();
           },
           onError: (ctx) => {
             console.error("Signin error context:", ctx);
             sendGTMEvent({ event: "login_error", error: ctx.error.message });
+            // Capture signin error with PostHog
+            posthog.capture("signin_error", {
+              error_message: ctx.error.message,
+              email: email,
+            });
+            posthog.captureException(new Error(ctx.error.message));
             showModal("Sign In Failed", ctx.error.message);
             setLoading(false);
           },

@@ -10,11 +10,16 @@ import {
 } from "@/components/ui/card";
 import { Loader2, Lock } from "lucide-react";
 import { useRouter } from "next/navigation";
+import posthog from "posthog-js";
 
 export function WaitingForApproval({ email }: { email?: string }) {
   const router = useRouter();
 
   const handleCheckStatus = () => {
+    // Capture approval status check event with PostHog
+    posthog.capture("approval_status_checked", {
+      email: email,
+    });
     // Reloading the page will trigger the AuthGuard to re-fetch the session
     window.location.reload();
   };
