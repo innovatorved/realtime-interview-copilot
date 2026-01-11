@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "better-auth": "^1.4.7",
-    "drizzle-orm": "^0.41.0"
+    "drizzle-orm": "^0.41.0",
+    "posthog-node": "^5.0.0"
   }
 }
