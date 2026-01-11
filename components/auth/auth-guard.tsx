@@ -16,9 +16,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     if (!isPending) {
       if (session) {
         // Identify user in PostHog when session is available (app load or login)
-        // This ensures all events are associated with the user, even across sessions
+        // Use email as distinct_id for consistency with backend
         if (session.user) {
-          posthog.identify(session.user.id, {
+          posthog.identify(session.user.email, {
             email: session.user.email,
             name: session.user.name,
           });

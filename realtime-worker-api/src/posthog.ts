@@ -66,12 +66,13 @@ export function trackLLMGeneration(params: LLMAnalyticsParams): LLMAnalyticsResu
         finalize: async () => {
             // Wait for user lookup to complete
             const user = await userPromise;
-            const userId = user?.id || "anonymous";
+            // Use email as distinct_id for consistency with frontend
+            const distinctId = user?.email || "anonymous";
 
             // Identify user if authenticated
-            if (user) {
+            if (user?.email) {
                 posthog.identify({
-                    distinctId: userId,
+                    distinctId,
                     properties: {
                         ...(user.email && { email: user.email }),
                         ...(user.name && { name: user.name }),
@@ -81,7 +82,7 @@ export function trackLLMGeneration(params: LLMAnalyticsParams): LLMAnalyticsResu
 
             // Capture the LLM generation event
             posthog.capture({
-                distinctId: userId,
+                distinctId,
                 event: "$ai_generation",
                 properties: {
                     $ai_trace_id: traceId,
