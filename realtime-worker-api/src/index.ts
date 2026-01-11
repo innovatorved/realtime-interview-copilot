@@ -1,11 +1,12 @@
 import { auth } from "./auth";
+import { trackLLMGeneration, type PostHogEnv } from "./posthog";
 
 enum FLAGS {
   COPILOT = "copilot",
   SUMMERIZER = "summerizer",
 }
 
-interface Env {
+interface Env extends PostHogEnv {
   DEEPGRAM_API_KEY: string;
   GOOGLE_GENERATIVE_AI_API_KEY: string;
   GEMINI_MODEL?: string;
@@ -282,21 +283,30 @@ async function handleCompletion(
     finalPrompt = buildSummerizerPrompt(basePrompt);
   }
 
+  const analytics = trackLLMGeneration({
+    env,
+    model: env.GEMINI_MODEL || "gemini-flash-lite-latest",
+    prompt: finalPrompt,
+    getUser: async () => {
+      const session = await auth(env).api.getSession({ headers: request.headers });
+      return session?.user ? { id: session.user.id, email: session.user.email, name: session.user.name } : null;
+    },
+  });
+
   const stream = new TransformStream();
   const writer = stream.writable.getWriter();
 
-  const pump = streamGeminiCompletion(finalPrompt, env, writer)
+  const pump = streamGeminiCompletion(finalPrompt, env, writer, analytics.onText)
     .catch(async (error: unknown) => {
-      const message =
-        error instanceof Error
-          ? { error: error.message }
-          : { error: String(error) };
-      await writer.write(
-        encoder.encode(`data: ${JSON.stringify(message)}\n\n`),
-      );
+      analytics.onError(error instanceof Error ? error : String(error));
+      const message = error instanceof Error
+        ? { error: error.message }
+        : { error: String(error) };
+      await writer.write(encoder.encode(`data: ${JSON.stringify(message)}\n\n`));
     })
     .finally(async () => {
       await writer.close();
+      ctx.waitUntil(analytics.finalize());
     });
 
   ctx.waitUntil(pump);
@@ -314,6 +324,7 @@ async function streamGeminiCompletion(
   prompt: string,
   env: Env,
   writer: WritableStreamDefaultWriter<Uint8Array>,
+  onText?: (text: string) => void,
 ) {
   const apiKey = env.GOOGLE_GENERATIVE_AI_API_KEY;
   if (!apiKey) {
@@ -400,6 +411,8 @@ async function streamGeminiCompletion(
               // Check for non-empty text
               const sseData = JSON.stringify({ text });
               await writer.write(encoder.encode(`data: ${sseData}\n\n`));
+              // Call the callback for analytics collection
+              onText?.(text);
             } else {
               // console.log("Chunk contained no text or was a non-text chunk."); // Optional: Log empty chunks
             }
