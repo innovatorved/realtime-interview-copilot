@@ -126,7 +126,9 @@ export function QuestionAssistant({
         console.error("Error:", err);
         setError("Failed to get answer. Please try again.");
         // Capture error with PostHog
-        posthog.captureException(err instanceof Error ? err : new Error(String(err)));
+        posthog.captureException(
+          err instanceof Error ? err : new Error(String(err)),
+        );
       }
     } finally {
       setIsLoading(false);

@@ -331,7 +331,9 @@ export default function RecorderTranscriber({
         // Capture recording started event with PostHog
         posthog.capture("recording_started", {
           platform: isElectron ? "electron" : "browser",
-          device_label: isElectron ? audioDevices.find((d) => d.deviceId === selectedDeviceId)?.label : "screen_capture",
+          device_label: isElectron
+            ? audioDevices.find((d) => d.deviceId === selectedDeviceId)?.label
+            : "screen_capture",
         });
       };
 

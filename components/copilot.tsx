@@ -234,7 +234,9 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
         console.error("Stream error:", err);
         setError(err instanceof Error ? err : new Error(String(err)));
         // Capture error with PostHog
-        posthog.captureException(err instanceof Error ? err : new Error(String(err)));
+        posthog.captureException(
+          err instanceof Error ? err : new Error(String(err)),
+        );
       }
     } finally {
       setIsLoading(false);
