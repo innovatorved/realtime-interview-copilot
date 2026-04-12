@@ -1,5 +1,8 @@
 import { auth } from "./auth";
 import { trackLLMGeneration, type PostHogEnv } from "./posthog";
+import { getDb } from "./db";
+import { savedNote, interviewPreset } from "./db/schema";
+import { eq, desc, like, or, and, sql, count } from "drizzle-orm";
 
 enum FLAGS {
   COPILOT = "copilot",
@@ -32,7 +35,7 @@ const jsonHeaders = {
 
 const encoder = new TextEncoder();
 
-const ALLOWED_METHODS = "GET,POST,OPTIONS";
+const ALLOWED_METHODS = "GET,POST,PUT,DELETE,OPTIONS";
 const ALLOWED_HEADERS = "Content-Type,Authorization";
 const CORS_MAX_AGE = "86400";
 
@@ -70,6 +73,29 @@ function handleOptions(request: Request): Response {
     status: 200,
     headers,
   });
+}
+
+async function getAuthenticatedUser(
+  request: Request,
+  env: Env,
+): Promise<{ id: string; email: string; name: string } | null> {
+  try {
+    const session = await auth(env).api.getSession({
+      headers: request.headers,
+    });
+    if (!session?.user) return null;
+    return {
+      id: session.user.id,
+      email: session.user.email,
+      name: session.user.name,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function jsonResponse(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), { status, headers: jsonHeaders });
 }
 
 function buildPrompt(bg: string | undefined, conversation: string) {
@@ -152,6 +178,33 @@ export default {
       return withCors(response, request);
     }
 
+    // --- Notes CRUD ---
+    if (path === "/api/notes" && request.method === "GET") {
+      const response = await handleGetNotes(request, env, url);
+      return withCors(response, request);
+    }
+    if (path === "/api/notes" && request.method === "POST") {
+      const response = await handleCreateNote(request, env);
+      return withCors(response, request);
+    }
+    if (path.match(/^\/api\/notes\/[^/]+$/) && request.method === "DELETE") {
+      const noteId = path.split("/").pop()!;
+      const response = await handleDeleteNote(request, env, noteId);
+      return withCors(response, request);
+    }
+
+    // --- Presets ---
+    if (path === "/api/presets" && request.method === "GET") {
+      const response = await handleGetPresets(request, env);
+      return withCors(response, request);
+    }
+
+    // --- Export ---
+    if (path === "/api/export" && request.method === "POST") {
+      const response = await handleExport(request, env);
+      return withCors(response, request);
+    }
+
     if (path.startsWith("/api/auth")) {
       console.log("[Worker] Handling auth request");
       try {
@@ -161,22 +214,13 @@ export default {
       } catch (e) {
         console.error("[Worker] Auth error:", e);
         return withCors(
-          new Response(JSON.stringify({ error: String(e) }), {
-            status: 500,
-            headers: jsonHeaders,
-          }),
+          jsonResponse({ error: String(e) }, 500),
           request,
         );
       }
     }
 
-    return withCors(
-      new Response(JSON.stringify({ error: "Not found" }), {
-        status: 404,
-        headers: jsonHeaders,
-      }),
-      request,
-    );
+    return withCors(jsonResponse({ error: "Not found" }, 404), request);
   },
 };
 
@@ -536,4 +580,272 @@ function extractTextFromChunk(chunk: any): string | null {
   }
 
   return text || null;
+}
+
+// ─── Notes CRUD ──────────────────────────────────────────────────────────────
+
+async function handleGetNotes(
+  request: Request,
+  env: Env,
+  url: URL,
+): Promise<Response> {
+  const user = await getAuthenticatedUser(request, env);
+  if (!user) return jsonResponse({ error: "Unauthorized" }, 401);
+
+  const db = getDb(env);
+  const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1", 10));
+  const limit = Math.min(
+    50,
+    Math.max(1, parseInt(url.searchParams.get("limit") ?? "20", 10)),
+  );
+  const search = (url.searchParams.get("q") ?? "").trim();
+  const tag = (url.searchParams.get("tag") ?? "").trim();
+  const offset = (page - 1) * limit;
+
+  const conditions = [eq(savedNote.userId, user.id)];
+  if (search) {
+    conditions.push(like(savedNote.content, `%${search}%`));
+  }
+  if (tag) {
+    conditions.push(eq(savedNote.tag, tag));
+  }
+
+  const whereClause = conditions.length === 1 ? conditions[0] : and(...conditions);
+
+  const [notes, totalResult] = await Promise.all([
+    db
+      .select()
+      .from(savedNote)
+      .where(whereClause)
+      .orderBy(desc(savedNote.createdAt))
+      .limit(limit)
+      .offset(offset),
+    db
+      .select({ total: count() })
+      .from(savedNote)
+      .where(whereClause),
+  ]);
+
+  const total = totalResult[0]?.total ?? 0;
+
+  return jsonResponse({
+    notes,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  });
+}
+
+async function handleCreateNote(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const user = await getAuthenticatedUser(request, env);
+  if (!user) return jsonResponse({ error: "Unauthorized" }, 401);
+
+  let body: { content?: string; tag?: string };
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    return jsonResponse({ error: "Invalid JSON" }, 400);
+  }
+
+  const content = (body.content ?? "").trim();
+  if (!content) return jsonResponse({ error: "content is required" }, 400);
+
+  const db = getDb(env);
+  const id = crypto.randomUUID();
+  const now = new Date();
+
+  const note = {
+    id,
+    userId: user.id,
+    content,
+    tag: body.tag ?? "Copilot",
+    createdAt: now,
+  };
+
+  await db.insert(savedNote).values(note);
+
+  return jsonResponse({ note }, 201);
+}
+
+async function handleDeleteNote(
+  request: Request,
+  env: Env,
+  noteId: string,
+): Promise<Response> {
+  const user = await getAuthenticatedUser(request, env);
+  if (!user) return jsonResponse({ error: "Unauthorized" }, 401);
+
+  const db = getDb(env);
+  await db
+    .delete(savedNote)
+    .where(and(eq(savedNote.id, noteId), eq(savedNote.userId, user.id)));
+
+  return jsonResponse({ success: true });
+}
+
+// ─── Presets ─────────────────────────────────────────────────────────────────
+
+async function handleGetPresets(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const user = await getAuthenticatedUser(request, env);
+  if (!user) return jsonResponse({ error: "Unauthorized" }, 401);
+
+  const db = getDb(env);
+  const presets = await db
+    .select()
+    .from(interviewPreset)
+    .where(
+      or(
+        eq(interviewPreset.isBuiltIn, true),
+        eq(interviewPreset.userId, user.id),
+      ),
+    )
+    .orderBy(interviewPreset.name);
+
+  return jsonResponse({ presets });
+}
+
+// ─── Export ──────────────────────────────────────────────────────────────────
+
+interface ExportRequestBody {
+  format: "markdown" | "pdf";
+  noteIds?: string[];
+  all?: boolean;
+}
+
+async function handleExport(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const user = await getAuthenticatedUser(request, env);
+  if (!user) return jsonResponse({ error: "Unauthorized" }, 401);
+
+  let body: ExportRequestBody;
+  try {
+    body = (await request.json()) as ExportRequestBody;
+  } catch {
+    return jsonResponse({ error: "Invalid JSON" }, 400);
+  }
+
+  const format = body.format;
+  if (format !== "markdown" && format !== "pdf") {
+    return jsonResponse({ error: "format must be 'markdown' or 'pdf'" }, 400);
+  }
+
+  const db = getDb(env);
+
+  let notes;
+  if (body.noteIds && body.noteIds.length > 0) {
+    notes = await db
+      .select()
+      .from(savedNote)
+      .where(
+        and(
+          eq(savedNote.userId, user.id),
+          sql`${savedNote.id} IN (${sql.join(
+            body.noteIds.map((id) => sql`${id}`),
+            sql`, `,
+          )})`,
+        ),
+      )
+      .orderBy(desc(savedNote.createdAt));
+  } else {
+    notes = await db
+      .select()
+      .from(savedNote)
+      .where(eq(savedNote.userId, user.id))
+      .orderBy(desc(savedNote.createdAt));
+  }
+
+  if (notes.length === 0) {
+    return jsonResponse({ error: "No notes found to export" }, 404);
+  }
+
+  const markdown = buildExportMarkdown(notes, user.name);
+
+  if (format === "markdown") {
+    return new Response(markdown, {
+      headers: {
+        "Content-Type": "text/markdown; charset=utf-8",
+        "Content-Disposition": `attachment; filename="interview-notes-${new Date().toISOString().split("T")[0]}.md"`,
+      },
+    });
+  }
+
+  // For PDF, return HTML that can be printed to PDF client-side
+  const html = buildExportHTML(markdown, user.name);
+  return new Response(html, {
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+    },
+  });
+}
+
+function buildExportMarkdown(
+  notes: Array<{
+    id: string;
+    content: string;
+    tag: string;
+    createdAt: Date;
+  }>,
+  userName: string,
+): string {
+  const lines: string[] = [
+    `# Interview Notes — ${userName}`,
+    `_Exported on ${new Date().toLocaleDateString("en-US", { dateStyle: "long" })}_`,
+    "",
+    "---",
+    "",
+  ];
+
+  for (const note of notes) {
+    const date = new Date(note.createdAt).toLocaleString("en-US", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+    lines.push(`## ${note.tag} · ${note.id.slice(0, 8)}`);
+    lines.push(`**${note.tag}** · ${date}`);
+    lines.push("");
+    lines.push(note.content);
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
+function buildExportHTML(markdown: string, userName: string): string {
+  const escapedContent = markdown
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Interview Notes — ${userName}</title>
+  <style>
+    body { font-family: 'Inter', -apple-system, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; line-height: 1.7; }
+    h1 { font-size: 1.8rem; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.5rem; }
+    h2 { font-size: 1.3rem; margin-top: 2rem; color: #374151; }
+    hr { border: none; border-top: 1px solid #e5e7eb; margin: 1.5rem 0; }
+    pre { white-space: pre-wrap; font-family: inherit; }
+    @media print { body { margin: 0; } }
+  </style>
+</head>
+<body>
+  <pre>${escapedContent}</pre>
+  <script>window.onload = function() { window.print(); }</script>
+</body>
+</html>`;
 }

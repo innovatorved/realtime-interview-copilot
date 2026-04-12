@@ -44,7 +44,9 @@ export default function RootLayout({
         <meta httpEquiv="X-Content-Type-Options" content="nosniff" />
         <meta name="referrer" content="strict-origin-when-cross-origin" />
       </head>
-      <body className={`${inter.className} bg-transparent`}>
+      <body
+        className={`${inter.className} bg-zinc-950 text-white antialiased`}
+      >
         <GoogleTagManager gtmId="GTM-TD6DHJZZ" />
         <TabProvider>
           <TitleBar />

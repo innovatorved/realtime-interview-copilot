@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 
 export const user = sqliteTable("user", {
   id: text("id").primaryKey(),
@@ -9,6 +9,36 @@ export const user = sqliteTable("user", {
   image: text("image"),
   createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+});
+
+/** Matches production D1: columns `userId`, `body`, `createdAt` (legacy shape). */
+export const savedNote = sqliteTable(
+  "saved_note",
+  {
+    id: text("id").primaryKey(),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    content: text("body").notNull(),
+    tag: text("tag").notNull().default("Copilot"),
+    createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("saved_note_user_created_idx").on(table.userId, table.createdAt),
+    index("saved_note_user_tag_idx").on(table.userId, table.tag),
+  ],
+);
+
+export const interviewPreset = sqliteTable("interview_preset", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  category: text("category").notNull(),
+  context: text("context").notNull(),
+  description: text("description"),
+  icon: text("icon"),
+  isBuiltIn: integer("isBuiltIn", { mode: "boolean" }).default(true),
+  userId: text("userId").references(() => user.id, { onDelete: "cascade" }),
+  createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
 });
 
 export const session = sqliteTable("session", {

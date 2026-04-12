@@ -9,6 +9,38 @@ export interface HistoryData {
   tag: string;
 }
 
+export interface SavedNote {
+  id: string;
+  userId: string;
+  content: string;
+  tag: string;
+  createdAt: string;
+}
+
+export interface PaginationInfo {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface NotesResponse {
+  notes: SavedNote[];
+  pagination: PaginationInfo;
+}
+
+export interface InterviewPreset {
+  id: string;
+  name: string;
+  category: string;
+  context: string;
+  description: string | null;
+  icon: string | null;
+  isBuiltIn: boolean | null;
+  userId: string | null;
+  createdAt: string;
+}
+
 export interface TranscriptionWord {
   word: string;
   punctuated_word?: string;

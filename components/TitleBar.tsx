@@ -11,6 +11,9 @@ import {
   Minus,
   Plus,
   LogOut,
+  Mic,
+  MessageSquare,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { authClient } from "@/lib/auth-client";
@@ -119,31 +122,31 @@ export default function TitleBar() {
 
       {/* Center - Tab Switcher */}
       <div
-        className="absolute left-1/2 transform -translate-x-1/2 flex items-center space-x-1"
+        className="absolute left-1/2 transform -translate-x-1/2 flex items-center space-x-0.5 bg-zinc-900/60 rounded-lg p-0.5 border border-white/[0.04]"
         style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
       >
-        <button
-          onClick={() => setActiveTab("copilot")}
-          className={cn(
-            "px-3 py-0.5 rounded text-[10px] font-medium transition-all duration-200",
-            activeTab === "copilot"
-              ? "bg-green-600 text-white shadow-sm"
-              : "text-gray-400 hover:text-white",
-          )}
-        >
-          Copilot
-        </button>
-        <button
-          onClick={() => setActiveTab("ask-ai")}
-          className={cn(
-            "px-3 py-0.5 rounded text-[10px] font-medium transition-all duration-200",
-            activeTab === "ask-ai"
-              ? "bg-green-600 text-white shadow-sm"
-              : "text-gray-400 hover:text-white",
-          )}
-        >
-          Ask AI
-        </button>
+        {([
+          { id: "copilot" as const, label: "Copilot", icon: Mic },
+          { id: "ask-ai" as const, label: "Ask AI", icon: MessageSquare },
+          { id: "presets" as const, label: "Presets", icon: Sparkles },
+        ]).map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-medium transition-all duration-200",
+                activeTab === tab.id
+                  ? "bg-emerald-600 text-white shadow-sm"
+                  : "text-gray-400 hover:text-white",
+              )}
+            >
+              <Icon className="w-3 h-3" />
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Right side - Controls */}

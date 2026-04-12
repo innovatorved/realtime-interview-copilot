@@ -14,6 +14,9 @@ import { BACKEND_API_URL } from "@/lib/constant";
 import { authClient } from "@/lib/auth-client";
 import { sendGTMEvent } from "@next/third-parties/google";
 import posthog from "posthog-js";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { BookmarkPlus, Sparkles, Zap } from "lucide-react";
 
 const RecorderTranscriber = dynamic(() => import("@/components/recorder"), {
   ssr: false,
@@ -23,9 +26,14 @@ const RecorderTranscriber = dynamic(() => import("@/components/recorder"), {
 interface CopilotProps {
   addInSavedData: (data: HistoryData) => void;
   isActive?: boolean;
+  presetContext?: string;
 }
 
-export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
+export function Copilot({
+  addInSavedData,
+  isActive = false,
+  presetContext = "",
+}: CopilotProps) {
   const isClientReady = useClientReady();
   const { data: session } = authClient.useSession();
   const [transcribedText, setTranscribedText] = useState<string>("");
@@ -39,7 +47,6 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
   const [error, setError] = useState<Error | null>(null);
   const transcriptionBoxRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll transcription box to bottom
   useEffect(() => {
     if (transcriptionBoxRef.current) {
       transcriptionBoxRef.current.scrollTop =
@@ -47,11 +54,16 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
     }
   }, [transcriptionSegments]);
 
+  useEffect(() => {
+    if (presetContext) {
+      setBg(presetContext);
+    }
+  }, [presetContext]);
+
   const handleFlag = useCallback((checked: boolean) => {
     if (!checked) {
       setFlag(FLAGS.SUMMERIZER);
       sendGTMEvent({ event: "switch_mode", mode: "summerizer" });
-      // Capture mode switch with PostHog
       posthog.capture("mode_switched", {
         mode: "summarizer",
         previous_mode: "copilot",
@@ -59,7 +71,6 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
     } else {
       setFlag(FLAGS.COPILOT);
       sendGTMEvent({ event: "switch_mode", mode: "copilot" });
-      // Capture mode switch with PostHog
       posthog.capture("mode_switched", {
         mode: "copilot",
         previous_mode: "summarizer",
@@ -71,14 +82,12 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
   const controller = useRef<AbortController | null>(null);
 
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    // Check if user is typing in an input or textarea
     const target = event.target as HTMLElement;
     const isTypingInInput =
       target.tagName === "INPUT" || target.tagName === "TEXTAREA";
 
     switch (event.key.toLowerCase()) {
       case "enter":
-        // Only trigger global Enter if NOT in an input/textarea
         if (!isTypingInInput) {
           event.preventDefault();
           if (formRef.current) {
@@ -119,15 +128,12 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
 
   const addTranscriptionSegment = (segment: TranscriptionSegment) => {
     setTranscriptionSegments((prev) => {
-      // Check if this is an update to an existing interim segment or a new final segment
       const existingIndex = prev.findIndex((s) => s.id === segment.id);
       if (existingIndex !== -1) {
-        // Update existing segment
         const updated = [...prev];
         updated[existingIndex] = segment;
         return updated;
       }
-      // Add new segment
       return [...prev, segment];
     });
   };
@@ -148,17 +154,14 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    // Clear any previous state
     setError(null);
     setCompletion("");
     setIsLoading(true);
 
-    // Create a new AbortController for this request
     if (controller.current) controller.current.abort();
     controller.current = new AbortController();
 
     sendGTMEvent({ event: "generate_completion", flag: flag });
-    // Capture completion generation request with PostHog
     posthog.capture("completion_generated", {
       mode: flag === FLAGS.COPILOT ? "copilot" : "summarizer",
       has_context: bg.length > 0,
@@ -198,15 +201,12 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
           break;
         }
 
-        // Decode the stream chunk
         const chunk = decoder.decode(value, { stream: true });
 
-        // Process Server-Sent Events
         const eventStrings = chunk.split("\n\n");
         for (const eventString of eventStrings) {
           if (!eventString.trim()) continue;
 
-          // Extract the data part of the SSE
           const dataMatch = eventString.match(/data: (.*)/);
           if (!dataMatch) continue;
 
@@ -229,11 +229,10 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
           }
         }
       }
-    } catch (err: any) {
-      if (err.name !== "AbortError") {
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name !== "AbortError") {
         console.error("Stream error:", err);
         setError(err instanceof Error ? err : new Error(String(err)));
-        // Capture error with PostHog
         posthog.captureException(
           err instanceof Error ? err : new Error(String(err)),
         );
@@ -266,19 +265,16 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
       event: "save_completion",
       tag: flag === FLAGS.COPILOT ? "Copilot" : "Summerizer",
     });
-    // Capture completion saved event with PostHog
     posthog.capture("completion_saved", {
       mode: flag === FLAGS.COPILOT ? "copilot" : "summarizer",
       completion_length: completion.length,
     });
   };
 
-  // Dynamic Window Resizing
   useEffect(() => {
     if (!isActive) return;
     if (typeof window !== "undefined" && window.electronAPI && session) {
-      // Keep window at expanded size
-      window.electronAPI.windowSetSize(1000, 600);
+      window.electronAPI.windowSetSize(1180, 640);
     }
   }, [session, isActive]);
 
@@ -287,35 +283,41 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
   }
 
   return (
-    <div className="flex flex-col h-full gap-4 pt-4 px-2 overflow-hidden">
+    <div className="flex flex-col h-full min-h-0 gap-3 px-3 py-3 sm:gap-4 sm:px-4 sm:py-4 overflow-hidden">
       {error && (
-        <div className="fixed top-8 left-0 w-full p-2 text-center text-[10px] bg-red-500/80 backdrop-blur-md text-white z-[60] animate-fade-in-scale">
+        <div className="fixed top-12 left-1/2 -translate-x-1/2 px-4 py-2 text-center text-xs bg-red-500/90 backdrop-blur-xl text-white z-[60] animate-fade-in-scale rounded-xl border border-red-400/20 shadow-xl max-w-md">
           {error.message}
         </div>
       )}
 
       {/* Top Section: Context & Transcription */}
-      <div className="grid gap-4 md:grid-cols-2 h-[45%] min-h-[320px] shrink-0">
+      <div className="grid gap-4 md:grid-cols-2 min-h-[280px] shrink-0">
         {/* Context & Controls Card */}
-        <div className="glass-card p-4 flex flex-col gap-3 h-full">
+        <div className="glass-card p-5 flex flex-col gap-3 h-full">
           <div className="flex items-center justify-between shrink-0">
             <Label
               htmlFor="system_prompt"
-              className="text-zinc-400 font-semibold tracking-wide text-[10px] uppercase"
+              className="text-zinc-500 font-semibold tracking-wider text-[10px] uppercase flex items-center gap-1.5"
             >
+              <Sparkles className="w-3 h-3 text-emerald-500/50" />
               Interview Context
             </Label>
+            {presetContext && (
+              <span className="text-[9px] text-emerald-500/60 bg-emerald-500/[0.06] px-2 py-0.5 rounded-full border border-emerald-500/10">
+                Preset loaded
+              </span>
+            )}
           </div>
 
           <Textarea
             id="system_prompt"
             placeholder="Paste job description, resume, or interview topic here..."
-            className="flex-1 min-h-[80px] resize-none bg-transparent border-0 focus-visible:ring-0 p-0 text-zinc-100 placeholder:text-zinc-600 text-xs leading-relaxed"
+            className="flex-1 min-h-[80px] resize-none bg-transparent border-0 focus-visible:ring-0 p-0 text-zinc-200 placeholder:text-zinc-700 text-xs leading-relaxed"
             value={bg}
             onChange={(e) => setBg(e.target.value)}
           />
 
-          <div className="pt-3 border-t border-white/5 space-y-3">
+          <div className="pt-3 border-t border-white/[0.04] space-y-3">
             <RecorderTranscriber
               addTextinTranscription={addTextinTranscription}
               addTranscriptionSegment={addTranscriptionSegment}
@@ -324,30 +326,30 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
             <form
               ref={formRef}
               onSubmit={handleSubmit}
-              className="w-full flex items-center justify-between gap-4"
+              className="w-full flex items-center justify-between gap-3"
             >
               {/* Mode Switcher */}
-              <div className="flex items-center gap-2 bg-black/20 rounded-full px-3 py-1 border border-white/5">
+              <div className="flex items-center gap-2 glass-panel px-3 py-1.5 rounded-xl">
                 <span
-                  className={`text-[10px] font-medium transition-colors ${flag === FLAGS.SUMMERIZER ? "text-green-400" : "text-zinc-500"}`}
+                  className={`text-[10px] font-medium transition-colors ${flag === FLAGS.SUMMERIZER ? "text-blue-400" : "text-zinc-600"}`}
                 >
                   Summarizer
                 </span>
                 <Switch
-                  className="scale-75 data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-zinc-700"
+                  className="scale-75 data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-zinc-700"
                   onCheckedChange={handleFlag}
                   defaultChecked
                   checked={flag === FLAGS.COPILOT}
                 />
                 <span
-                  className={`text-[10px] font-medium transition-colors ${flag === FLAGS.COPILOT ? "text-green-400" : "text-zinc-500"}`}
+                  className={`text-[10px] font-medium transition-colors ${flag === FLAGS.COPILOT ? "text-emerald-400" : "text-zinc-600"}`}
                 >
                   Copilot
                 </span>
               </div>
 
               <Button
-                className="w-40 h-8 bg-green-600 hover:bg-green-500 text-white font-medium shadow-[0_0_15px_rgba(22,163,74,0.3)] transition-all active:scale-[0.98] text-[10px] uppercase tracking-wider"
+                className="h-9 px-6 accent-gradient text-white font-medium shadow-lg hover:shadow-emerald-500/20 transition-all active:scale-[0.97] text-xs tracking-wide rounded-xl"
                 disabled={isLoading}
                 type="submit"
                 onClick={isLoading ? stop : undefined}
@@ -368,7 +370,10 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
                     />
                   </div>
                 ) : (
-                  <span>Enter ↵</span>
+                  <span className="flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5" />
+                    Generate
+                  </span>
                 )}
               </Button>
             </form>
@@ -376,17 +381,18 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
         </div>
 
         {/* Transcription Card */}
-        <div className="glass-card p-4 flex flex-col h-full min-h-[180px]">
-          <div className="flex items-center justify-between mb-2 shrink-0">
+        <div className="glass-card p-5 flex flex-col h-full min-h-[180px]">
+          <div className="flex items-center justify-between mb-3 shrink-0">
             <Label
               htmlFor="transcription"
-              className="text-zinc-400 font-semibold tracking-wide text-[10px] uppercase"
+              className="text-zinc-500 font-semibold tracking-wider text-[10px] uppercase flex items-center gap-1.5"
             >
+              <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
               Live Transcription
             </Label>
             <button
               type="button"
-              className="text-[10px] text-zinc-500 hover:text-red-400 transition-colors uppercase font-medium tracking-wide"
+              className="text-[10px] text-zinc-600 hover:text-red-400 transition-colors font-medium tracking-wide px-2 py-1 rounded-lg hover:bg-red-500/[0.06]"
               onClick={clearTranscriptionChange}
             >
               Clear
@@ -394,40 +400,56 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
           </div>
           <div
             ref={transcriptionBoxRef}
-            className="flex-1 min-h-0 max-h-[250px] overflow-y-auto rounded-lg custom-scrollbar -mr-2 pr-2"
+            className="flex-1 min-h-0 max-h-[250px] overflow-y-auto rounded-xl custom-scrollbar -mr-2 pr-2"
           >
             <TranscriptionDisplay segments={transcriptionSegments} />
           </div>
         </div>
       </div>
 
-      {/* AI Output Section */}
-      <div className="flex-1 min-h-0 relative group">
-        <div className="absolute top-3 right-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-          {completion && (
-            <button
-              type="button"
-              className="text-xs bg-green-900/40 text-green-400 hover:bg-green-900/600 px-3 py-1 rounded-full border border-green-500/20 transition-colors"
-              onClick={handleSave}
-            >
-              Save Note
-            </button>
-          )}
+      {/* AI Output Section — toolbar keeps Save visible; body has even horizontal padding */}
+      <div className="flex-1 min-h-0 flex flex-col glass-card overflow-hidden rounded-2xl border border-white/[0.06]">
+        <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-2.5 border-b border-white/[0.06] bg-zinc-900/30">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 truncate min-w-0 pr-2">
+            AI response
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={!completion.trim()}
+            className="h-8 min-w-[7.25rem] max-w-[7.25rem] shrink-0 gap-1.5 px-2 text-[11px] font-medium rounded-lg border border-emerald-500/20 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 hover:text-emerald-200 disabled:opacity-40 disabled:hover:bg-emerald-500/15 disabled:hover:text-emerald-300 disabled:cursor-not-allowed"
+            onClick={handleSave}
+          >
+            <BookmarkPlus className="w-3.5 h-3.5 shrink-0" />
+            Save note
+          </Button>
         </div>
 
-        <div className="glass-card w-full h-full p-6 overflow-y-auto custom-scrollbar relative">
+        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 py-4 sm:px-5 sm:py-5">
           {!completion ? (
-            <div className="h-full flex flex-col items-center justify-center text-zinc-600 space-y-2">
-              <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center">
-                <span className="text-2xl animate-pulse">✨</span>
+            <div className="h-full min-h-[120px] flex flex-col items-center justify-center text-zinc-700 space-y-3 px-2">
+              <div className="w-14 h-14 rounded-2xl bg-white/[0.03] flex items-center justify-center border border-white/[0.04]">
+                <Sparkles className="w-6 h-6 text-zinc-600" />
               </div>
-              <p className="text-sm">
-                Ready to assist. Start recording or type context.
-              </p>
+              <div className="text-center max-w-sm">
+                <p className="text-sm font-medium text-zinc-500">
+                  Ready to assist
+                </p>
+                <p className="text-xs text-zinc-600 mt-1">
+                  Start recording or press{" "}
+                  <kbd className="px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/[0.06] text-zinc-500 font-mono text-[9px]">
+                    Enter
+                  </kbd>{" "}
+                  to generate
+                </p>
+              </div>
             </div>
           ) : (
-            <div className="whitespace-pre-wrap text-zinc-100 text-sm leading-relaxed prose prose-invert max-w-none">
-              {completion}
+            <div className="prose prose-invert prose-sm max-w-none text-zinc-200 leading-relaxed pl-0.5 pr-1">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {completion}
+              </ReactMarkdown>
             </div>
           )}
         </div>
@@ -438,31 +460,28 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
 
 function CopilotSkeleton() {
   return (
-    <div className="grid w-full gap-4 mt-12 animate-pulse">
-      <div className="h-8 w-64 bg-gray-800/60 rounded" />
+    <div className="p-4 space-y-4 animate-pulse">
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-3">
-          <div className="h-4 w-40 bg-gray-800/60 rounded" />
-          <div className="h-[150px] bg-gray-800/60 rounded" />
-          <div className="h-9 bg-gray-800/60 rounded" />
+        <div className="glass-card p-5 space-y-3">
+          <div className="h-3 w-28 bg-white/[0.04] rounded-md" />
+          <div className="h-[120px] bg-white/[0.03] rounded-xl" />
+          <div className="h-9 bg-white/[0.03] rounded-xl" />
         </div>
-        <div className="space-y-3">
-          <div className="h-4 w-32 bg-gray-800/60 rounded" />
-          <div className="h-[225px] bg-gray-800/60 rounded" />
+        <div className="glass-card p-5 space-y-3">
+          <div className="h-3 w-32 bg-white/[0.04] rounded-md" />
+          <div className="h-[160px] bg-white/[0.03] rounded-xl" />
         </div>
       </div>
-      <div className="grid md:grid-cols-2 gap-2">
-        <div className="h-9 bg-gray-800/60 rounded" />
-        <div className="h-9 bg-gray-800/60 rounded" />
+      <div className="glass-card p-6 h-40">
+        <div className="h-3 w-48 bg-white/[0.04] rounded-md mx-auto" />
       </div>
-      <div className="h-40 bg-gray-800/60 rounded" />
     </div>
   );
 }
 
 function RecorderFallback() {
   return (
-    <div className="flex h-9 items-center justify-center rounded bg-gray-900/40 text-xs text-gray-400">
+    <div className="flex h-9 items-center justify-center rounded-xl bg-white/[0.02] border border-white/[0.04] text-xs text-zinc-600">
       Initializing recorder...
     </div>
   );

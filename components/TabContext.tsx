@@ -8,7 +8,7 @@ import {
   ReactNode,
 } from "react";
 
-type TabType = "copilot" | "ask-ai";
+export type TabType = "copilot" | "ask-ai" | "presets";
 
 interface TabContextType {
   activeTab: TabType;
@@ -29,6 +29,10 @@ export function TabProvider({ children }: { children: ReactNode }) {
       if (e.altKey && e.code === "KeyA") {
         e.preventDefault();
         setActiveTab("ask-ai");
+      }
+      if (e.altKey && e.code === "KeyP") {
+        e.preventDefault();
+        setActiveTab("presets");
       }
     };
 

@@ -11,7 +11,7 @@ import { useQueue } from "@uidotdev/usehooks";
 import { MicIcon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { MicOffIcon } from "lucide-react";
+import { Loader2, MicOffIcon } from "lucide-react";
 import { TranscriptionSegment, TranscriptionWord } from "@/lib/types";
 import {
   Select,
@@ -482,18 +482,25 @@ export default function RecorderTranscriber({
     processQueue();
   }, [connection, queue, remove, first, size, isProcessing, isListening]);
 
-  if (isLoadingKey)
+  const statusBarClass =
+    "w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-white/[0.08] bg-zinc-900/50 text-zinc-400 text-xs backdrop-blur-sm";
+
+  if (isLoadingKey) {
     return (
-      <span className="w-full p-2 text-center text-xs bg-red-500 text-white">
-        Fetching API key...
-      </span>
+      <div className={statusBarClass} role="status" aria-live="polite">
+        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-emerald-500/80" />
+        <span>Fetching API key…</span>
+      </div>
     );
-  if (isLoading)
+  }
+  if (isLoading) {
     return (
-      <span className="w-full p-2 text-center text-xs bg-red-500 text-white">
-        Connecting to Deepgram...
-      </span>
+      <div className={statusBarClass} role="status" aria-live="polite">
+        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-emerald-500/80" />
+        <span>Connecting to Deepgram…</span>
+      </div>
     );
+  }
   if (!isClientReady) {
     return <RecorderSkeleton />;
   }
