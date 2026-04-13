@@ -21,12 +21,13 @@ import { useRouter } from "next/navigation";
 import { sendGTMEvent } from "@next/third-parties/google";
 
 import { useTab } from "@/components/TabContext";
+import { useAppBackdrop } from "@/components/AppBackdropContext";
 
 export default function TitleBar() {
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(true);
-  const [opacity, setOpacity] = useState(1);
   const [isMaximized, setIsMaximized] = useState(false);
   const [isElectron, setIsElectron] = useState(false);
+  const { backdropOpacity, adjustBackdropOpacity } = useAppBackdrop();
   const { data: session } = authClient.useSession();
   const router = useRouter();
   const { activeTab, setActiveTab } = useTab();
@@ -38,7 +39,6 @@ export default function TitleBar() {
 
       // Get initial states
       window.electronAPI.windowIsAlwaysOnTop().then(setIsAlwaysOnTop);
-      window.electronAPI.windowGetOpacity().then(setOpacity);
       window.electronAPI.windowIsMaximized().then(setIsMaximized);
     }
   }, []);
@@ -70,12 +70,9 @@ export default function TitleBar() {
     }
   };
 
-  const handleOpacityChange = async (delta: number) => {
+  const handleBackdropChange = (delta: number) => {
     if (window.electronAPI) {
-      const newOpacity = Math.max(0.1, Math.min(1, opacity + delta));
-      const actualOpacity =
-        await window.electronAPI.windowSetOpacity(newOpacity);
-      setOpacity(actualOpacity);
+      adjustBackdropOpacity(delta);
     }
   };
 
@@ -182,20 +179,20 @@ export default function TitleBar() {
             size="sm"
             variant="ghost"
             className="h-6 w-6 p-0 hover:bg-gray-700/50 text-gray-200 hover:text-white"
-            onClick={() => handleOpacityChange(-0.1)}
-            title="Decrease transparency"
+            onClick={() => handleBackdropChange(-0.1)}
+            title="More see-through (background only)"
           >
             <Minus className="h-3 w-3" />
           </Button>
           <span className="text-[10px] text-gray-200 min-w-[32px] text-center font-medium drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-            {Math.round(opacity * 100)}%
+            {Math.round(backdropOpacity * 100)}%
           </span>
           <Button
             size="sm"
             variant="ghost"
             className="h-6 w-6 p-0 hover:bg-gray-700/50 text-gray-200 hover:text-white"
-            onClick={() => handleOpacityChange(0.1)}
-            title="Increase transparency"
+            onClick={() => handleBackdropChange(0.1)}
+            title="Darker background (UI stays sharp)"
           >
             <Plus className="h-3 w-3" />
           </Button>

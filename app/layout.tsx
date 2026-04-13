@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import TitleBar from "@/components/TitleBar";
+import { AppBackdropProvider } from "@/components/AppBackdropContext";
 import { GoogleTagManager } from "@next/third-parties/google";
 import { TabProvider } from "@/components/TabContext";
 
@@ -45,13 +46,15 @@ export default function RootLayout({
         <meta name="referrer" content="strict-origin-when-cross-origin" />
       </head>
       <body
-        className={`${inter.className} bg-zinc-950 text-white antialiased`}
+        className={`${inter.className} bg-transparent text-white antialiased`}
       >
         <GoogleTagManager gtmId="GTM-TD6DHJZZ" />
-        <TabProvider>
-          <TitleBar />
-          {children}
-        </TabProvider>
+        <AppBackdropProvider>
+          <TabProvider>
+            <TitleBar />
+            {children}
+          </TabProvider>
+        </AppBackdropProvider>
       </body>
     </html>
   );

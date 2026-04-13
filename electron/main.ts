@@ -45,8 +45,6 @@ async function createWindow() {
     alwaysOnTop: true,
     backgroundColor: "#00000000",
     hasShadow: true,
-    vibrancy: "under-window",
-    visualEffectState: "active",
     icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -172,6 +170,8 @@ async function createWindow() {
   }
 
   mainWindow.once("ready-to-show", () => {
+    // Whole-window opacity is not used for “see-through” (that is CSS backdrop only).
+    mainWindow?.setOpacity(1);
     mainWindow?.show();
   });
 
@@ -232,13 +232,6 @@ ipcMain.handle("window-always-on-top", (_, flag: boolean) => {
   return flag;
 });
 
-ipcMain.handle("window-set-opacity", (_, opacity: number) => {
-  // Opacity should be between 0 and 1
-  const clampedOpacity = Math.max(0.1, Math.min(1, opacity));
-  mainWindow?.setOpacity(clampedOpacity);
-  return clampedOpacity;
-});
-
 ipcMain.handle("window-set-size", (_, width: number, height: number) => {
   if (mainWindow) {
     const [currentWidth, currentHeight] = mainWindow.getSize();
@@ -249,10 +242,6 @@ ipcMain.handle("window-set-size", (_, width: number, height: number) => {
       mainWindow.setSize(newWidth, newHeight, false);
     }
   }
-});
-
-ipcMain.handle("window-get-opacity", () => {
-  return mainWindow?.getOpacity() || 1;
 });
 
 ipcMain.handle("window-is-always-on-top", () => {

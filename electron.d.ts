@@ -4,8 +4,6 @@ export interface ElectronAPI {
   windowMaximize: () => Promise<boolean>;
   windowClose: () => Promise<void>;
   windowAlwaysOnTop: (flag: boolean) => Promise<boolean>;
-  windowSetOpacity: (opacity: number) => Promise<number>;
-  windowGetOpacity: () => Promise<number>;
   windowIsAlwaysOnTop: () => Promise<boolean>;
   windowIsMaximized: () => Promise<boolean>;
   windowSetSize: (width: number, height: number) => Promise<void>;

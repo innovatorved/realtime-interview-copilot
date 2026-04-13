@@ -6,9 +6,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   windowClose: () => ipcRenderer.invoke("window-close"),
   windowAlwaysOnTop: (flag: boolean) =>
     ipcRenderer.invoke("window-always-on-top", flag),
-  windowSetOpacity: (opacity: number) =>
-    ipcRenderer.invoke("window-set-opacity", opacity),
-  windowGetOpacity: () => ipcRenderer.invoke("window-get-opacity"),
   windowIsAlwaysOnTop: () => ipcRenderer.invoke("window-is-always-on-top"),
   windowIsMaximized: () => ipcRenderer.invoke("window-is-maximized"),
   windowSetSize: (width: number, height: number) =>
@@ -25,8 +22,6 @@ export interface ElectronAPI {
   windowMaximize: () => Promise<boolean>;
   windowClose: () => Promise<void>;
   windowAlwaysOnTop: (flag: boolean) => Promise<boolean>;
-  windowSetOpacity: (opacity: number) => Promise<number>;
-  windowGetOpacity: () => Promise<number>;
   windowIsAlwaysOnTop: () => Promise<boolean>;
   windowIsMaximized: () => Promise<boolean>;
   windowSetSize: (width: number, height: number) => Promise<void>;

@@ -8,7 +8,7 @@ import { useNotes } from "@/hooks/useNotes";
 import { usePresets } from "@/hooks/usePresets";
 import { useExport } from "@/hooks/useExport";
 import { cn } from "@/lib/utils";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useLayoutEffect } from "react";
 import { useTab } from "@/components/TabContext";
 import { BookOpen, ChevronDown, Mic, MessageSquare, Sparkles } from "lucide-react";
 
@@ -32,7 +32,7 @@ export default function MainPage() {
   const { presets, fetchPresets } = usePresets();
   const { isExporting, exportNotes } = useExport();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (typeof window !== "undefined" && window.electronAPI) {
       setIsElectron(true);
     }
@@ -105,7 +105,14 @@ export default function MainPage() {
   ];
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950">
+    <div
+      className={cn(
+        "flex flex-col h-screen overflow-hidden",
+        isElectron
+          ? "bg-transparent"
+          : "bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950",
+      )}
+    >
       {!isElectron && (
         <nav className="glass-nav sticky top-0 z-40 px-4 py-2">
           <div className="flex items-center justify-between max-w-7xl mx-auto">
