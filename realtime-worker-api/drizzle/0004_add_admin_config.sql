@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS admin_config (
+  key TEXT PRIMARY KEY NOT NULL,
+  value TEXT NOT NULL,
+  updatedAt INTEGER NOT NULL
+);

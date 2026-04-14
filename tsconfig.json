@@ -31,5 +31,5 @@
     "out/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "realtime-worker-api"]
+  "exclude": ["node_modules", "realtime-worker-api", "admin-dashboard", "admin"]
 }

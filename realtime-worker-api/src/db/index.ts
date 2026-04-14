@@ -7,6 +7,7 @@ export interface Env {
   GEMINI_MODEL?: string;
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_URL: string;
+  ADMIN_EMAILS?: string;
   DB: D1Database;
 }
 

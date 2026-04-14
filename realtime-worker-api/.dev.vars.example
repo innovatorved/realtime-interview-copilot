@@ -1,7 +1,16 @@
 DEEPGRAM_API_KEY=
 GOOGLE_GENERATIVE_AI_API_KEY=
 
-MODEL="gemini-flash-lite-latest"
+# AI model selection (see Gemini model list)
+GEMINI_MODEL=gemini-flash-lite-latest
 
+# Better Auth
+BETTER_AUTH_SECRET=your-random-secret-here
+BETTER_AUTH_URL=http://localhost:8787
+
+# Comma-separated emails allowed to access /api/admin/* and the /admin UI
+ADMIN_EMAILS=you@example.com
+
+# Optional analytics
 POSTHOG_API_KEY=
 POSTHOG_HOST=

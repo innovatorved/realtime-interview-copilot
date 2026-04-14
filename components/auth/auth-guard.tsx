@@ -57,7 +57,31 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     return <AuthWizard onSuccess={() => setAuthenticated(true)} />;
   }
 
-  // Check if user is approved
+  // @ts-ignore - isBanned is added to schema but types might not be inferred yet in client
+  if (session?.user && session.user.isBanned) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen text-white gap-4 px-6">
+        <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
+          <span className="text-2xl">🚫</span>
+        </div>
+        <h1 className="text-xl font-semibold">Account suspended</h1>
+        <p className="text-sm text-zinc-400 text-center max-w-md">
+          Your account has been suspended. Contact the administrator if you
+          believe this is an error.
+        </p>
+        <button
+          className="text-sm text-zinc-500 hover:text-white mt-2"
+          onClick={() => {
+            void authClient.signOut();
+            window.dispatchEvent(new Event("auth:logout"));
+          }}
+        >
+          Sign out
+        </button>
+      </div>
+    );
+  }
+
   // @ts-ignore - isApproved is added to schema but types might not be inferred yet in client
   if (session?.user && !session.user.isApproved) {
     return <WaitingForApproval email={session.user.email} />;

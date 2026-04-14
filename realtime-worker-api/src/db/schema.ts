@@ -6,7 +6,10 @@ export const user = sqliteTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: integer("emailVerified", { mode: "boolean" }).notNull(),
   isApproved: integer("isApproved", { mode: "boolean" }).default(false),
+  isBanned: integer("isBanned", { mode: "boolean" }).default(false),
+  banReason: text("banReason"),
   image: text("image"),
+  lastActiveAt: integer("lastActiveAt", { mode: "timestamp" }),
   createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
 });
@@ -81,4 +84,59 @@ export const verification = sqliteTable("verification", {
   expiresAt: integer("expiresAt", { mode: "timestamp" }).notNull(),
   createdAt: integer("createdAt", { mode: "timestamp" }),
   updatedAt: integer("updatedAt", { mode: "timestamp" }),
+});
+
+export const auditEvent = sqliteTable(
+  "audit_event",
+  {
+    id: text("id").primaryKey(),
+    eventType: text("eventType").notNull(),
+    userId: text("userId").references(() => user.id, { onDelete: "set null" }),
+    userEmail: text("userEmail"),
+    ipAddress: text("ipAddress"),
+    userAgent: text("userAgent"),
+    metadata: text("metadata"),
+    createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("audit_event_type_idx").on(table.eventType),
+    index("audit_event_user_idx").on(table.userId),
+    index("audit_event_created_idx").on(table.createdAt),
+  ],
+);
+
+export const securityEvent = sqliteTable(
+  "security_event",
+  {
+    id: text("id").primaryKey(),
+    eventType: text("eventType").notNull(),
+    ipAddress: text("ipAddress"),
+    userEmail: text("userEmail"),
+    action: text("action").notNull(),
+    metadata: text("metadata"),
+    createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("security_event_type_idx").on(table.eventType),
+    index("security_event_ip_idx").on(table.ipAddress),
+    index("security_event_created_idx").on(table.createdAt),
+  ],
+);
+
+export const rateLimitEntry = sqliteTable(
+  "rate_limit",
+  {
+    id: text("id").primaryKey(),
+    key: text("key").notNull(),
+    count: integer("count").notNull().default(0),
+    windowStart: integer("windowStart", { mode: "timestamp" }).notNull(),
+    expiresAt: integer("expiresAt", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [index("rate_limit_key_idx").on(table.key)],
+);
+
+export const adminConfig = sqliteTable("admin_config", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
 });

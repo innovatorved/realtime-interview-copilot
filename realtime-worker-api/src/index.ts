@@ -1,12 +1,55 @@
 import { auth } from "./auth";
 import { trackLLMGeneration, type PostHogEnv } from "./posthog";
 import { getDb } from "./db";
-import { savedNote, interviewPreset } from "./db/schema";
+import { savedNote, interviewPreset, user as userTable, adminConfig } from "./db/schema";
 import { eq, desc, like, or, and, sql, count } from "drizzle-orm";
 
 enum FLAGS {
   COPILOT = "copilot",
   SUMMERIZER = "summerizer",
+}
+
+interface ResolvedConfig {
+  geminiModel: string;
+  geminiKey: string;
+  deepgramKey: string;
+  customModelName: string;
+  customBaseUrl: string;
+  customApiKey: string;
+  useCustom: boolean;
+}
+
+async function resolveConfig(env: Env): Promise<ResolvedConfig> {
+  try {
+    const db = getDb(env);
+    const rows = await db.select().from(adminConfig);
+    const map = new Map(rows.map((r) => [r.key, r.value]));
+
+    const customModelName = map.get("custom_model_name") || "";
+    const customBaseUrl = map.get("custom_base_url") || "";
+    const customApiKey = map.get("custom_api_key") || "";
+    const useCustom = Boolean(customModelName && customBaseUrl && customApiKey);
+
+    return {
+      geminiModel: map.get("gemini_model") || env.GEMINI_MODEL || "gemini-flash-lite-latest",
+      geminiKey: map.get("gemini_key") || env.GOOGLE_GENERATIVE_AI_API_KEY || "",
+      deepgramKey: map.get("deepgram_key") || env.DEEPGRAM_API_KEY || "",
+      customModelName,
+      customBaseUrl,
+      customApiKey,
+      useCustom,
+    };
+  } catch {
+    return {
+      geminiModel: env.GEMINI_MODEL || "gemini-flash-lite-latest",
+      geminiKey: env.GOOGLE_GENERATIVE_AI_API_KEY || "",
+      deepgramKey: env.DEEPGRAM_API_KEY || "",
+      customModelName: "",
+      customBaseUrl: "",
+      customApiKey: "",
+      useCustom: false,
+    };
+  }
 }
 
 interface Env extends PostHogEnv {
@@ -15,6 +58,8 @@ interface Env extends PostHogEnv {
   GEMINI_MODEL?: string;
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_URL: string;
+  /** Comma-separated emails allowed to use /api/admin/* (self-hosted dashboard). */
+  ADMIN_EMAILS?: string;
   DB: D1Database;
 }
 
@@ -75,6 +120,9 @@ function handleOptions(request: Request): Response {
   });
 }
 
+const ACTIVITY_UPDATE_INTERVAL_MS = 5 * 60 * 1000;
+const lastActivityUpdates = new Map<string, number>();
+
 async function getAuthenticatedUser(
   request: Request,
   env: Env,
@@ -84,8 +132,17 @@ async function getAuthenticatedUser(
       headers: request.headers,
     });
     if (!session?.user) return null;
+
+    const userId = session.user.id;
+    const now = Date.now();
+    const lastUpdate = lastActivityUpdates.get(userId) ?? 0;
+    if (now - lastUpdate > ACTIVITY_UPDATE_INTERVAL_MS) {
+      lastActivityUpdates.set(userId, now);
+      getDb(env).update(userTable).set({ lastActiveAt: new Date() }).where(eq(userTable.id, userId)).catch(() => {});
+    }
+
     return {
-      id: session.user.id,
+      id: userId,
       email: session.user.email,
       name: session.user.name,
     };
@@ -225,11 +282,12 @@ export default {
 };
 
 async function handleDeepgram(env: Env): Promise<Response> {
-  const apiKey = env.DEEPGRAM_API_KEY;
+  const cfg = await resolveConfig(env);
+  const apiKey = cfg.deepgramKey;
 
   if (!apiKey) {
     return new Response(
-      JSON.stringify({ error: "Missing DEEPGRAM_API_KEY binding" }),
+      JSON.stringify({ error: "Missing Deepgram API key — set via Admin Dashboard or DEEPGRAM_API_KEY env var" }),
       {
         status: 500,
         headers: jsonHeaders,
@@ -327,9 +385,12 @@ async function handleCompletion(
     finalPrompt = buildSummerizerPrompt(basePrompt);
   }
 
+  const cfg = await resolveConfig(env);
+
+  const activeModel = cfg.useCustom ? cfg.customModelName : cfg.geminiModel;
   const analytics = trackLLMGeneration({
     env,
-    model: env.GEMINI_MODEL || "gemini-flash-lite-latest",
+    model: activeModel,
     prompt: finalPrompt,
     getUser: async () => {
       const session = await auth(env).api.getSession({ headers: request.headers });
@@ -340,7 +401,11 @@ async function handleCompletion(
   const stream = new TransformStream();
   const writer = stream.writable.getWriter();
 
-  const pump = streamGeminiCompletion(finalPrompt, env, writer, analytics.onText)
+  const completionFn = cfg.useCustom
+    ? streamOpenAICompatibleCompletion(finalPrompt, cfg.customModelName, cfg.customApiKey, cfg.customBaseUrl, writer, analytics.onText)
+    : streamGeminiCompletion(finalPrompt, cfg.geminiModel, cfg.geminiKey, writer, analytics.onText);
+
+  const pump = completionFn
     .catch(async (error: unknown) => {
       analytics.onError(error instanceof Error ? error : String(error));
       const message = error instanceof Error
@@ -366,17 +431,15 @@ async function handleCompletion(
 
 async function streamGeminiCompletion(
   prompt: string,
-  env: Env,
+  modelName: string,
+  apiKey: string,
   writer: WritableStreamDefaultWriter<Uint8Array>,
   onText?: (text: string) => void,
 ) {
-  const apiKey = env.GOOGLE_GENERATIVE_AI_API_KEY;
   if (!apiKey) {
-    throw new Error("Missing GOOGLE_GENERATIVE_AI_API_KEY binding");
+    throw new Error("Missing Gemini API key — set via Admin Dashboard or GOOGLE_GENERATIVE_AI_API_KEY env var");
   }
 
-  const DEFAULT_MODEL = "gemini-flash-lite-latest";
-  const modelName = env.GEMINI_MODEL || DEFAULT_MODEL;
   const url = `https://gateway.ai.cloudflare.com/v1/b4ca0337fb21e846c53e1f2611ba436c/gateway04/google-ai-studio/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${apiKey}`;
 
   const requestBody = JSON.stringify({
@@ -496,6 +559,83 @@ async function streamGeminiCompletion(
     } catch (writeError) {
       console.error("Failed to write error message to stream:", writeError);
     }
+  }
+}
+
+async function streamOpenAICompatibleCompletion(
+  prompt: string,
+  modelName: string,
+  apiKey: string,
+  baseUrl: string,
+  writer: WritableStreamDefaultWriter<Uint8Array>,
+  onText?: (text: string) => void,
+) {
+  if (!apiKey || !baseUrl) {
+    throw new Error("Missing custom model API key or base URL — configure in Admin Dashboard Settings");
+  }
+
+  const endpoint = baseUrl.replace(/\/+$/, "") + "/chat/completions";
+
+  const requestBody = JSON.stringify({
+    model: modelName,
+    stream: true,
+    max_tokens: 8192,
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: requestBody,
+    });
+
+    if (!response.ok) {
+      let errorBody = "Could not read error body";
+      try { errorBody = await response.text(); } catch { /* ignore */ }
+      throw new Error(`Custom model API error: ${response.status} ${response.statusText}. Body: ${errorBody}`);
+    }
+
+    if (!response.body) throw new Error("Response body is null");
+
+    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += value;
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith("data:")) continue;
+        const payload = trimmed.slice(5).trim();
+        if (payload === "[DONE]") continue;
+
+        try {
+          const parsed = JSON.parse(payload);
+          const delta = parsed.choices?.[0]?.delta?.content;
+          if (delta) {
+            await writer.write(encoder.encode(`data: ${JSON.stringify({ text: delta })}\n\n`));
+            onText?.(delta);
+          }
+        } catch { /* skip malformed chunks */ }
+      }
+    }
+
+    await writer.write(encoder.encode("data: [DONE]\n\n"));
+  } catch (error: unknown) {
+    console.error("Error streaming from custom OpenAI-compatible API:", error);
+    const errPayload = error instanceof Error ? { error: error.message } : { error: String(error) };
+    try {
+      await writer.write(encoder.encode(`data: ${JSON.stringify(errPayload)}\n\n`));
+    } catch { /* ignore write failures */ }
   }
 }
 
