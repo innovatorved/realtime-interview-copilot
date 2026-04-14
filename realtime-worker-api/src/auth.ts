@@ -37,6 +37,7 @@ export const auth = (env: Env) => {
     trustedOrigins: [
       "http://localhost:3000",
       "http://localhost:3001",
+      "https://interview-copilot-admin.vedgupta.in",
       "https://realtime-worker-api-prod.vedgupta.in",
     ],
     secret: env.BETTER_AUTH_SECRET,

@@ -64,6 +64,7 @@ export default function RecorderTranscriber({
   const [caption, setCaption] = useState<string | null>(null);
   const segmentCounterRef = useRef<number>(0);
   const connectionRef = useRef<LiveClient | null>(null);
+  const intentionalCloseRef = useRef(false);
 
   // Load available audio devices
   const loadAudioDevices = useCallback(async () => {
@@ -144,6 +145,19 @@ export default function RecorderTranscriber({
     }
   }, []);
 
+  const cleanupSession = useCallback(() => {
+    intentionalCloseRef.current = true;
+
+    if (connectionRef.current) {
+      try { connectionRef.current.finish(); } catch { /* ignore */ }
+      connectionRef.current = null;
+    }
+    setConnection(null);
+    setListening(false);
+    setLoading(false);
+    setApiKey(null);
+  }, []);
+
   const toggleRecorderTranscriber = useCallback(async () => {
     let currentMedia = userMedia;
     if (micOpen) {
@@ -161,18 +175,8 @@ export default function RecorderTranscriber({
         setUserMedia(null);
       }
 
-      // Close Deepgram connection
-      if (connectionRef.current) {
-        connectionRef.current.finish();
-        connectionRef.current = null;
-        setConnection(null);
-        setListening(false);
-      }
+      cleanupSession();
 
-      // Clear the API key so a fresh one is fetched next time
-      setApiKey(null);
-
-      // Capture recording stopped event with PostHog
       posthog.capture("recording_stopped", {
         platform: isElectron ? "electron" : "browser",
       });
@@ -182,31 +186,19 @@ export default function RecorderTranscriber({
       // Start listening - always fetch a fresh API key
       console.log("🎙️ Starting new recording session...");
 
-      // Ensure we start fresh - clear any existing connection
-      if (connectionRef.current) {
-        console.log("Cleaning up old connection...");
-        connectionRef.current.finish();
-        connectionRef.current = null;
-        setConnection(null);
-        setListening(false);
-      }
-
-      // Clear old API key and fetch a new one
-      setApiKey(null);
+      cleanupSession();
+      intentionalCloseRef.current = false;
 
       if (!userMedia) {
         try {
-          // Check if we're in Electron using state
           if (isElectron) {
             console.log("🖥️ Running in Electron mode");
 
-            // Check if a device is selected
             if (!selectedDeviceId) {
               alert("Please select an audio device first!");
               return;
             }
 
-            // Find the selected device
             const selectedDevice = audioDevices.find(
               (d) => d.deviceId === selectedDeviceId,
             );
@@ -235,7 +227,6 @@ export default function RecorderTranscriber({
               video: false,
             });
 
-            // Verify we got the correct device
             const audioTrack = media.getAudioTracks()[0];
             console.log(
               `✅ Successfully captured audio from: ${audioTrack.label}`,
@@ -246,7 +237,6 @@ export default function RecorderTranscriber({
               `   Track enabled: ${audioTrack.enabled}, muted: ${audioTrack.muted}, readyState: ${audioTrack.readyState}`,
             );
 
-            // Verify this is the correct device
             if (
               !audioTrack.label
                 .toLowerCase()
@@ -271,7 +261,6 @@ export default function RecorderTranscriber({
             currentMedia = media;
             setUserMedia((_) => media);
           } else {
-            // In browser: Use screen capture with audio (original behavior)
             const media = await navigator.mediaDevices.getDisplayMedia({
               video: true,
               audio: true,
@@ -295,13 +284,12 @@ export default function RecorderTranscriber({
 
       if (!currentMedia) return;
 
-      // Always get a fresh API key for each session
       setLoadingKey(true);
       try {
         console.log("🔑 Fetching fresh API key...");
         const res = await fetch(`${BACKEND_API_URL}/api/deepgram`, {
           cache: "no-store",
-          credentials: "include", // Important: Send cookies for auth
+          credentials: "include",
         });
         const object = await res.json();
         if (typeof object !== "object" || object === null || !("key" in object))
@@ -312,7 +300,6 @@ export default function RecorderTranscriber({
         console.error("Failed to get API key:", e);
         alert("Failed to get API key. Please try again.");
         setLoadingKey(false);
-        // Clean up media on error
         if (currentMedia) {
           currentMedia.getTracks().forEach((track) => track.stop());
           setUserMedia(null);
@@ -321,14 +308,12 @@ export default function RecorderTranscriber({
       }
       setLoadingKey(false);
 
-      // Create a fresh MediaRecorder instance
       const mic = new MediaRecorder(currentMedia);
       mic.start(500);
 
       mic.onstart = () => {
         console.log("🎙️ MediaRecorder started");
         setMicOpen((_) => true);
-        // Capture recording started event with PostHog
         posthog.capture("recording_started", {
           platform: isElectron ? "electron" : "browser",
           device_label: isElectron
@@ -352,11 +337,12 @@ export default function RecorderTranscriber({
     add,
     micOpen,
     userMedia,
-    apiKey,
     selectedDeviceId,
     audioDevices,
     loadAudioDevices,
     isElectron,
+    microphone,
+    cleanupSession,
   ]);
 
   // Fetch API key only when component mounts
@@ -374,8 +360,8 @@ export default function RecorderTranscriber({
 
   // Establish Deepgram connection only when user has clicked start AND we have an API key
   useEffect(() => {
-    // Only create connection if we have API key, mic is open, and no existing connection
     if (!apiKey || !micOpen || connectionRef.current) return;
+    if (intentionalCloseRef.current) return;
 
     console.log("🌐 Creating new Deepgram connection...");
     setLoading(true);
@@ -395,18 +381,22 @@ export default function RecorderTranscriber({
 
     newConnection.on(LiveTranscriptionEvents.Close, () => {
       console.log("🔌 Deepgram connection closed");
-      setListening(false);
-      setConnection(null);
-      connectionRef.current = null;
+      if (connectionRef.current === newConnection) {
+        intentionalCloseRef.current = true;
+        setListening(false);
+        setLoading(false);
+        setConnection(null);
+        connectionRef.current = null;
+      }
     });
 
     newConnection.on(LiveTranscriptionEvents.Error, (error) => {
       console.error("❌ Deepgram connection error:", error);
-      setListening(false);
-      setLoading(false);
-      // Clean up on error
-      if (connectionRef.current) {
-        connectionRef.current.finish();
+      if (connectionRef.current === newConnection) {
+        intentionalCloseRef.current = true;
+        setListening(false);
+        setLoading(false);
+        try { connectionRef.current.finish(); } catch { /* ignore */ }
         connectionRef.current = null;
         setConnection(null);
       }
@@ -421,7 +411,6 @@ export default function RecorderTranscriber({
         setCaption(caption);
         addTextinTranscription(caption);
 
-        // Extract detailed segment data if callback is provided
         if (addTranscriptionSegment) {
           const startTime = words.length > 0 ? (words[0].start ?? 0) : 0;
           const endTime =
