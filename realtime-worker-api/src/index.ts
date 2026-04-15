@@ -6,7 +6,7 @@ import { eq, desc, like, or, and, sql, count } from "drizzle-orm";
 
 enum FLAGS {
   COPILOT = "copilot",
-  SUMMERIZER = "summerizer",
+  SUMMARIZER = "summarizer",
 }
 
 interface ResolvedConfig {
@@ -39,7 +39,8 @@ async function resolveConfig(env: Env): Promise<ResolvedConfig> {
       customApiKey,
       useCustom,
     };
-  } catch {
+  } catch (err) {
+    console.error("Failed to load admin config from D1, using env defaults:", err);
     return {
       geminiModel: env.GEMINI_MODEL || "gemini-flash-lite-latest",
       geminiKey: env.GOOGLE_GENERATIVE_AI_API_KEY || "",
@@ -182,8 +183,8 @@ ${conversation}
 **Response:**`;
 }
 
-function buildSummerizerPrompt(text: string) {
-  return `You are a summerizer. You are summarizing the given text. Summarize the following text. Only write summary.\nContent:\n${text}\nSummary:\n`;
+function buildSummarizerPrompt(text: string) {
+  return `Summarize the following text concisely. Only write the summary.\nContent:\n${text}\nSummary:\n`;
 }
 
 type DeepgramProjectsResponse = {
@@ -212,8 +213,6 @@ export default {
   ): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/$/, "");
-
-    console.log(`[Worker] Incoming request: ${request.method} ${path}`);
 
     if (request.method === "OPTIONS") {
       return handleOptions(request);
@@ -263,15 +262,13 @@ export default {
     }
 
     if (path.startsWith("/api/auth")) {
-      console.log("[Worker] Handling auth request");
       try {
         const response = await auth(env).handler(request);
-        console.log(`[Worker] Auth response status: ${response.status}`);
         return withCors(response, request);
       } catch (e) {
         console.error("[Worker] Auth error:", e);
         return withCors(
-          jsonResponse({ error: String(e) }, 500),
+          jsonResponse({ error: "Authentication error" }, 500),
           request,
         );
       }
@@ -381,8 +378,8 @@ async function handleCompletion(
   let finalPrompt = basePrompt;
   if (payload.flag === FLAGS.COPILOT) {
     finalPrompt = buildPrompt(payload.bg, basePrompt);
-  } else if (payload.flag === FLAGS.SUMMERIZER) {
-    finalPrompt = buildSummerizerPrompt(basePrompt);
+  } else if (payload.flag === FLAGS.SUMMARIZER) {
+    finalPrompt = buildSummarizerPrompt(basePrompt);
   }
 
   const cfg = await resolveConfig(env);
@@ -467,9 +464,8 @@ async function streamGeminiCompletion(
       let errorBody = "Could not read error body";
       try {
         errorBody = await response.text();
-        console.error("API Error Body:", errorBody);
-      } catch (readError) {
-        console.error("Failed to read error body:", readError);
+      } catch {
+        // Could not read error body
       }
       throw new Error(
         `API Error: ${response.status} ${response.statusText}. Body: ${errorBody}`,
@@ -480,84 +476,52 @@ async function streamGeminiCompletion(
       throw new Error("Response body is null");
     }
 
-    // Process the SSE stream
     const reader = response.body
-      .pipeThrough(new TextDecoderStream()) // Decode Uint8Array to text
+      .pipeThrough(new TextDecoderStream())
       .getReader();
 
     let buffer = "";
-    const SSERegex = /^data:\s*(.*)(?:\n\n|\r\r|\r\n\r\n)/; // Regex to find "data: {...}\n\n"
+    const SSERegex = /^data:\s*(.*)(?:\n\n|\r\r|\r\n\r\n)/;
 
     while (true) {
       const { done, value } = await reader.read();
+      if (done) break;
 
-      if (done) {
-        // Process any remaining data in the buffer (unlikely for valid SSE but good practice)
-        if (buffer.trim()) {
-          console.warn("Trailing data in buffer after stream end:", buffer);
-          // You could try one last parse attempt here if necessary
-        }
-        break; // Exit the loop
-      }
-
-      buffer += value; // Append the new chunk to the buffer
+      buffer += value;
 
       let match;
-      // Process all complete SSE messages in the buffer
       while ((match = buffer.match(SSERegex)) !== null) {
         const jsonDataString = match[1];
 
         if (jsonDataString) {
           try {
             const jsonChunk = JSON.parse(jsonDataString);
-            // console.log("Raw Chunk JSON:", JSON.stringify(jsonChunk, null, 2)); // Optional: Log the raw chunk
-
             const text = extractTextFromChunk(jsonChunk);
 
             if (text !== null && text !== "") {
-              // Check for non-empty text
               const sseData = JSON.stringify({ text });
               await writer.write(encoder.encode(`data: ${sseData}\n\n`));
-              // Call the callback for analytics collection
               onText?.(text);
-            } else {
-              // console.log("Chunk contained no text or was a non-text chunk."); // Optional: Log empty chunks
             }
-          } catch (e: any) {
-            console.error("Error parsing JSON chunk:", jsonDataString, e);
-            // Send an error message downstream if parsing fails
-            const errorMessage = JSON.stringify({
-              error: `JSON Parse Error: ${e.message}`,
-            });
+          } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            const errorMessage = JSON.stringify({ error: `JSON Parse Error: ${msg}` });
             await writer.write(encoder.encode(`data: ${errorMessage}\n\n`));
           }
         }
 
-        // Remove the processed message (including delimiters) from the buffer
         buffer = buffer.substring(match[0].length);
       }
     }
 
-    // Send the final [DONE] marker
     await writer.write(encoder.encode("data: [DONE]\n\n"));
-  } catch (error: any) {
-    console.error("Error streaming directly from Gemini API:", error);
-    // Ensure error is stringified correctly for SSE
-    let errorMessageContent: any;
-    if (error instanceof Error) {
-      errorMessageContent = {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-      }; // Include stack for debugging
-    } else {
-      errorMessageContent = { error: String(error) };
-    }
-    const errorMessage = JSON.stringify({ error: errorMessageContent });
+  } catch (error: unknown) {
+    console.error("Error streaming from Gemini API:", error);
+    const errPayload = error instanceof Error ? { error: error.message } : { error: String(error) };
     try {
-      await writer.write(encoder.encode(`data: ${errorMessage}\n\n`));
-    } catch (writeError) {
-      console.error("Failed to write error message to stream:", writeError);
+      await writer.write(encoder.encode(`data: ${JSON.stringify(errPayload)}\n\n`));
+    } catch {
+      // Stream already closed
     }
   }
 }
@@ -631,58 +595,13 @@ async function streamOpenAICompatibleCompletion(
 
     await writer.write(encoder.encode("data: [DONE]\n\n"));
   } catch (error: unknown) {
-    console.error("Error streaming from custom OpenAI-compatible API:", error);
     const errPayload = error instanceof Error ? { error: error.message } : { error: String(error) };
     try {
       await writer.write(encoder.encode(`data: ${JSON.stringify(errPayload)}\n\n`));
-    } catch { /* ignore write failures */ }
-  }
-}
-
-async function processSSEMessage(
-  rawMessage: string,
-  writer: WritableStreamDefaultWriter<Uint8Array>,
-): Promise<boolean> {
-  if (!rawMessage.trim()) {
-    return false;
-  }
-
-  // Extract data: prefix
-  const dataMatch = rawMessage.match(/^data:\s*(.*)$/m);
-  if (!dataMatch) {
-    return false;
-  }
-
-  const dataContent = dataMatch[1].trim();
-
-  if (!dataContent) {
-    return false;
-  }
-
-  if (dataContent === "[DONE]") {
-    await writer.write(encoder.encode("data: [DONE]\n\n"));
-    return true;
-  }
-
-  try {
-    const chunk = JSON.parse(dataContent);
-    const text = extractTextFromChunk(chunk);
-    if (text) {
-      await writer.write(
-        encoder.encode(`data: ${JSON.stringify({ text })}\n\n`),
-      );
+    } catch {
+      // Stream already closed
     }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error("Failed to parse chunk:", dataContent, message);
-    await writer.write(
-      encoder.encode(
-        `data: ${JSON.stringify({ error: `JSON parse error: ${message}` })}\n\n`,
-      ),
-    );
   }
-
-  return false;
 }
 
 function extractTextFromChunk(chunk: any): string | null {
@@ -786,7 +705,7 @@ async function handleCreateNote(
   const user = await getAuthenticatedUser(request, env);
   if (!user) return jsonResponse({ error: "Unauthorized" }, 401);
 
-  let body: { content?: string; tag?: string };
+  let body: { content?: string; tag?: string; title?: string };
   try {
     body = (await request.json()) as typeof body;
   } catch {

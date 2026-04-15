@@ -36,10 +36,11 @@ export function useExport() {
         } else {
           const html = await res.text();
           const printWindow = window.open("", "_blank");
-          if (printWindow) {
-            printWindow.document.write(html);
-            printWindow.document.close();
+          if (!printWindow) {
+            throw new Error("Pop-up blocked. Please allow pop-ups to export as PDF.");
           }
+          printWindow.document.write(html);
+          printWindow.document.close();
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);

@@ -7,7 +7,6 @@ import {
   createClient,
 } from "@deepgram/sdk";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useQueue } from "@uidotdev/usehooks";
 import { MicIcon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -20,7 +19,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
 import { useClientReady } from "@/hooks/useClientReady";
 import { BACKEND_API_URL } from "@/lib/constant";
 import posthog from "posthog-js";
@@ -36,70 +34,47 @@ interface AudioDeviceInfo {
   kind: string;
 }
 
+type SessionState = "idle" | "fetching-key" | "connecting" | "live";
+
 export default function RecorderTranscriber({
   addTextinTranscription,
   addTranscriptionSegment,
 }: RecorderTranscriberProps) {
   const isClientReady = useClientReady();
-  const isRendered = useRef(false);
-  const { add, remove, first, size, queue } = useQueue<any>([]);
-  const [apiKey, setApiKey] = useState<CreateProjectKeyResponse | null>(null);
-  const [connection, setConnection] = useState<LiveClient | null>(null);
-  const [isListening, setListening] = useState(false);
-  const [isLoadingKey, setLoadingKey] = useState(false);
-  const [isLoading, setLoading] = useState(false);
-  const [isProcessing, setProcessing] = useState(false);
-  const [micOpen, setMicOpen] = useState(false);
-  const [microphone, setRecorderTranscriber] = useState<MediaRecorder | null>(
-    null,
-  );
-  const [userMedia, setUserMedia] = useState<MediaStream | null>(null);
 
-  // Audio device selection states
   const [audioDevices, setAudioDevices] = useState<AudioDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
   const [isLoadingDevices, setIsLoadingDevices] = useState(false);
-  const [isElectron, setIsElectron] = useState<boolean | null>(null); // null initially to prevent hydration mismatch
+  const [isElectron, setIsElectron] = useState<boolean | null>(null);
+  const [sessionState, setSessionState] = useState<SessionState>("idle");
 
-  const [caption, setCaption] = useState<string | null>(null);
-  const segmentCounterRef = useRef<number>(0);
   const connectionRef = useRef<LiveClient | null>(null);
-  const intentionalCloseRef = useRef(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const segmentCounterRef = useRef<number>(0);
+  const sessionIdRef = useRef<number>(0);
 
-  // Load available audio devices
+  const addTextRef = useRef(addTextinTranscription);
+  addTextRef.current = addTextinTranscription;
+  const addSegmentRef = useRef(addTranscriptionSegment);
+  addSegmentRef.current = addTranscriptionSegment;
+
   const loadAudioDevices = useCallback(async () => {
     setIsLoadingDevices(true);
     try {
-      console.log("🎤 Loading audio devices...");
-
-      // Request permission first if needed
       try {
         const tempStream = await navigator.mediaDevices.getUserMedia({
           audio: true,
         });
         tempStream.getTracks().forEach((track) => track.stop());
-      } catch (e) {
-        console.log("Permission request for enumerating devices:", e);
+      } catch {
+        // Permission not yet granted; device labels may be empty
       }
 
       const devices = await navigator.mediaDevices.enumerateDevices();
       const audioInputs = devices.filter(
         (device) => device.kind === "audioinput",
       );
-
-      console.log("📋 All available devices:");
-      devices.forEach((device, index) => {
-        console.log(
-          `  ${index + 1}. [${device.kind}] ${device.label || "Unnamed device"} (ID: ${device.deviceId})`,
-        );
-      });
-
-      console.log("\n🎧 Audio Input devices:");
-      audioInputs.forEach((device, index) => {
-        console.log(
-          `  ${index + 1}. ${device.label || "Unnamed device"} (ID: ${device.deviceId})`,
-        );
-      });
 
       const deviceList: AudioDeviceInfo[] = audioInputs.map((d) => ({
         deviceId: d.deviceId,
@@ -109,11 +84,9 @@ export default function RecorderTranscriber({
 
       setAudioDevices(deviceList);
 
-      // Auto-select BlackHole or similar virtual device if available
       const blackholeDevice = audioInputs.find((device) =>
         device.label.toLowerCase().includes("blackhole"),
       );
-
       const virtualDevice =
         blackholeDevice ||
         audioInputs.find(
@@ -124,439 +97,321 @@ export default function RecorderTranscriber({
         );
 
       if (virtualDevice) {
-        console.log(
-          `✅ Auto-selected virtual audio device: ${virtualDevice.label}`,
-        );
         setSelectedDeviceId(virtualDevice.deviceId);
       } else if (audioInputs.length > 0) {
-        console.warn(
-          "⚠️ No virtual audio device found. Please select one manually.",
-        );
-        console.log(
-          "Available devices:",
-          audioInputs.map((d) => d.label).join(", "),
-        );
         setSelectedDeviceId(audioInputs[0].deviceId);
       }
     } catch (error) {
-      console.error("❌ Error loading audio devices:", error);
+      console.error("Error loading audio devices:", error);
     } finally {
       setIsLoadingDevices(false);
     }
   }, []);
 
-  const cleanupSession = useCallback(() => {
-    intentionalCloseRef.current = true;
+  const teardown = useCallback(() => {
+    if (mediaRecorderRef.current) {
+      try { mediaRecorderRef.current.stop(); } catch { /* already stopped */ }
+      mediaRecorderRef.current = null;
+    }
+
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
 
     if (connectionRef.current) {
-      try { connectionRef.current.finish(); } catch { /* ignore */ }
+      try { connectionRef.current.finish(); } catch { /* already closed */ }
       connectionRef.current = null;
     }
-    setConnection(null);
-    setListening(false);
-    setLoading(false);
-    setApiKey(null);
+
+    setSessionState("idle");
   }, []);
 
-  const toggleRecorderTranscriber = useCallback(async () => {
-    let currentMedia = userMedia;
-    if (micOpen) {
-      // Stop listening
-      console.log("🛑 Stopping recording...");
-      microphone?.stop();
-      setRecorderTranscriber(null);
+  const startSession = useCallback(async () => {
+    teardown();
 
-      // Stop all tracks to release the device
-      if (userMedia) {
-        userMedia.getTracks().forEach((track) => {
-          track.stop();
-          console.log(`   Stopped track: ${track.label}`);
-        });
-        setUserMedia(null);
-      }
+    const thisSession = ++sessionIdRef.current;
+    const isStale = () => sessionIdRef.current !== thisSession;
 
-      cleanupSession();
+    setSessionState("fetching-key");
 
-      posthog.capture("recording_stopped", {
-        platform: isElectron ? "electron" : "browser",
-      });
-
-      console.log("✅ Recording stopped and device released");
-    } else {
-      // Start listening - always fetch a fresh API key
-      console.log("🎙️ Starting new recording session...");
-
-      cleanupSession();
-      intentionalCloseRef.current = false;
-
-      if (!userMedia) {
-        try {
-          if (isElectron) {
-            console.log("🖥️ Running in Electron mode");
-
-            if (!selectedDeviceId) {
-              alert("Please select an audio device first!");
-              return;
-            }
-
-            const selectedDevice = audioDevices.find(
-              (d) => d.deviceId === selectedDeviceId,
-            );
-
-            if (!selectedDevice) {
-              console.error("❌ Selected device not found!");
-              alert("Selected audio device not found. Please select again.");
-              await loadAudioDevices();
-              return;
-            }
-
-            console.log(
-              `🎤 Attempting to use selected audio device: ${selectedDevice.label}`,
-            );
-            console.log(`   Device ID: ${selectedDevice.deviceId}`);
-
-            const media = await navigator.mediaDevices.getUserMedia({
-              audio: {
-                deviceId: { exact: selectedDevice.deviceId },
-                echoCancellation: false,
-                noiseSuppression: false,
-                autoGainControl: false,
-                sampleRate: 48000,
-                channelCount: 2,
-              } as MediaTrackConstraints,
-              video: false,
-            });
-
-            const audioTrack = media.getAudioTracks()[0];
-            console.log(
-              `✅ Successfully captured audio from: ${audioTrack.label}`,
-            );
-            console.log(`   Track ID: ${audioTrack.id}`);
-            console.log(`   Track settings:`, audioTrack.getSettings());
-            console.log(
-              `   Track enabled: ${audioTrack.enabled}, muted: ${audioTrack.muted}, readyState: ${audioTrack.readyState}`,
-            );
-
-            if (
-              !audioTrack.label
-                .toLowerCase()
-                .includes(selectedDevice.label.toLowerCase().split(" ")[0])
-            ) {
-              console.error(
-                `❌ WARNING: Expected device "${selectedDevice.label}" but got "${audioTrack.label}"`,
-              );
-              console.error(`   This might be the wrong device!`);
-              alert(
-                `⚠️ Device Mismatch Warning!\n\n` +
-                  `Expected: ${selectedDevice.label}\n` +
-                  `Got: ${audioTrack.label}\n\n` +
-                  `The audio might be captured from the wrong device.`,
-              );
-            } else {
-              console.log(
-                `✅✅ VERIFIED: Using correct device "${audioTrack.label}"`,
-              );
-            }
-
-            currentMedia = media;
-            setUserMedia((_) => media);
-          } else {
-            const media = await navigator.mediaDevices.getDisplayMedia({
-              video: true,
-              audio: true,
-            });
-            media.getVideoTracks().forEach((track) => track.stop());
-            currentMedia = media;
-            setUserMedia((_) => media);
-          }
-        } catch (error) {
-          console.error("❌ Error accessing audio:", error);
-          alert(
-            "Could not access audio. Please ensure:\n" +
-              "- On Mac: BlackHole is installed and set as input device\n" +
-              "- On Windows: VB-Audio Virtual Cable or similar is configured\n" +
-              "- Microphone permissions are granted\n\n" +
-              `Error: ${error}`,
-          );
+    let media: MediaStream;
+    try {
+      if (isElectron) {
+        if (!selectedDeviceId) {
+          alert("Please select an audio device first!");
+          setSessionState("idle");
           return;
         }
-      }
 
-      if (!currentMedia) return;
+        const selectedDevice = audioDevices.find(
+          (d) => d.deviceId === selectedDeviceId,
+        );
 
-      setLoadingKey(true);
-      try {
-        console.log("🔑 Fetching fresh API key...");
-        const res = await fetch(`${BACKEND_API_URL}/api/deepgram`, {
-          cache: "no-store",
-          credentials: "include",
-        });
-        const object = await res.json();
-        if (typeof object !== "object" || object === null || !("key" in object))
-          throw new Error("No api key returned");
-        setApiKey(object as CreateProjectKeyResponse);
-        console.log("✅ Fresh API key obtained");
-      } catch (e) {
-        console.error("Failed to get API key:", e);
-        alert("Failed to get API key. Please try again.");
-        setLoadingKey(false);
-        if (currentMedia) {
-          currentMedia.getTracks().forEach((track) => track.stop());
-          setUserMedia(null);
+        if (!selectedDevice) {
+          alert("Selected audio device not found. Please select again.");
+          await loadAudioDevices();
+          setSessionState("idle");
+          return;
         }
-        return;
-      }
-      setLoadingKey(false);
 
-      const mic = new MediaRecorder(currentMedia);
-      mic.start(500);
-
-      mic.onstart = () => {
-        console.log("🎙️ MediaRecorder started");
-        setMicOpen((_) => true);
-        posthog.capture("recording_started", {
-          platform: isElectron ? "electron" : "browser",
-          device_label: isElectron
-            ? audioDevices.find((d) => d.deviceId === selectedDeviceId)?.label
-            : "screen_capture",
+        media = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            deviceId: { exact: selectedDevice.deviceId },
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+            sampleRate: 48000,
+            channelCount: 2,
+          } as MediaTrackConstraints,
+          video: false,
         });
-      };
-
-      mic.onstop = () => {
-        console.log("🛑 MediaRecorder stopped");
-        setMicOpen((_) => false);
-      };
-
-      mic.ondataavailable = (e) => {
-        add(e.data);
-      };
-
-      setRecorderTranscriber((_) => mic);
+      } else {
+        media = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: true,
+        });
+        media.getVideoTracks().forEach((track) => track.stop());
+      }
+    } catch (error) {
+      alert(
+        "Could not access audio. Please ensure:\n" +
+          "- On Mac: BlackHole is installed and set as input device\n" +
+          "- On Windows: VB-Audio Virtual Cable or similar is configured\n" +
+          "- Microphone permissions are granted\n\n" +
+          `Error: ${error}`,
+      );
+      setSessionState("idle");
+      return;
     }
-  }, [
-    add,
-    micOpen,
-    userMedia,
-    selectedDeviceId,
-    audioDevices,
-    loadAudioDevices,
-    isElectron,
-    microphone,
-    cleanupSession,
-  ]);
 
-  // Fetch API key only when component mounts
-  useEffect(() => {
-    if (isRendered.current) return;
-    isRendered.current = true;
+    if (isStale()) {
+      media.getTracks().forEach((t) => t.stop());
+      return;
+    }
 
-    // Check if running in Electron (client-side only)
-    setIsElectron(typeof window !== "undefined" && !!window.electronAPI);
+    mediaStreamRef.current = media;
 
-    // Load audio devices when component mounts
-    loadAudioDevices();
-    // API key will be fetched when user starts listening, not on mount
-  }, [loadAudioDevices]);
+    let apiKeyResponse: CreateProjectKeyResponse;
+    try {
+      const res = await fetch(`${BACKEND_API_URL}/api/deepgram`, {
+        cache: "no-store",
+        credentials: "include",
+      });
+      const object = await res.json();
+      if (typeof object !== "object" || object === null || !("key" in object)) {
+        throw new Error("No api key returned");
+      }
+      apiKeyResponse = object as CreateProjectKeyResponse;
+    } catch (e) {
+      console.error("Failed to get API key:", e);
+      alert("Failed to get API key. Please try again.");
+      teardown();
+      return;
+    }
 
-  // Establish Deepgram connection only when user has clicked start AND we have an API key
-  useEffect(() => {
-    if (!apiKey || !micOpen || connectionRef.current) return;
-    if (intentionalCloseRef.current) return;
+    if (isStale()) {
+      teardown();
+      return;
+    }
 
-    console.log("🌐 Creating new Deepgram connection...");
-    setLoading(true);
+    setSessionState("connecting");
 
-    const deepgram = createClient(apiKey?.key ?? "");
-    const newConnection = deepgram.listen.live({
+    const deepgram = createClient(apiKeyResponse.key ?? "");
+    const conn = deepgram.listen.live({
       model: "nova-2",
       interim_results: true,
       smart_format: true,
     });
 
-    newConnection.on(LiveTranscriptionEvents.Open, () => {
-      console.log("✅ Deepgram connection opened");
-      setListening(true);
-      setLoading(false);
+    connectionRef.current = conn;
+
+    conn.on(LiveTranscriptionEvents.Open, () => {
+      if (isStale()) {
+        try { conn.finish(); } catch { /* ignore */ }
+        return;
+      }
+
+      setSessionState("live");
+
+      const mic = new MediaRecorder(media);
+      mediaRecorderRef.current = mic;
+
+      mic.ondataavailable = (e) => {
+        if (isStale() || !connectionRef.current) return;
+        if (e.data.size > 0) {
+          try { connectionRef.current.send(e.data); } catch { /* connection gone */ }
+        }
+      };
+
+      mic.start(500);
+
+      posthog.capture("recording_started", {
+        platform: isElectron ? "electron" : "browser",
+        device_label: isElectron
+          ? audioDevices.find((d) => d.deviceId === selectedDeviceId)?.label
+          : "screen_capture",
+      });
     });
 
-    newConnection.on(LiveTranscriptionEvents.Close, () => {
-      console.log("🔌 Deepgram connection closed");
-      if (connectionRef.current === newConnection) {
-        intentionalCloseRef.current = true;
-        setListening(false);
-        setLoading(false);
-        setConnection(null);
-        connectionRef.current = null;
+    conn.on(LiveTranscriptionEvents.Close, () => {
+      if (connectionRef.current === conn) {
+        teardown();
       }
     });
 
-    newConnection.on(LiveTranscriptionEvents.Error, (error) => {
-      console.error("❌ Deepgram connection error:", error);
-      if (connectionRef.current === newConnection) {
-        intentionalCloseRef.current = true;
-        setListening(false);
-        setLoading(false);
-        try { connectionRef.current.finish(); } catch { /* ignore */ }
-        connectionRef.current = null;
-        setConnection(null);
+    conn.on(LiveTranscriptionEvents.Error, (error) => {
+      console.error("Deepgram connection error:", error);
+      if (connectionRef.current === conn) {
+        teardown();
       }
     });
 
-    newConnection.on(LiveTranscriptionEvents.Transcript, (data) => {
+    conn.on(LiveTranscriptionEvents.Transcript, (data) => {
+      if (isStale()) return;
+
       const words = data.channel.alternatives[0].words;
       const caption = words
         .map((word: any) => word.punctuated_word ?? word.word)
         .join(" ");
-      if (caption !== "") {
-        setCaption(caption);
-        addTextinTranscription(caption);
 
-        if (addTranscriptionSegment) {
-          const startTime = words.length > 0 ? (words[0].start ?? 0) : 0;
-          const endTime =
-            words.length > 0 ? (words[words.length - 1].end ?? 0) : 0;
+      if (caption === "") return;
 
-          const wordsData: TranscriptionWord[] = words.map((word: any) => ({
-            word: word.word,
-            punctuated_word: word.punctuated_word,
-            start: word.start,
-            end: word.end,
-            confidence: word.confidence,
-            speaker: data.channel.speaker,
-          }));
+      addTextRef.current(caption);
 
-          const segment: TranscriptionSegment = {
-            id: `segment-${segmentCounterRef.current++}`,
-            text: caption,
-            words: wordsData,
-            startTime,
-            endTime,
-            confidence:
-              words.reduce(
-                (acc: number, w: any) => acc + (w.confidence ?? 0),
-                0,
-              ) / words.length,
-            speaker: data.channel.speaker,
-            isFinal: data.is_final ?? false,
-            timestamp: new Date().toISOString(),
-          };
+      if (addSegmentRef.current) {
+        const startTime = words.length > 0 ? (words[0].start ?? 0) : 0;
+        const endTime =
+          words.length > 0 ? (words[words.length - 1].end ?? 0) : 0;
 
-          addTranscriptionSegment(segment);
-        }
+        const wordsData: TranscriptionWord[] = words.map((word: any) => ({
+          word: word.word,
+          punctuated_word: word.punctuated_word,
+          start: word.start,
+          end: word.end,
+          confidence: word.confidence,
+          speaker: data.channel.speaker,
+        }));
+
+        const segment: TranscriptionSegment = {
+          id: `segment-${segmentCounterRef.current++}`,
+          text: caption,
+          words: wordsData,
+          startTime,
+          endTime,
+          confidence:
+            words.reduce(
+              (acc: number, w: any) => acc + (w.confidence ?? 0),
+              0,
+            ) / words.length,
+          speaker: data.channel.speaker,
+          isFinal: data.is_final ?? false,
+          timestamp: new Date().toISOString(),
+        };
+
+        addSegmentRef.current(segment);
       }
     });
+  }, [
+    isElectron,
+    selectedDeviceId,
+    audioDevices,
+    loadAudioDevices,
+    teardown,
+  ]);
 
-    connectionRef.current = newConnection;
-    setConnection(newConnection);
-  }, [apiKey, micOpen, addTextinTranscription, addTranscriptionSegment]);
+  const stopSession = useCallback(() => {
+    sessionIdRef.current++;
+    teardown();
+    posthog.capture("recording_stopped", {
+      platform: isElectron ? "electron" : "browser",
+    });
+  }, [teardown, isElectron]);
 
   useEffect(() => {
-    const processQueue = async () => {
-      if (size > 0 && !isProcessing) {
-        setProcessing(true);
+    setIsElectron(typeof window !== "undefined" && !!window.electronAPI);
+    loadAudioDevices();
+  }, [loadAudioDevices]);
 
-        if (isListening) {
-          const blob = first;
-          connection?.send(blob);
-          remove();
-        }
-
-        const waiting = setTimeout(() => {
-          clearTimeout(waiting);
-          setProcessing(false);
-        }, 250);
-      }
+  useEffect(() => {
+    return () => {
+      sessionIdRef.current++;
+      teardown();
     };
+  }, [teardown]);
 
-    processQueue();
-  }, [connection, queue, remove, first, size, isProcessing, isListening]);
-
-  const statusBarClass =
-    "w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-white/[0.08] bg-zinc-900/50 text-zinc-400 text-xs backdrop-blur-sm";
-
-  if (isLoadingKey) {
-    return (
-      <div className={statusBarClass} role="status" aria-live="polite">
-        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-emerald-500/80" />
-        <span>Fetching API key…</span>
-      </div>
-    );
-  }
-  if (isLoading) {
-    return (
-      <div className={statusBarClass} role="status" aria-live="polite">
-        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-emerald-500/80" />
-        <span>Connecting to Deepgram…</span>
-      </div>
-    );
-  }
-  if (!isClientReady) {
-    return <RecorderSkeleton />;
-  }
+  const isActive = sessionState !== "idle";
+  const isBusy = sessionState === "fetching-key" || sessionState === "connecting";
 
   return (
     <div className="w-full relative">
       <div className="flex flex-col gap-2">
-        {/* Controls Row */}
-        <div className="flex items-center gap-2 p-1 bg-zinc-950/50 rounded-lg border border-white/5">
-          {/* Compact Audio Device Selector - only show in Electron */}
-          {isElectron && (
-            <div className="relative flex-1 min-w-0">
-              <Select
-                value={selectedDeviceId}
-                onValueChange={setSelectedDeviceId}
-                disabled={micOpen || isLoadingDevices}
-              >
-                <SelectTrigger className="h-8 bg-transparent border-0 text-zinc-300 text-xs hover:text-white focus:ring-0 px-2 shadow-none w-full">
-                  <div className="flex items-center gap-2 truncate">
-                    <span className="text-zinc-500 text-[10px] uppercase tracking-wider font-semibold">
-                      Input
-                    </span>
-                    <SelectValue placeholder="Select device..." />
-                  </div>
-                </SelectTrigger>
-                <SelectContent className="bg-zinc-900 border-white/10 text-zinc-100">
-                  {audioDevices.map((device) => (
-                    <SelectItem
-                      key={device.deviceId}
-                      value={device.deviceId}
-                      className="text-white text-xs"
-                    >
-                      <div className="flex items-center gap-1.5">
-                        {(device.label.toLowerCase().includes("blackhole") ||
-                          device.label.toLowerCase().includes("vb-audio") ||
-                          device.label
-                            .toLowerCase()
-                            .includes("virtual cable") ||
-                          device.label.toLowerCase().includes("loopback")) && (
-                          <span className="text-green-400 text-xs">✓</span>
-                        )}
-                        <span className="truncate max-w-[180px]">
-                          {device.label}
-                        </span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        <div className="flex items-center gap-2 p-1 bg-zinc-950/50 rounded-lg border border-white/5 h-10">
+          {isBusy ? (
+            <div className="flex-1 flex items-center justify-center gap-2 text-zinc-400 text-xs" role="status" aria-live="polite">
+              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-emerald-500/80" />
+              <span>{sessionState === "fetching-key" ? "Fetching API key…" : "Connecting…"}</span>
             </div>
-          )}
+          ) : (
+            <>
+              {isElectron && (
+                <div className="relative flex-1 min-w-0">
+                  <Select
+                    value={selectedDeviceId}
+                    onValueChange={setSelectedDeviceId}
+                    disabled={isActive || isLoadingDevices}
+                  >
+                    <SelectTrigger className="h-8 bg-transparent border-0 text-zinc-300 text-xs hover:text-white focus:ring-0 px-2 shadow-none w-full">
+                      <div className="flex items-center gap-2 truncate">
+                        <span className="text-zinc-500 text-[10px] uppercase tracking-wider font-semibold">
+                          Input
+                        </span>
+                        <SelectValue placeholder="Select device..." />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent className="bg-zinc-900 border-white/10 text-zinc-100">
+                      {audioDevices.map((device) => (
+                        <SelectItem
+                          key={device.deviceId}
+                          value={device.deviceId}
+                          className="text-white text-xs"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            {(device.label.toLowerCase().includes("blackhole") ||
+                              device.label.toLowerCase().includes("vb-audio") ||
+                              device.label
+                                .toLowerCase()
+                                .includes("virtual cable") ||
+                              device.label.toLowerCase().includes("loopback")) && (
+                              <span className="text-green-400 text-xs">✓</span>
+                            )}
+                            <span className="truncate max-w-[180px]">
+                              {device.label}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
-          {/* Divider if selector is present */}
-          {isElectron && <div className="w-px h-4 bg-white/10 mx-1" />}
+              {isElectron && <div className="w-px h-4 bg-white/10 mx-1" />}
+            </>
+          )}
 
           <Button
             className={cn(
-              "h-8 px-4 text-xs font-medium transition-all duration-300",
-              isListening
+              "h-8 px-4 text-xs font-medium transition-all duration-300 shrink-0",
+              sessionState === "live"
                 ? "bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 border border-red-500/20"
                 : "bg-green-500/10 text-green-400 hover:bg-green-500/20 hover:text-green-300 border border-green-500/20",
             )}
             size="sm"
-            onClick={() => toggleRecorderTranscriber()}
-            disabled={isElectron === true && !selectedDeviceId}
+            onClick={isActive ? stopSession : startSession}
+            disabled={(isElectron === true && !selectedDeviceId) || isBusy}
           >
-            {!micOpen ? (
+            {!isActive ? (
               <div className="flex items-center gap-2">
                 <MicIcon className="h-3 w-3" />
                 Start Listening
@@ -570,42 +425,33 @@ export default function RecorderTranscriber({
           </Button>
         </div>
 
-        {/* Status Line - Integrated below controls instead of fixed */}
-        <div className="flex items-center justify-between px-1">
+        <div className="flex items-center justify-between px-1 h-4">
           <div className="flex items-center gap-2">
             <div
               className={cn(
                 "w-1.5 h-1.5 rounded-full transition-colors",
-                isListening
+                sessionState === "live"
                   ? "bg-green-500 animate-pulse"
-                  : micOpen
+                  : isActive
                     ? "bg-yellow-500"
                     : "bg-zinc-700",
               )}
             />
             <span className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">
-              {isListening
+              {sessionState === "live"
                 ? "Live & Connected"
-                : !micOpen
+                : sessionState === "idle"
                   ? "Ready"
                   : "Connecting..."}
             </span>
           </div>
-          {isListening && (
+          {sessionState === "live" && (
             <span className="text-[10px] text-green-500/70 font-mono animate-pulse">
               REC
             </span>
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-function RecorderSkeleton() {
-  return (
-    <div className="w-full">
-      <div className="mt-2 h-9 w-full animate-pulse rounded bg-gray-900/40" />
     </div>
   );
 }

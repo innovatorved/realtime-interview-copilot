@@ -62,8 +62,8 @@ export function Copilot({
 
   const handleFlag = useCallback((checked: boolean) => {
     if (!checked) {
-      setFlag(FLAGS.SUMMERIZER);
-      sendGTMEvent({ event: "switch_mode", mode: "summerizer" });
+      setFlag(FLAGS.SUMMARIZER);
+      sendGTMEvent({ event: "switch_mode", mode: "summarizer" });
       posthog.capture("mode_switched", {
         mode: "summarizer",
         previous_mode: "copilot",
@@ -102,7 +102,7 @@ export function Copilot({
       case "s":
         if (!isTypingInInput) {
           event.preventDefault();
-          setFlag(FLAGS.SUMMERIZER);
+          setFlag(FLAGS.SUMMARIZER);
         }
         break;
       case "c":
@@ -259,11 +259,11 @@ export function Copilot({
     addInSavedData({
       createdAt: new Date().toISOString(),
       data: completion,
-      tag: flag === FLAGS.COPILOT ? "Copilot" : "Summerizer",
+      tag: flag === FLAGS.COPILOT ? "Copilot" : "Summarizer",
     });
     sendGTMEvent({
       event: "save_completion",
-      tag: flag === FLAGS.COPILOT ? "Copilot" : "Summerizer",
+      tag: flag === FLAGS.COPILOT ? "Copilot" : "Summarizer",
     });
     posthog.capture("completion_saved", {
       mode: flag === FLAGS.COPILOT ? "copilot" : "summarizer",
@@ -291,9 +291,9 @@ export function Copilot({
       )}
 
       {/* Top Section: Context & Transcription */}
-      <div className="grid gap-4 md:grid-cols-2 min-h-[280px] shrink-0">
+      <div className="grid gap-4 md:grid-cols-2 h-[280px] shrink-0">
         {/* Context & Controls Card */}
-        <div className="glass-card p-5 flex flex-col gap-3 h-full">
+        <div className="glass-card p-5 flex flex-col gap-3 h-full min-h-0 overflow-hidden">
           <div className="flex items-center justify-between shrink-0">
             <Label
               htmlFor="system_prompt"
@@ -312,12 +312,12 @@ export function Copilot({
           <Textarea
             id="system_prompt"
             placeholder="Paste job description, resume, or interview topic here..."
-            className="flex-1 min-h-[80px] resize-none bg-transparent border-0 focus-visible:ring-0 p-0 text-zinc-200 placeholder:text-zinc-700 text-xs leading-relaxed"
+            className="flex-1 min-h-0 resize-none bg-transparent border-0 focus-visible:ring-0 p-0 text-zinc-200 placeholder:text-zinc-700 text-xs leading-relaxed overflow-y-auto"
             value={bg}
             onChange={(e) => setBg(e.target.value)}
           />
 
-          <div className="pt-3 border-t border-white/[0.04] space-y-3">
+          <div className="pt-3 border-t border-white/[0.04] space-y-3 shrink-0">
             <RecorderTranscriber
               addTextinTranscription={addTextinTranscription}
               addTranscriptionSegment={addTranscriptionSegment}
@@ -331,14 +331,13 @@ export function Copilot({
               {/* Mode Switcher */}
               <div className="flex items-center gap-2 glass-panel px-3 py-1.5 rounded-xl">
                 <span
-                  className={`text-[10px] font-medium transition-colors ${flag === FLAGS.SUMMERIZER ? "text-blue-400" : "text-zinc-600"}`}
+                  className={`text-[10px] font-medium transition-colors ${flag === FLAGS.SUMMARIZER ? "text-blue-400" : "text-zinc-600"}`}
                 >
                   Summarizer
                 </span>
                 <Switch
                   className="scale-75 data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-zinc-700"
                   onCheckedChange={handleFlag}
-                  defaultChecked
                   checked={flag === FLAGS.COPILOT}
                 />
                 <span
@@ -381,7 +380,7 @@ export function Copilot({
         </div>
 
         {/* Transcription Card */}
-        <div className="glass-card p-5 flex flex-col h-full min-h-[180px]">
+        <div className="glass-card p-5 flex flex-col h-full min-h-0 overflow-hidden">
           <div className="flex items-center justify-between mb-3 shrink-0">
             <Label
               htmlFor="transcription"
@@ -400,7 +399,7 @@ export function Copilot({
           </div>
           <div
             ref={transcriptionBoxRef}
-            className="flex-1 min-h-0 max-h-[250px] overflow-y-auto rounded-xl custom-scrollbar -mr-2 pr-2"
+            className="flex-1 min-h-0 overflow-y-auto rounded-xl custom-scrollbar -mr-2 pr-2"
           >
             <TranscriptionDisplay segments={transcriptionSegments} />
           </div>
@@ -411,7 +410,7 @@ export function Copilot({
       <div className="flex-1 min-h-0 flex flex-col glass-card overflow-hidden rounded-2xl border border-white/[0.06]">
         <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-2.5 border-b border-white/[0.06] bg-zinc-900/30">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 truncate min-w-0 pr-2">
-            AI response
+            Output
           </span>
           <Button
             type="button"
@@ -446,7 +445,7 @@ export function Copilot({
               </div>
             </div>
           ) : (
-            <div className="prose prose-invert prose-sm max-w-none text-zinc-200 leading-relaxed pl-0.5 pr-1">
+            <div className="prose prose-invert prose-xs max-w-none text-zinc-300 text-xs leading-relaxed pl-0.5 pr-1">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {completion}
               </ReactMarkdown>

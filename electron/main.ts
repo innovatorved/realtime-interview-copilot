@@ -1,6 +1,5 @@
 import { app, BrowserWindow, ipcMain, screen } from "electron";
 import * as path from "path";
-import * as fs from "fs";
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -57,9 +56,6 @@ async function createWindow() {
     show: false,
   });
 
-  // Open DevTools for debugging
-  // mainWindow.webContents.openDevTools();
-
   // Configure CSP to allow the hosted API
   mainWindow.webContents.session.webRequest.onHeadersReceived(
     (details, callback) => {
@@ -91,55 +87,29 @@ async function createWindow() {
     },
   );
 
-  // Hide from screen capture on macOS
   if (process.platform === "darwin") {
     mainWindow.setWindowButtonVisibility(false);
-
-    // Method 1: Set sharing type to none (macOS 10.15+)
-    // @ts-ignore - setSharingType is not in Electron types but exists
+    // @ts-ignore - setSharingType exists on macOS 10.15+
     if (mainWindow.setSharingType) {
       // @ts-ignore
       mainWindow.setSharingType("none");
     }
-
-    // Method 2: Additional macOS content protection
     try {
-      // This makes the window content not capturable
       mainWindow.setContentProtection(true);
-    } catch (e) {
-      console.log("Content protection not available:", e);
+    } catch {
+      // Content protection not available
     }
   }
 
-  // Prevent window from being shown in screen shares (Windows)
-  if (process.platform === "win32") {
-    mainWindow.setContentProtection(true);
-
-    // Additional Windows protection - set window to be excluded from capture
-    try {
-      // @ts-ignore - Windows-specific API
-      if (mainWindow.setSkipTaskbar) {
-        // This helps hide from certain screen capture tools
-        mainWindow.setContentProtection(true);
-      }
-    } catch (e) {
-      console.log("Additional Windows protection not available:", e);
-    }
-  }
-
-  // Linux protection
-  if (process.platform === "linux") {
+  if (process.platform === "win32" || process.platform === "linux") {
     try {
       mainWindow.setContentProtection(true);
-    } catch (e) {
-      console.log("Content protection not available on Linux:", e);
+    } catch {
+      // Content protection not available on this platform
     }
   }
 
   const buildPath = path.join(app.getAppPath(), "out");
-  console.log("Build path:", buildPath);
-  console.log("Is packaged:", app.isPackaged);
-  console.log("App path:", app.getAppPath());
 
   const isDev = !app.isPackaged || process.env.DEV_PORT;
 
@@ -147,7 +117,6 @@ async function createWindow() {
     if (isDev) {
       const devPort = process.env.DEV_PORT || "3000";
       const devUrl = `http://localhost:${devPort}`;
-      console.log("Loading development URL:", devUrl);
       await mainWindow.loadURL(devUrl);
 
       setTimeout(() => {
@@ -175,10 +144,8 @@ async function createWindow() {
     mainWindow?.show();
   });
 
-  // Fallback: show window after 3 seconds if it hasn't shown yet
   setTimeout(() => {
     if (mainWindow && !mainWindow.isVisible()) {
-      console.log("Window not visible after 3 seconds, forcing show");
       mainWindow.show();
     }
   }, 3000);
@@ -250,18 +217,6 @@ ipcMain.handle("window-is-always-on-top", () => {
 
 ipcMain.handle("window-is-maximized", () => {
   return mainWindow?.isMaximized() || false;
-});
-
-// Get available audio devices
-ipcMain.handle("get-audio-devices", async () => {
-  try {
-    // This will be called from the renderer process
-    // The actual enumeration happens in the renderer due to security
-    return { success: true };
-  } catch (error) {
-    console.error("Error getting audio devices:", error);
-    return { success: false, error };
-  }
 });
 
 // Handle app quit

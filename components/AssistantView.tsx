@@ -2,14 +2,13 @@
 
 import { useEffect, useState, useRef } from "react";
 import { Card } from "@/components/ui/card";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface HistoryItem {
   id: string;
   text: string;
 }
-
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 
 export function AssistantView() {
   const [context, setContext] = useState<string>("");
@@ -51,12 +50,10 @@ export function AssistantView() {
     }
   }, []);
 
-  // Update window size when content changes
   useEffect(() => {
-    if (window.electronAPI && containerRef.current) {
+    if (typeof window !== "undefined" && window.electronAPI && containerRef.current) {
       const height = containerRef.current.scrollHeight;
-      // Add some padding and limit/clamp if necessary, but user asked for "same as window size"
-      window.electronAPI.windowSetSize(0, height + 40); // 0 width keeps current width
+      window.electronAPI.windowSetSize(0, height + 40);
     }
   }, [context, history, currentResponse]);
 

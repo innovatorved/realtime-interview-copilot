@@ -101,10 +101,10 @@ export default function History({
 
   const tagColors: Record<string, string> = {
     Copilot: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-    Summerizer: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+    Summarizer: "bg-blue-500/10 text-blue-400 border-blue-500/20",
   };
 
-  const tags = ["Copilot", "Summerizer"];
+  const tags = ["Copilot", "Summarizer"];
 
   return (
     <div

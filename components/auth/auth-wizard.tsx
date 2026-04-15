@@ -72,14 +72,11 @@ export function AuthWizard({
         },
         {
           onSuccess: () => {
-            console.log("Signup successful");
             sendGTMEvent({ event: "signup", value: "email" });
-            // Identify user in PostHog using email as distinct ID
             posthog.identify(email, {
               email: email,
               name: name,
             });
-            // Capture signup event with PostHog
             posthog.capture("user_signed_up", {
               method: "email",
               email: email,
@@ -91,9 +88,7 @@ export function AuthWizard({
             setTimeout(() => handleSuccess(), 1500);
           },
           onError: (ctx) => {
-            console.error("Signup error context:", ctx);
             sendGTMEvent({ event: "signup_error", error: ctx.error.message });
-            // Capture signup error with PostHog
             posthog.capture("signup_error", {
               error_message: ctx.error.message,
               email: email,
@@ -104,9 +99,9 @@ export function AuthWizard({
           },
         },
       );
-    } catch (e: any) {
-      console.error("Signup exception:", e);
-      showModal("Error", e.message || "An unexpected error occurred");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "An unexpected error occurred";
+      showModal("Error", msg);
       setLoading(false);
     }
   };
@@ -125,24 +120,18 @@ export function AuthWizard({
         },
         {
           onSuccess: () => {
-            console.log("Signin successful");
             sendGTMEvent({ event: "login", value: "email" });
-            // Identify user in PostHog using email as distinct ID
             posthog.identify(email, {
               email: email,
             });
-            // Capture signin event with PostHog
             posthog.capture("user_signed_in", {
               method: "email",
               email: email,
             });
-            // Optional: Show success modal or just redirect
             handleSuccess();
           },
           onError: (ctx) => {
-            console.error("Signin error context:", ctx);
             sendGTMEvent({ event: "login_error", error: ctx.error.message });
-            // Capture signin error with PostHog
             posthog.capture("signin_error", {
               error_message: ctx.error.message,
               email: email,
@@ -153,9 +142,9 @@ export function AuthWizard({
           },
         },
       );
-    } catch (e: any) {
-      console.error("Signin exception:", e);
-      showModal("Error", e.message || "An unexpected error occurred");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "An unexpected error occurred";
+      showModal("Error", msg);
       setLoading(false);
     }
   };

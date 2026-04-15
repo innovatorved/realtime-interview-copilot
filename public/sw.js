@@ -37,13 +37,12 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   // Don't cache external API requests (Cloudflare Worker, Deepgram)
   if (
-    event.request.url.includes(
-      "realtime-worker-api.innovatorved.workers.dev",
-    ) ||
+    event.request.url.includes("realtime-worker-api") ||
+    event.request.url.includes("vedgupta.in") ||
     event.request.url.includes("deepgram.com") ||
-    event.request.url.includes("api.deepgram.com")
+    event.request.url.includes("posthog.com") ||
+    event.request.url.includes("googletagmanager.com")
   ) {
-    // Just fetch directly, don't cache
     event.respondWith(fetch(event.request));
     return;
   }
@@ -76,7 +75,6 @@ self.addEventListener("push", function (event) {
 
 // Notification click event
 self.addEventListener("notificationclick", function (event) {
-  console.log("Notification click received.");
   event.notification.close();
   event.waitUntil(clients.openWindow("/"));
 });

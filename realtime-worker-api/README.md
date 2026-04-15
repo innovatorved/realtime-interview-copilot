@@ -151,7 +151,7 @@ Content-Type: application/json
 
 {
   "bg": "Interview context (optional)",
-  "flag": "copilot | summerizer",
+  "flag": "copilot | summarizer",
   "prompt": "The conversation transcript"
 }
 ```
@@ -160,7 +160,7 @@ Content-Type: application/json
 | Flag | Behavior |
 |------|----------|
 | `copilot` | Generates structured interview answers |
-| `summerizer` | Generates conversation summary |
+| `summarizer` | Generates conversation summary |
 | *(other)* | Raw prompt to Gemini |
 
 **Response (SSE Stream):**

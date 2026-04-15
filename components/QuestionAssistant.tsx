@@ -5,19 +5,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Square, MessageSquare, Sparkles } from "lucide-react";
 import { BACKEND_API_URL } from "@/lib/constant";
-import { Label } from "@/components/ui/label";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import posthog from "posthog-js";
 
 interface QuestionAssistantProps {
-  onQuestionSubmit?: (question: string) => void;
+  isActive?: boolean;
 }
 
 export function QuestionAssistant({
-  onQuestionSubmit,
   isActive = false,
-}: QuestionAssistantProps & { isActive?: boolean }) {
+}: QuestionAssistantProps) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [isLoading, setIsLoading] = useState(false);
