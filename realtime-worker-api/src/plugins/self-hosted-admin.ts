@@ -36,9 +36,11 @@ import {
   user,
   session,
   adminConfig,
+  savedNote,
+  interviewPreset,
 } from "../db/schema";
 import type * as schemaTypes from "../db/schema";
-import { count, desc, eq, gte, like, or, and, lt } from "drizzle-orm";
+import { count, desc, eq, gte, like, or, and, lt, sql, asc, inArray } from "drizzle-orm";
 import { z } from "zod";
 import adminCfg from "../config.json";
 
@@ -86,6 +88,47 @@ const testModelSchema = z.object({
   modelName: z.string().min(1).max(200),
   baseUrl: z.string().url().max(500),
   apiKey: z.string().min(1).max(500),
+});
+
+const bulkUserIdsSchema = z.object({
+  userIds: z.array(safeIdSchema).min(1).max(100),
+});
+
+const bulkApproveSchema = z.object({
+  userIds: z.array(safeIdSchema).min(1).max(100),
+  approve: z.boolean(),
+});
+
+const bulkBanSchema = z.object({
+  userIds: z.array(safeIdSchema).min(1).max(100),
+  ban: z.boolean(),
+  banReason: z.string().max(500).optional(),
+});
+
+const adminDeleteNoteSchema = z.object({
+  noteId: safeIdSchema,
+});
+
+const adminCreatePresetSchema = z.object({
+  name: z.string().min(1).max(200),
+  category: z.string().min(1).max(100),
+  context: z.string().min(1).max(5000),
+  description: z.string().max(500).optional(),
+  icon: z.string().max(50).optional(),
+  isBuiltIn: z.boolean().optional(),
+});
+
+const adminUpdatePresetSchema = z.object({
+  presetId: safeIdSchema,
+  name: z.string().min(1).max(200).optional(),
+  category: z.string().min(1).max(100).optional(),
+  context: z.string().min(1).max(5000).optional(),
+  description: z.string().max(500).optional(),
+  icon: z.string().max(50).optional(),
+});
+
+const adminDeletePresetSchema = z.object({
+  presetId: safeIdSchema,
 });
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -564,6 +607,8 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         if (!existing) throw new APIError("NOT_FOUND", { message: "User not found" });
 
         await recordAudit({ eventType: "user_deleted", userId, userEmail: existing.email, metadata: { adminEmail } });
+        await db.delete(savedNote).where(eq(savedNote.userId, userId));
+        await db.delete(interviewPreset).where(eq(interviewPreset.userId, userId));
         await db.delete(session).where(eq(session.userId, userId));
         await db.delete(account).where(eq(account.userId, userId));
         await db.delete(user).where(eq(user.id, userId));
@@ -587,13 +632,16 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         }
         const where = conditions.length > 0 ? and(...conditions) : undefined;
 
+        const baseQuery = db.select(baseSelect).from(session).innerJoin(user, eq(session.userId, user.id));
+        const countQuery = db.select({ total: count() }).from(session).innerJoin(user, eq(session.userId, user.id));
+
         const [rows, [{ total }]] = await Promise.all([
           where
-            ? db.select(baseSelect).from(session).innerJoin(user, eq(session.userId, user.id)).where(where).orderBy(desc(session.updatedAt)).limit(limit).offset(offset)
-            : db.select(baseSelect).from(session).innerJoin(user, eq(session.userId, user.id)).orderBy(desc(session.updatedAt)).limit(limit).offset(offset),
+            ? baseQuery.where(where).orderBy(desc(session.updatedAt)).limit(limit).offset(offset)
+            : baseQuery.orderBy(desc(session.updatedAt)).limit(limit).offset(offset),
           where
-            ? db.select({ total: count() }).from(session).innerJoin(user, eq(session.userId, user.id)).where(where)
-            : db.select({ total: count() }).from(session),
+            ? countQuery.where(where)
+            : countQuery,
         ]);
         return ctx.json({ sessions: rows, total });
       }),
@@ -732,6 +780,389 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         } catch (e) {
           return ctx.json({ ok: false, error: e instanceof Error ? e.message : String(e) });
         }
+      }),
+
+      // ── System Health ────────────────────────────────────────────
+
+      adminHealth: createAuthEndpoint("/self-hosted-admin/health", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
+        if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+        const db = opts.getDb();
+        const now = new Date();
+
+        const checks: Record<string, { ok: boolean; latencyMs: number; error?: string }> = {};
+
+        const dbStart = Date.now();
+        try {
+          await db.select({ n: count() }).from(user);
+          checks.database = { ok: true, latencyMs: Date.now() - dbStart };
+        } catch (e) {
+          checks.database = { ok: false, latencyMs: Date.now() - dbStart, error: e instanceof Error ? e.message : String(e) };
+        }
+
+        const configRows = await db.select().from(adminConfig).catch(() => [] as { key: string; value: string }[]);
+        const cfgMap = new Map(configRows.map((r) => [r.key, r.value]));
+        const envRuntime = opts.runtimeInfo?.() as Record<string, unknown> ?? {};
+
+        checks.geminiKey = { ok: Boolean(cfgMap.get("gemini_key") || envRuntime.geminiKeyConfigured), latencyMs: 0 };
+        checks.deepgramKey = { ok: Boolean(cfgMap.get("deepgram_key") || envRuntime.deepgramKeyConfigured), latencyMs: 0 };
+
+        const allOk = Object.values(checks).every((c) => c.ok);
+
+        return ctx.json({ status: allOk ? "healthy" : "degraded", timestamp: now.toISOString(), checks });
+      }),
+
+      // ── Bulk User Operations ─────────────────────────────────────
+
+      adminBulkApprove: createAuthEndpoint("/self-hosted-admin/bulk-approve", { method: "POST", use: [sessionMiddleware], body: bulkApproveSchema }, async (ctx) => {
+        const adminEmail = ctx.context.session.user.email;
+        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        const db = opts.getDb();
+        const { userIds, approve } = ctx.body;
+
+        let affected = 0;
+        for (const uid of userIds) {
+          const result = await db.update(user).set({ isApproved: approve, updatedAt: new Date() }).where(eq(user.id, uid));
+          affected++;
+        }
+
+        await recordAudit({
+          eventType: approve ? "user_approved" : "user_approval_revoked",
+          userEmail: adminEmail,
+          metadata: { action: "bulk_approve", userIds, approve, count: affected },
+        });
+
+        return ctx.json({ ok: true, affected });
+      }),
+
+      adminBulkBan: createAuthEndpoint("/self-hosted-admin/bulk-ban", { method: "POST", use: [sessionMiddleware], body: bulkBanSchema }, async (ctx) => {
+        const adminEmail = ctx.context.session.user.email;
+        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        const db = opts.getDb();
+        const { userIds, ban, banReason } = ctx.body;
+
+        for (const uid of userIds) {
+          const updates: Record<string, unknown> = { isBanned: ban, updatedAt: new Date() };
+          if (ban && banReason) updates.banReason = banReason;
+          if (!ban) updates.banReason = null;
+          await db.update(user).set(updates).where(eq(user.id, uid));
+        }
+
+        if (ban) {
+          for (const uid of userIds) {
+            await db.delete(session).where(eq(session.userId, uid));
+          }
+        }
+
+        await recordAudit({
+          eventType: ban ? "user_banned" : "user_unbanned",
+          userEmail: adminEmail,
+          metadata: { action: "bulk_ban", userIds, ban, banReason, count: userIds.length },
+        });
+
+        return ctx.json({ ok: true, affected: userIds.length });
+      }),
+
+      adminBulkDelete: createAuthEndpoint("/self-hosted-admin/bulk-delete", { method: "POST", use: [sessionMiddleware], body: bulkUserIdsSchema }, async (ctx) => {
+        const adminEmail = ctx.context.session.user.email;
+        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        const db = opts.getDb();
+        const { userIds } = ctx.body;
+
+        const selfId = ctx.context.session.user.id;
+        if (userIds.includes(selfId)) throw new APIError("BAD_REQUEST", { message: "Cannot delete your own account" });
+
+        for (const uid of userIds) {
+          await db.delete(savedNote).where(eq(savedNote.userId, uid));
+          await db.delete(interviewPreset).where(eq(interviewPreset.userId, uid));
+          await db.delete(session).where(eq(session.userId, uid));
+          await db.delete(account).where(eq(account.userId, uid));
+          await db.delete(user).where(eq(user.id, uid));
+        }
+
+        await recordAudit({
+          eventType: "user_deleted",
+          userEmail: adminEmail,
+          metadata: { action: "bulk_delete", userIds, count: userIds.length },
+        });
+
+        return ctx.json({ ok: true, affected: userIds.length });
+      }),
+
+      // ── Admin Notes Management ───────────────────────────────────
+
+      adminListNotes: createAuthEndpoint("/self-hosted-admin/list-notes", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
+        if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+        const db = opts.getDb();
+        const url = new URL(ctx.request?.url ?? "http://localhost");
+        const limit = parseLimit(url.searchParams.get("limit"));
+        const offset = parseOffset(url.searchParams.get("offset"));
+        const q = sanitizeSearch(url.searchParams.get("q"));
+        const userId = url.searchParams.get("userId");
+
+        const conditions: ReturnType<typeof eq>[] = [];
+        if (q) {
+          const safeQ = q.replace(/%/g, "\\%").replace(/_/g, "\\_");
+          conditions.push(like(savedNote.content, `%${safeQ}%`));
+        }
+        if (userId && SAFE_ID_RE.test(userId)) conditions.push(eq(savedNote.userId, userId));
+
+        const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+        const baseSelect = {
+          id: savedNote.id,
+          userId: savedNote.userId,
+          content: savedNote.content,
+          tag: savedNote.tag,
+          createdAt: savedNote.createdAt,
+          userEmail: user.email,
+          userName: user.name,
+        };
+
+        const [rows, [{ total }]] = await Promise.all([
+          where
+            ? db.select(baseSelect).from(savedNote).leftJoin(user, eq(savedNote.userId, user.id)).where(where).orderBy(desc(savedNote.createdAt)).limit(limit).offset(offset)
+            : db.select(baseSelect).from(savedNote).leftJoin(user, eq(savedNote.userId, user.id)).orderBy(desc(savedNote.createdAt)).limit(limit).offset(offset),
+          where
+            ? db.select({ total: count() }).from(savedNote).where(where)
+            : db.select({ total: count() }).from(savedNote),
+        ]);
+
+        return ctx.json({ notes: rows, total });
+      }),
+
+      adminDeleteNote: createAuthEndpoint("/self-hosted-admin/delete-note", { method: "POST", use: [sessionMiddleware], body: adminDeleteNoteSchema }, async (ctx) => {
+        const adminEmail = ctx.context.session.user.email;
+        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        const db = opts.getDb();
+        const { noteId } = ctx.body;
+
+        await db.delete(savedNote).where(eq(savedNote.id, noteId));
+        await recordAudit({ eventType: "admin_action", userEmail: adminEmail, metadata: { action: "delete_note", noteId } });
+        return ctx.json({ ok: true });
+      }),
+
+      // ── Admin Presets Management ─────────────────────────────────
+
+      adminListPresets: createAuthEndpoint("/self-hosted-admin/list-presets", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
+        if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+        const db = opts.getDb();
+        const url = new URL(ctx.request?.url ?? "http://localhost");
+        const limit = parseLimit(url.searchParams.get("limit"));
+        const offset = parseOffset(url.searchParams.get("offset"));
+        const category = url.searchParams.get("category");
+        const builtInOnly = url.searchParams.get("builtIn");
+
+        const conditions: ReturnType<typeof eq>[] = [];
+        if (category) conditions.push(eq(interviewPreset.category, category));
+        if (builtInOnly === "true") conditions.push(eq(interviewPreset.isBuiltIn, true));
+        if (builtInOnly === "false") conditions.push(eq(interviewPreset.isBuiltIn, false));
+
+        const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+        const [rows, [{ total }]] = await Promise.all([
+          where
+            ? db.select().from(interviewPreset).where(where).orderBy(asc(interviewPreset.name)).limit(limit).offset(offset)
+            : db.select().from(interviewPreset).orderBy(asc(interviewPreset.name)).limit(limit).offset(offset),
+          where
+            ? db.select({ total: count() }).from(interviewPreset).where(where)
+            : db.select({ total: count() }).from(interviewPreset),
+        ]);
+
+        return ctx.json({ presets: rows, total });
+      }),
+
+      adminCreatePreset: createAuthEndpoint("/self-hosted-admin/create-preset", { method: "POST", use: [sessionMiddleware], body: adminCreatePresetSchema }, async (ctx) => {
+        const adminEmail = ctx.context.session.user.email;
+        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        const db = opts.getDb();
+        const { name, category, context, description, icon, isBuiltIn } = ctx.body;
+
+        const id = crypto.randomUUID();
+        await db.insert(interviewPreset).values({
+          id,
+          name,
+          category,
+          context,
+          description: description ?? null,
+          icon: icon ?? null,
+          isBuiltIn: isBuiltIn ?? true,
+          userId: null,
+          createdAt: new Date(),
+        });
+
+        await recordAudit({ eventType: "admin_action", userEmail: adminEmail, metadata: { action: "create_preset", presetId: id, name } });
+        return ctx.json({ ok: true, presetId: id });
+      }),
+
+      adminUpdatePreset: createAuthEndpoint("/self-hosted-admin/update-preset", { method: "POST", use: [sessionMiddleware], body: adminUpdatePresetSchema }, async (ctx) => {
+        const adminEmail = ctx.context.session.user.email;
+        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        const db = opts.getDb();
+        const { presetId, ...fields } = ctx.body;
+
+        const [existing] = await db.select({ id: interviewPreset.id }).from(interviewPreset).where(eq(interviewPreset.id, presetId));
+        if (!existing) throw new APIError("NOT_FOUND", { message: "Preset not found" });
+
+        const updates: Record<string, unknown> = {};
+        if (fields.name !== undefined) updates.name = fields.name;
+        if (fields.category !== undefined) updates.category = fields.category;
+        if (fields.context !== undefined) updates.context = fields.context;
+        if (fields.description !== undefined) updates.description = fields.description;
+        if (fields.icon !== undefined) updates.icon = fields.icon;
+
+        if (Object.keys(updates).length > 0) {
+          await db.update(interviewPreset).set(updates).where(eq(interviewPreset.id, presetId));
+        }
+
+        await recordAudit({ eventType: "admin_action", userEmail: adminEmail, metadata: { action: "update_preset", presetId } });
+        return ctx.json({ ok: true });
+      }),
+
+      adminDeletePreset: createAuthEndpoint("/self-hosted-admin/delete-preset", { method: "POST", use: [sessionMiddleware], body: adminDeletePresetSchema }, async (ctx) => {
+        const adminEmail = ctx.context.session.user.email;
+        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        const db = opts.getDb();
+        const { presetId } = ctx.body;
+
+        await db.delete(interviewPreset).where(eq(interviewPreset.id, presetId));
+        await recordAudit({ eventType: "admin_action", userEmail: adminEmail, metadata: { action: "delete_preset", presetId } });
+        return ctx.json({ ok: true });
+      }),
+
+      // ── Stats Export ─────────────────────────────────────────────
+
+      adminExportStats: createAuthEndpoint("/self-hosted-admin/export-stats", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
+        if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+        const db = opts.getDb();
+        const now = new Date();
+        const dayAgo = new Date(now.getTime() - 86_400_000);
+        const weekAgo = new Date(now.getTime() - 7 * 86_400_000);
+        const monthAgo = new Date(now.getTime() - 30 * 86_400_000);
+
+        const [
+          [{ totalUsers }],
+          [{ newUsers24h }],
+          [{ newUsersWeek }],
+          [{ newUsersMonth }],
+          [{ pendingApproval }],
+          [{ bannedUsers }],
+          [{ activeSessions }],
+          [{ totalNotes }],
+          [{ totalPresets }],
+          [{ totalAuditEvents }],
+          [{ securityBlocks24h }],
+          [{ securityBlocksWeek }],
+        ] = await Promise.all([
+          db.select({ totalUsers: count() }).from(user),
+          db.select({ newUsers24h: count() }).from(user).where(gte(user.createdAt, dayAgo)),
+          db.select({ newUsersWeek: count() }).from(user).where(gte(user.createdAt, weekAgo)),
+          db.select({ newUsersMonth: count() }).from(user).where(gte(user.createdAt, monthAgo)),
+          db.select({ pendingApproval: count() }).from(user).where(eq(user.isApproved, false)),
+          db.select({ bannedUsers: count() }).from(user).where(eq(user.isBanned, true)),
+          db.select({ activeSessions: count() }).from(session).where(gte(session.expiresAt, now)),
+          db.select({ totalNotes: count() }).from(savedNote),
+          db.select({ totalPresets: count() }).from(interviewPreset),
+          db.select({ totalAuditEvents: count() }).from(auditEvent),
+          db.select({ securityBlocks24h: count() }).from(securityEvent).where(gte(securityEvent.createdAt, dayAgo)),
+          db.select({ securityBlocksWeek: count() }).from(securityEvent).where(gte(securityEvent.createdAt, weekAgo)),
+        ]);
+
+        const csvLines = [
+          "metric,value",
+          `total_users,${totalUsers}`,
+          `new_users_24h,${newUsers24h}`,
+          `new_users_week,${newUsersWeek}`,
+          `new_users_month,${newUsersMonth}`,
+          `pending_approval,${pendingApproval}`,
+          `banned_users,${bannedUsers}`,
+          `active_sessions,${activeSessions}`,
+          `total_notes,${totalNotes}`,
+          `total_presets,${totalPresets}`,
+          `total_audit_events,${totalAuditEvents}`,
+          `security_blocks_24h,${securityBlocks24h}`,
+          `security_blocks_week,${securityBlocksWeek}`,
+          `exported_at,${now.toISOString()}`,
+        ];
+
+        return ctx.json({
+          stats: {
+            totalUsers, newUsers24h, newUsersWeek, newUsersMonth,
+            pendingApproval, bannedUsers, activeSessions,
+            totalNotes, totalPresets, totalAuditEvents,
+            securityBlocks24h, securityBlocksWeek,
+          },
+          csv: csvLines.join("\n"),
+          exportedAt: now.toISOString(),
+        });
+      }),
+
+      // ── Export Users CSV ─────────────────────────────────────────
+
+      adminExportUsers: createAuthEndpoint("/self-hosted-admin/export-users", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
+        if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+        const db = opts.getDb();
+
+        const rows = await db.select({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          isApproved: user.isApproved,
+          isBanned: user.isBanned,
+          createdAt: user.createdAt,
+          lastActiveAt: user.lastActiveAt,
+        }).from(user).orderBy(desc(user.createdAt));
+
+        const csvHeader = "id,name,email,isApproved,isBanned,createdAt,lastActiveAt";
+        const csvRows = rows.map((r) => {
+          const safeName = (r.name || "").replace(/"/g, '""');
+          return `${r.id},"${safeName}",${r.email},${r.isApproved ?? false},${r.isBanned ?? false},${r.createdAt?.toISOString() ?? ""},${r.lastActiveAt?.toISOString() ?? ""}`;
+        });
+
+        return ctx.json({ csv: [csvHeader, ...csvRows].join("\n"), total: rows.length });
+      }),
+
+      // ── User Detail (single user with related data) ─────────────
+
+      adminGetUser: createAuthEndpoint("/self-hosted-admin/get-user", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
+        if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+        const db = opts.getDb();
+        const url = new URL(ctx.request?.url ?? "http://localhost");
+        const userId = url.searchParams.get("userId");
+        if (!userId || !SAFE_ID_RE.test(userId)) throw new APIError("BAD_REQUEST", { message: "Invalid userId" });
+
+        const [targetUser] = await db.select().from(user).where(eq(user.id, userId));
+        if (!targetUser) throw new APIError("NOT_FOUND", { message: "User not found" });
+
+        const [sessions, notes, presets, recentAudit] = await Promise.all([
+          db.select({ id: session.id, expiresAt: session.expiresAt, createdAt: session.createdAt, ipAddress: session.ipAddress, userAgent: session.userAgent })
+            .from(session).where(eq(session.userId, userId)).orderBy(desc(session.createdAt)).limit(10),
+          db.select({ total: count() }).from(savedNote).where(eq(savedNote.userId, userId)),
+          db.select({ total: count() }).from(interviewPreset).where(eq(interviewPreset.userId, userId)),
+          db.select().from(auditEvent).where(eq(auditEvent.userId, userId)).orderBy(desc(auditEvent.createdAt)).limit(20),
+        ]);
+
+        return ctx.json({
+          user: targetUser,
+          sessions,
+          notesCount: notes[0]?.total ?? 0,
+          presetsCount: presets[0]?.total ?? 0,
+          recentAuditEvents: recentAudit,
+        });
+      }),
+
+      // ── Cleanup expired rate limits / sessions ───────────────────
+
+      adminCleanup: createAuthEndpoint("/self-hosted-admin/cleanup", { method: "POST", use: [sessionMiddleware] }, async (ctx) => {
+        const adminEmail = ctx.context.session.user.email;
+        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        const db = opts.getDb();
+        const now = new Date();
+
+        await db.delete(rateLimitEntry).where(lt(rateLimitEntry.expiresAt, now));
+        await db.delete(session).where(lt(session.expiresAt, now));
+
+        await recordAudit({ eventType: "admin_action", userEmail: adminEmail, metadata: { action: "cleanup", timestamp: now.toISOString() } });
+        return ctx.json({ ok: true, cleanedAt: now.toISOString() });
       }),
     },
   } satisfies BetterAuthPlugin;

@@ -85,9 +85,17 @@ const ALLOWED_METHODS = "GET,POST,PUT,DELETE,OPTIONS";
 const ALLOWED_HEADERS = "Content-Type,Authorization";
 const CORS_MAX_AGE = "86400";
 
+const TRUSTED_ORIGINS = new Set([
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "https://copilot.vedgupta.in",
+  "https://interview-copilot-admin.vedgupta.in",
+  "https://realtime-worker-api-prod.vedgupta.in",
+]);
+
 function buildCorsHeaders(request: Request) {
   const origin = request.headers.get("Origin");
-  const allowOrigin = origin ?? "*";
+  const allowOrigin = origin && TRUSTED_ORIGINS.has(origin) ? origin : TRUSTED_ORIGINS.values().next().value!;
 
   return {
     "Access-Control-Allow-Origin": allowOrigin,
@@ -139,7 +147,7 @@ async function getAuthenticatedUser(
     const lastUpdate = lastActivityUpdates.get(userId) ?? 0;
     if (now - lastUpdate > ACTIVITY_UPDATE_INTERVAL_MS) {
       lastActivityUpdates.set(userId, now);
-      getDb(env).update(userTable).set({ lastActiveAt: new Date() }).where(eq(userTable.id, userId)).catch(() => {});
+      getDb(env).update(userTable).set({ lastActiveAt: new Date() }).where(eq(userTable.id, userId)).execute().catch(() => {});
     }
 
     return {

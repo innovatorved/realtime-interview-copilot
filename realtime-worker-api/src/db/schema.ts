@@ -1,18 +1,27 @@
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 
-export const user = sqliteTable("user", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  email: text("email").notNull().unique(),
-  emailVerified: integer("emailVerified", { mode: "boolean" }).notNull(),
-  isApproved: integer("isApproved", { mode: "boolean" }).default(false),
-  isBanned: integer("isBanned", { mode: "boolean" }).default(false),
-  banReason: text("banReason"),
-  image: text("image"),
-  lastActiveAt: integer("lastActiveAt", { mode: "timestamp" }),
-  createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
-  updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
-});
+export const user = sqliteTable(
+  "user",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    email: text("email").notNull().unique(),
+    emailVerified: integer("emailVerified", { mode: "boolean" }).notNull(),
+    isApproved: integer("isApproved", { mode: "boolean" }).default(false),
+    isBanned: integer("isBanned", { mode: "boolean" }).default(false),
+    banReason: text("banReason"),
+    image: text("image"),
+    lastActiveAt: integer("lastActiveAt", { mode: "timestamp" }),
+    createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("user_approved_idx").on(table.isApproved),
+    index("user_banned_idx").on(table.isBanned),
+    index("user_created_idx").on(table.createdAt),
+    index("user_last_active_idx").on(table.lastActiveAt),
+  ],
+);
 
 /** Matches production D1: columns `userId`, `body`, `createdAt` (legacy shape). */
 export const savedNote = sqliteTable(
@@ -32,30 +41,45 @@ export const savedNote = sqliteTable(
   ],
 );
 
-export const interviewPreset = sqliteTable("interview_preset", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  category: text("category").notNull(),
-  context: text("context").notNull(),
-  description: text("description"),
-  icon: text("icon"),
-  isBuiltIn: integer("isBuiltIn", { mode: "boolean" }).default(true),
-  userId: text("userId").references(() => user.id, { onDelete: "cascade" }),
-  createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
-});
+export const interviewPreset = sqliteTable(
+  "interview_preset",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    category: text("category").notNull(),
+    context: text("context").notNull(),
+    description: text("description"),
+    icon: text("icon"),
+    isBuiltIn: integer("isBuiltIn", { mode: "boolean" }).default(true),
+    userId: text("userId").references(() => user.id, { onDelete: "cascade" }),
+    createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("preset_user_idx").on(table.userId),
+    index("preset_builtin_idx").on(table.isBuiltIn),
+    index("preset_category_idx").on(table.category),
+  ],
+);
 
-export const session = sqliteTable("session", {
-  id: text("id").primaryKey(),
-  expiresAt: integer("expiresAt", { mode: "timestamp" }).notNull(),
-  token: text("token").notNull().unique(),
-  createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
-  updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
-  ipAddress: text("ipAddress"),
-  userAgent: text("userAgent"),
-  userId: text("userId")
-    .notNull()
-    .references(() => user.id),
-});
+export const session = sqliteTable(
+  "session",
+  {
+    id: text("id").primaryKey(),
+    expiresAt: integer("expiresAt", { mode: "timestamp" }).notNull(),
+    token: text("token").notNull().unique(),
+    createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+    ipAddress: text("ipAddress"),
+    userAgent: text("userAgent"),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id),
+  },
+  (table) => [
+    index("session_user_idx").on(table.userId),
+    index("session_expires_idx").on(table.expiresAt),
+  ],
+);
 
 export const account = sqliteTable("account", {
   id: text("id").primaryKey(),

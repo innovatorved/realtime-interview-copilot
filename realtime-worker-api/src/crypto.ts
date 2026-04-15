@@ -76,10 +76,10 @@ export async function verifyPassword({
   if (originalHash.length !== newHash.length) {
     return false;
   }
+  // Constant-time comparison to prevent timing attacks
+  let diff = 0;
   for (let i = 0; i < originalHash.length; i++) {
-    if (originalHash[i] !== newHash[i]) {
-      return false;
-    }
+    diff |= originalHash[i]! ^ newHash[i]!;
   }
-  return true;
+  return diff === 0;
 }
