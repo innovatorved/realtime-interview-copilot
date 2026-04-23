@@ -2,64 +2,152 @@
 
 _Last updated: 2026-04-24_
 
-Realtime Interview Copilot is an open-source desktop application developed by
-Ved Gupta. This document describes what data the application handles.
+Realtime Interview Copilot is an open-source desktop application maintained by
+Ved Gupta. This document explains what data the application handles, what
+leaves your device, and what your rights are.
 
-## What we collect
+---
 
-**Nothing.** The desktop application does not include analytics, telemetry,
-crash reporting, advertising SDKs, or any other form of silent data
-collection. We do not operate servers that track your usage.
+## 1. Summary
 
-## Data you provide yourself
+- The desktop application itself collects **no analytics, telemetry, or
+  crash data**. There is no silent tracking.
+- To be useful, the app sends the audio it captures to a speech-to-text
+  service (**Deepgram**) and sends your questions — and any screenshots you
+  attach — to a large language model provider (**Google Gemini**, or any
+  OpenAI-compatible model you configure).
+- You control which providers are used and which credentials are used to
+  access them.
+- Your credentials, interview context, saved answers, and preferences are
+  stored locally on your own machine.
 
-The app functions only when you connect it to third-party services using your
-own credentials:
+---
 
-- **Deepgram** — for live audio transcription. Audio captured from your system
-  is streamed directly to Deepgram under your API key.
-- **Google Gemini** / **OpenAI-compatible providers** — for AI answers. Your
-  prompts (and any screenshots you attach with ⌘⇧1) are sent directly to the
-  provider you configure.
+## 2. What gets sent off your device
 
-These providers have their own privacy policies. Please review them:
+When the app is actively running with a live session, the following data is
+transmitted over HTTPS from your machine to third-party APIs:
 
-- Deepgram — https://deepgram.com/privacy
-- Google AI / Gemini — https://policies.google.com/privacy
-- OpenAI — https://openai.com/policies/privacy-policy
+### 2.1 Audio → Deepgram
 
-## Local storage
+- **What**: a live audio stream captured from your system output (speakers /
+  headphones).
+- **To**: Deepgram (`api.deepgram.com`) using your own Deepgram API key or an
+  ephemeral key minted by the project's Cloudflare Worker API on your behalf.
+- **Why**: to produce the real-time transcript displayed in the app.
+- **Retention**: governed by Deepgram's policies. Deepgram's terms of service
+  and privacy policy state that streaming audio is processed in real time
+  and that customers can request data-retention controls on their account.
+  See https://deepgram.com/privacy and https://deepgram.com/terms-of-service.
+- **Our access**: the application does not keep a copy of the audio after
+  the session ends. Nothing is uploaded to a server operated by this
+  project.
 
-The following data is stored only on your own machine:
+### 2.2 Prompts + optional screenshots → AI provider
 
-- Your API keys (in the operating system's secure storage).
-- Interview context, saved answers, and preferences (in the app's local
-  application-support directory).
+- **What**: your typed question, any relevant transcript context you choose
+  to include, and — if you press `⌘⇧1` or click the camera button — a PNG
+  screenshot of your primary display.
+- **To**: one of
+  - **Google Gemini** via `generativelanguage.googleapis.com` (default), or
+  - any **OpenAI-compatible** endpoint you configure (e.g. OpenAI, Azure
+    OpenAI, a self-hosted model, etc.).
+- **Why**: to generate the streaming AI answer shown in the app.
+- **Retention**: governed by the provider you select.
+  - Google Gemini API: https://policies.google.com/privacy and
+    https://ai.google.dev/gemini-api/terms
+  - OpenAI: https://openai.com/policies/privacy-policy and
+    https://openai.com/policies/api-data-usage-policies (API inputs are not
+    used to train OpenAI models by default).
+- **Screenshots**: the app never captures a screenshot in the background.
+  Captures are only triggered by an explicit hotkey press or button click,
+  and you can remove the attachment before submitting.
 
-You can remove everything by uninstalling the app and deleting its support
-directory, or by running `brew uninstall --zap --cask realtime-interview-copilot`
-on macOS.
+### 2.3 Optional backend (`realtime-worker-api`)
 
-## Optional backend (self-hosted)
+This project also ships a Cloudflare Worker (optional, self-hostable) that
+some users route through in order to avoid distributing API keys. If you use
+a deployment of this worker:
 
-The reference Cloudflare Worker API (`realtime-worker-api/`) is an **optional**
-backend that individual users or teams can self-host to manage model
-credentials. If you choose to use a maintainer-hosted instance, the only
-personal data that instance stores is the email address and hashed password
-you use to sign in, plus any application secrets you choose to save under
-your account. That data is held in a Cloudflare D1 database under the
-operator's control and is never shared with third parties.
+- Your email address and a hashed password (via Better Auth) are stored in a
+  Cloudflare D1 database operated by whoever hosts that instance.
+- Any configuration keys you save (Deepgram key, Gemini key, custom model
+  credentials) are stored in that same database, scoped to your account.
+- The worker issues short-lived Deepgram keys and proxies completion
+  requests to the configured model. Requests are logged only for rate
+  limiting and abuse prevention; prompt content is not persisted by the
+  worker.
 
-## Children
+You can avoid this backend entirely by self-hosting it or by configuring
+the desktop app to talk to a different endpoint.
 
-The project is not directed at children under 13.
+---
 
-## Changes
+## 3. What stays local
 
-Material changes to this policy will be announced via a new entry in the
-project's release notes.
+Stored only on your own machine, in the operating-system-standard
+application-support directory:
 
-## Contact
+- API keys (via secure storage where the OS supports it).
+- Interview context, notes, saved AI responses, and UI preferences.
+- Any transcripts you explicitly export.
 
-Questions or requests: vedgupta@protonmail.com ·
+No data from step 3 is ever uploaded to servers controlled by this project.
+
+Removing it: uninstall the application and delete the support directory, or
+on macOS run `brew uninstall --zap --cask realtime-interview-copilot`.
+
+---
+
+## 4. Cookies, analytics, advertising
+
+None. The desktop application does not use cookies, analytics SDKs,
+advertising identifiers, or fingerprinting. A future release may add opt-in,
+anonymous crash reporting; if so, it will be disabled by default and
+announced in the release notes.
+
+---
+
+## 5. Your rights
+
+Because the desktop application stores your data locally and does not
+operate any user-tracking service, you already have full control over it.
+For data held by third-party providers (Deepgram, Gemini, OpenAI, etc.),
+exercise your rights (GDPR / CCPA access, deletion, portability) directly
+with that provider under the account you used.
+
+For data held in a community-run `realtime-worker-api` instance, contact the
+operator of that instance. For the author's reference deployment, contact
+the email below.
+
+---
+
+## 6. Children
+
+The project is not directed at children under 13, and knowingly collects no
+personal information from them.
+
+---
+
+## 7. Security
+
+- Releases are distributed only via GitHub Releases and Homebrew.
+- macOS builds are ad-hoc signed; Windows builds are code-signed through the
+  [SignPath Foundation](https://signpath.org/) OSS program.
+- All network traffic uses HTTPS.
+- Reporting security issues: email the address below. Please do not open a
+  public issue for security reports.
+
+---
+
+## 8. Changes
+
+Material changes to this policy will be noted in the project's release
+notes and reflected in the `Last updated` date at the top of this file.
+
+---
+
+## 9. Contact
+
+Ved Gupta · vedgupta@protonmail.com ·
 https://github.com/innovatorved/realtime-interview-copilot/issues
