@@ -9,6 +9,7 @@
 ## Overview
 
 The `realtime-worker-api` is a Cloudflare Worker that powers the backend of Realtime Interview Copilot. It handles:
+
 - 🎤 Deepgram temporary API key generation
 - 🤖 AI completion streaming via Google Gemini
 - 🔐 User authentication with Better Auth
@@ -37,28 +38,33 @@ realtime-worker-api/
 
 ## Tech Stack
 
-| Component | Technology |
-|-----------|------------|
-| Runtime | Cloudflare Workers |
-| Database | Cloudflare D1 (SQLite) |
-| ORM | Drizzle ORM |
-| Auth | Better Auth |
-| AI | Google Gemini API |
-| Transcription | Deepgram API |
-| Analytics | PostHog |
+
+| Component     | Technology             |
+| ------------- | ---------------------- |
+| Runtime       | Cloudflare Workers     |
+| Database      | Cloudflare D1 (SQLite) |
+| ORM           | Drizzle ORM            |
+| Auth          | Better Auth            |
+| AI            | Google Gemini API      |
+| Transcription | Deepgram API           |
+| Analytics     | PostHog                |
+
 
 ---
 
 ## Quick Start
 
 ### 1. Install Dependencies
+
 ```bash
 cd realtime-worker-api
 bun install
 ```
 
 ### 2. Configure Environment Variables
+
 Create `.dev.vars` file:
+
 ```bash
 DEEPGRAM_API_KEY=your_deepgram_key
 GOOGLE_GENERATIVE_AI_API_KEY=your_google_ai_key
@@ -70,6 +76,7 @@ GEMINI_MODEL=gemini-flash-lite-latest # Optional
 ```
 
 ### 3. Setup Database
+
 ```bash
 # Create D1 database
 npx wrangler d1 create realtime-interview-copilot-db
@@ -87,6 +94,7 @@ npx wrangler d1 migrations apply realtime-interview-copilot-db --remote
 ```
 
 ### 4. Run Development Server
+
 ```bash
 bun run dev
 # or
@@ -94,6 +102,7 @@ npx wrangler dev
 ```
 
 ### 5. Deploy to Production
+
 ```bash
 bun run deploy
 # or
@@ -105,6 +114,7 @@ npx wrangler deploy
 ## API Endpoints
 
 ### Base URLs
+
 - **Development**: `http://localhost:8787`
 - **Production**: `https://realtime-worker-api-prod.vedgupta.in`
 
@@ -115,12 +125,14 @@ npx wrangler deploy
 Generate a temporary Deepgram API key for client-side transcription.
 
 **Request:**
+
 ```http
 POST /api/deepgram
 Content-Type: application/json
 ```
 
 **Response:**
+
 ```json
 {
   "key": "temporary_api_key_here",
@@ -132,6 +144,7 @@ Content-Type: application/json
 ```
 
 **Error Response:**
+
 ```json
 {
   "error": "Missing DEEPGRAM_API_KEY binding"
@@ -145,6 +158,7 @@ Content-Type: application/json
 Stream AI-generated responses using Google Gemini.
 
 **Request:**
+
 ```http
 POST /api/completion
 Content-Type: application/json
@@ -157,13 +171,17 @@ Content-Type: application/json
 ```
 
 **Flags:**
-| Flag | Behavior |
-|------|----------|
-| `copilot` | Generates structured interview answers |
-| `summarizer` | Generates conversation summary |
-| *(other)* | Raw prompt to Gemini |
+
+
+| Flag         | Behavior                               |
+| ------------ | -------------------------------------- |
+| `copilot`    | Generates structured interview answers |
+| `summarizer` | Generates conversation summary         |
+| *(other)*    | Raw prompt to Gemini                   |
+
 
 **Response (SSE Stream):**
+
 ```
 data: {"text": "Here is my "}
 
@@ -173,6 +191,7 @@ data: [DONE]
 ```
 
 **Error Response:**
+
 ```
 data: {"error": "API Error: 500 Internal Server Error"}
 ```
@@ -183,14 +202,17 @@ data: {"error": "API Error: 500 Internal Server Error"}
 
 Better Auth endpoints for authentication.
 
-| Endpoint | Description |
-|----------|-------------|
-| `POST /api/auth/sign-up/email` | Register new user |
-| `POST /api/auth/sign-in/email` | Login user |
-| `POST /api/auth/sign-out` | Logout user |
-| `GET /api/auth/session` | Get current session |
+
+| Endpoint                       | Description         |
+| ------------------------------ | ------------------- |
+| `POST /api/auth/sign-up/email` | Register new user   |
+| `POST /api/auth/sign-in/email` | Login user          |
+| `POST /api/auth/sign-out`      | Logout user         |
+| `GET /api/auth/session`        | Get current session |
+
 
 **Sign Up Example:**
+
 ```http
 POST /api/auth/sign-up/email
 Content-Type: application/json
@@ -209,65 +231,83 @@ Content-Type: application/json
 ### Tables
 
 #### `user`
-| Column | Type | Description |
-|--------|------|-------------|
-| id | TEXT | Primary key (UUID) |
-| name | TEXT | User's display name |
-| email | TEXT | Unique email address |
+
+
+| Column        | Type    | Description               |
+| ------------- | ------- | ------------------------- |
+| id            | TEXT    | Primary key (UUID)        |
+| name          | TEXT    | User's display name       |
+| email         | TEXT    | Unique email address      |
 | emailVerified | INTEGER | Email verification status |
-| isApproved | INTEGER | Admin approval status |
-| image | TEXT | Profile image URL |
-| createdAt | INTEGER | Timestamp |
-| updatedAt | INTEGER | Timestamp |
+| isApproved    | INTEGER | Admin approval status     |
+| image         | TEXT    | Profile image URL         |
+| createdAt     | INTEGER | Timestamp                 |
+| updatedAt     | INTEGER | Timestamp                 |
+
 
 #### `session`
-| Column | Type | Description |
-|--------|------|-------------|
-| id | TEXT | Primary key |
+
+
+| Column    | Type    | Description              |
+| --------- | ------- | ------------------------ |
+| id        | TEXT    | Primary key              |
 | expiresAt | INTEGER | Session expiry timestamp |
-| token | TEXT | Unique session token |
-| ipAddress | TEXT | Client IP |
-| userAgent | TEXT | Client user agent |
-| userId | TEXT | Foreign key to user |
+| token     | TEXT    | Unique session token     |
+| ipAddress | TEXT    | Client IP                |
+| userAgent | TEXT    | Client user agent        |
+| userId    | TEXT    | Foreign key to user      |
+
 
 #### `account`
-| Column | Type | Description |
-|--------|------|-------------|
-| id | TEXT | Primary key |
-| accountId | TEXT | Provider account ID |
-| providerId | TEXT | Auth provider name |
-| userId | TEXT | Foreign key to user |
-| password | TEXT | Hashed password |
-| accessToken | TEXT | OAuth access token |
+
+
+| Column       | Type | Description         |
+| ------------ | ---- | ------------------- |
+| id           | TEXT | Primary key         |
+| accountId    | TEXT | Provider account ID |
+| providerId   | TEXT | Auth provider name  |
+| userId       | TEXT | Foreign key to user |
+| password     | TEXT | Hashed password     |
+| accessToken  | TEXT | OAuth access token  |
 | refreshToken | TEXT | OAuth refresh token |
 
+
 #### `verification`
-| Column | Type | Description |
-|--------|------|-------------|
-| id | TEXT | Primary key |
-| identifier | TEXT | Verification identifier |
-| value | TEXT | Verification value |
-| expiresAt | INTEGER | Expiry timestamp |
+
+
+| Column     | Type    | Description             |
+| ---------- | ------- | ----------------------- |
+| id         | TEXT    | Primary key             |
+| identifier | TEXT    | Verification identifier |
+| value      | TEXT    | Verification value      |
+| expiresAt  | INTEGER | Expiry timestamp        |
+
 
 ---
 
 ## Environment Variables
 
 ### Required
-| Variable | Description |
-|----------|-------------|
-| `DEEPGRAM_API_KEY` | Deepgram API key for transcription |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | Google AI API key for Gemini |
-| `BETTER_AUTH_SECRET` | Secret for auth token signing |
-| `BETTER_AUTH_URL` | Base URL for auth |
-| `DB` | D1 database binding (auto-configured) |
+
+
+| Variable                       | Description                           |
+| ------------------------------ | ------------------------------------- |
+| `DEEPGRAM_API_KEY`             | Deepgram API key for transcription    |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Google AI API key for Gemini          |
+| `BETTER_AUTH_SECRET`           | Secret for auth token signing         |
+| `BETTER_AUTH_URL`              | Base URL for auth                     |
+| `DB`                           | D1 database binding (auto-configured) |
+
 
 ### Optional
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `GEMINI_MODEL` | `gemini-flash-lite-latest` | Gemini model to use |
-| `POSTHOG_API_KEY` | - | PostHog API key for analytics |
-| `POSTHOG_HOST` | `https://eu.i.posthog.com` | PostHog host URL |
+
+
+| Variable          | Default                    | Description                   |
+| ----------------- | -------------------------- | ----------------------------- |
+| `GEMINI_MODEL`    | `gemini-flash-lite-latest` | Gemini model to use           |
+| `POSTHOG_API_KEY` | -                          | PostHog API key for analytics |
+| `POSTHOG_HOST`    | `https://eu.i.posthog.com` | PostHog host URL              |
+
 
 ---
 
@@ -294,6 +334,7 @@ migrations_dir = "drizzle"
 ## PostHog Analytics
 
 The API tracks LLM generation events with:
+
 - Trace ID
 - Model name
 - Input prompt
@@ -302,6 +343,7 @@ The API tracks LLM generation events with:
 - Error status
 
 Events are captured under:
+
 - **Event**: `$ai_generation`
 - **Provider**: `gemini`
 
@@ -310,6 +352,7 @@ Events are captured under:
 ## CORS Configuration
 
 The API supports CORS with:
+
 - Dynamic origin matching
 - Credentials allowed
 - Methods: `GET, POST, OPTIONS`
@@ -343,6 +386,7 @@ npx wrangler tail           # View live logs
 ## Troubleshooting
 
 ### Database Connection Issues
+
 ```bash
 # Verify database exists
 npx wrangler d1 list
@@ -352,14 +396,17 @@ npx wrangler d1 migrations list <database-name>
 ```
 
 ### API Key Errors
+
 - Verify environment variables in `.dev.vars` (local)
 - Check Cloudflare dashboard secrets (production)
 
 ### CORS Issues
+
 - Ensure client origin is allowed
 - Check preflight OPTIONS handling
 
 ### Deployment Fails
+
 ```bash
 # Re-login
 npx wrangler login
@@ -367,3 +414,4 @@ npx wrangler login
 # Check errors
 npx wrangler deploy --dry-run
 ```
+
