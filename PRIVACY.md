@@ -1,7 +1,5 @@
 # Privacy Policy
 
-_Last updated: 2026-04-24_
-
 Realtime Interview Copilot is an open-source desktop application maintained by
 Ved Gupta. This document explains what data the application handles, what
 leaves your device, and what your rights are.
@@ -143,7 +141,7 @@ personal information from them.
 ## 8. Changes
 
 Material changes to this policy will be noted in the project's release
-notes and reflected in the `Last updated` date at the top of this file.
+notes.
 
 ---
 
