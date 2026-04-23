@@ -135,6 +135,11 @@ export function QuestionAssistant({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    // Guard against Enter-submitting (or the action button re-submitting)
+    // the form while a request is already in flight. Without this, pressing
+    // the Stop button was aborting the controller AND letting the form
+    // submit, which kicked off a fresh request — looking like a restart.
+    if (isLoading) return;
     if (!question.trim() && !attachedImage) return;
 
     setError(null);
@@ -219,13 +224,13 @@ export function QuestionAssistant({
     }
   };
 
-  const handleStop = () => {
+  const handleStop = useCallback(() => {
     if (controller.current) {
       controller.current.abort();
       controller.current = null;
-      setIsLoading(false);
     }
-  };
+    setIsLoading(false);
+  }, []);
 
   const hasContent = !!answer || isLoading || !!error;
 
@@ -323,7 +328,7 @@ export function QuestionAssistant({
               </div>
             </div>
             <Button
-              type="submit"
+              type={isLoading ? "button" : "submit"}
               disabled={!isLoading && !question.trim() && !attachedImage}
               onClick={isLoading ? handleStop : undefined}
               className={`h-11 px-5 rounded-xl font-medium transition-all text-sm shrink-0 ${
@@ -388,7 +393,18 @@ export function QuestionAssistant({
             {/* Answer body */}
             {answer && (
               <div className="glass-card p-6 rounded-2xl animate-fade-in-up">
-                <div className="prose prose-invert prose-sm max-w-none text-zinc-200 leading-relaxed break-words [&_pre]:overflow-x-auto [&_pre]:whitespace-pre [&_code]:break-words [&_table]:block [&_table]:overflow-x-auto">
+                <div className="prose prose-invert prose-sm max-w-none text-[13px] leading-relaxed text-zinc-200 break-words
+                  [&_p]:text-[13px] [&_p]:leading-relaxed [&_p]:my-2
+                  [&_ul]:text-[13px] [&_ul]:my-2 [&_ol]:text-[13px] [&_ol]:my-2 [&_li]:my-0.5
+                  [&_h1]:text-base [&_h1]:font-semibold [&_h1]:mt-4 [&_h1]:mb-2
+                  [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mt-3 [&_h2]:mb-2
+                  [&_h3]:text-[13px] [&_h3]:font-semibold [&_h3]:mt-3 [&_h3]:mb-1.5
+                  [&_h4]:text-[13px] [&_h4]:font-semibold [&_h4]:mt-2 [&_h4]:mb-1
+                  [&_code]:text-[12px] [&_code]:break-words
+                  [&_pre]:text-[12px] [&_pre]:overflow-x-auto [&_pre]:whitespace-pre [&_pre]:my-2
+                  [&_table]:block [&_table]:overflow-x-auto [&_table]:text-[12px]
+                  [&_strong]:font-semibold [&_strong]:text-white
+                  [&_blockquote]:text-[13px] [&_blockquote]:my-2">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {answer}
                   </ReactMarkdown>

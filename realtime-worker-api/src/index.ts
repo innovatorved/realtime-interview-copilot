@@ -492,6 +492,12 @@ async function streamGeminiCompletion(
     ],
     generationConfig: {
       maxOutputTokens: 8192,
+      // Disable Gemini 2.5 "thinking" for lower latency + cheaper completions.
+      // https://ai.google.dev/gemini-api/docs/thinking — thinkingBudget=0 turns
+      // off the internal reasoning pass entirely on Flash / Flash-Lite.
+      thinkingConfig: {
+        thinkingBudget: 0,
+      },
     },
   });
 
