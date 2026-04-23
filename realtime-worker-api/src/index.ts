@@ -483,17 +483,23 @@ async function streamGeminiCompletion(
   }
   parts.push({ text: prompt });
 
-  // Only Gemini 2.5 Flash / Flash-Lite / Pro accept thinkingConfig. Older
-  // aliases (gemini-flash-lite-latest, gemini-1.5-*, gemma-*) reject the
-  // field with a 400 "Thinking budget is not supported for this model".
+  // Disable "thinking" / chain-of-thought on every family that supports it so
+  // responses start immediately and no raw thoughts leak into the stream.
+  //   - Gemini 2.5 family  → thinkingBudget: 0
+  //   - Gemini 3 family    → thinkingLevel: "low"
+  //   - Gemma 4 family     → thinkingLevel: "MINIMAL" (only MINIMAL|HIGH valid)
+  //   - Older aliases (gemini-1.5-*, gemini-flash-lite-latest, gemma-2/3) do
+  //     not accept thinkingConfig at all — sending it returns HTTP 400.
   // https://ai.google.dev/gemini-api/docs/thinking
-  const supportsThinkingConfig = /^gemini-2\.5-/i.test(modelName);
   const generationConfig: Record<string, unknown> = {
     maxOutputTokens: 8192,
   };
-  if (supportsThinkingConfig) {
-    // Disable thinking to reduce latency + cost on interactive completions.
+  if (/^gemini-2\.5-/i.test(modelName)) {
     generationConfig.thinkingConfig = { thinkingBudget: 0 };
+  } else if (/^gemini-3/i.test(modelName)) {
+    generationConfig.thinkingConfig = { thinkingLevel: "low" };
+  } else if (/^gemma-4-/i.test(modelName)) {
+    generationConfig.thinkingConfig = { thinkingLevel: "MINIMAL" };
   }
 
   const requestBody = JSON.stringify({
@@ -701,6 +707,9 @@ function extractTextFromChunk(chunk: any): string | null {
 
   let text = "";
   for (const part of parts) {
+    // Skip any "thought" parts so the model's internal reasoning never leaks
+    // into the user-facing stream, regardless of the thinkingConfig flag.
+    if (part?.thought === true) continue;
     if (typeof part?.text === "string") {
       text += part.text;
     }
