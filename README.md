@@ -63,9 +63,13 @@ PRs welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md). Windows/Linux test report
 
 Windows builds are signed free of charge by the [SignPath Foundation](https://about.signpath.io/), certificate issued by [SignPath](https://signpath.io/). Signing policy and provenance are managed through SignPath.io.
 
+## Architecture
+
+For a complete walkthrough — audio capture, transcription pipeline, AI/vision backend, worker API, CI, distribution, and security — see [ARCHITECTURE.md](./ARCHITECTURE.md).
+
 ## License, Privacy & Contact
 
-[LICENSE](./LICENSE) · [Privacy Policy](./PRIVACY.md) · [vedgupta@protonmail.com](mailto:vedgupta@protonmail.com) · [Report issues](https://github.com/innovatorved/realtime-interview-copilot/issues)
+[LICENSE](./LICENSE) · [Privacy Policy](./PRIVACY.md) · [Architecture](./ARCHITECTURE.md) · [vedgupta@protonmail.com](mailto:vedgupta@protonmail.com) · [Report issues](https://github.com/innovatorved/realtime-interview-copilot/issues)
 
 ---
 
