@@ -9,6 +9,39 @@ Get the latest build from the [**Releases page**](https://github.com/innovatorve
 - **macOS (Apple Silicon)** — `.dmg`
 - **Windows (x64)** — `.exe`
 
+### macOS install
+
+The app is ad-hoc signed (not Apple-notarized — notarization requires a $99/yr paid Apple Developer account). You will see *"Apple could not verify … is free of malware"* on first launch. Pick any one option below.
+
+**Option A — Homebrew (recommended, one command)**
+
+```bash
+brew tap innovatorved/tap
+brew install --cask realtime-interview-copilot
+```
+
+The cask automatically removes the quarantine attribute after install, so the app just opens — no warnings.
+
+**Option B — Manual (DMG)**
+
+1. Open the `.dmg`, drag the app to `/Applications`.
+2. In Finder, **right-click** *Realtime Interview Copilot Beta* in `/Applications` → **Open** → **Open** on the new dialog.
+3. Subsequent launches work normally.
+
+**Option C — System Settings bypass (macOS 15 Sequoia)**
+
+Try launching once, dismiss the block, then go to **System Settings → Privacy & Security → scroll to the bottom → Open Anyway**.
+
+**Option D — Terminal**
+
+```bash
+xattr -cr "/Applications/Realtime Interview Copilot Beta.app"
+```
+
+### Windows install
+
+The installer is unsigned. SmartScreen may show a warning — click **More info** → **Run anyway**.
+
 ## Features
 
 - 🎙️ **Live transcription** of system audio (Deepgram) — no BlackHole / VB-Cable needed
