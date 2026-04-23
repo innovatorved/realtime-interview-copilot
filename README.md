@@ -59,9 +59,13 @@ Tagged pushes (`v*`) trigger a GitHub Actions workflow that builds macOS and Win
 
 PRs welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md). Windows/Linux test reports especially appreciated.
 
-## License & Contact
+## Code signing
 
-[LICENSE](./LICENSE) · [vedgupta@protonmail.com](mailto:vedgupta@protonmail.com) · [Report issues](https://github.com/innovatorved/realtime-interview-copilot/issues)
+Windows builds are signed free of charge by the [SignPath Foundation](https://about.signpath.io/), certificate issued by [SignPath](https://signpath.io/). Signing policy and provenance are managed through SignPath.io.
+
+## License, Privacy & Contact
+
+[LICENSE](./LICENSE) · [Privacy Policy](./PRIVACY.md) · [vedgupta@protonmail.com](mailto:vedgupta@protonmail.com) · [Report issues](https://github.com/innovatorved/realtime-interview-copilot/issues)
 
 ---
 
