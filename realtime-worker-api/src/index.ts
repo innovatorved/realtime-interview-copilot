@@ -31,7 +31,7 @@ async function resolveConfig(env: Env): Promise<ResolvedConfig> {
     const useCustom = Boolean(customModelName && customBaseUrl && customApiKey);
 
     return {
-      geminiModel: map.get("gemini_model") || env.GEMINI_MODEL || "gemini-flash-lite-latest",
+      geminiModel: map.get("gemini_model") || env.GEMINI_MODEL || "gemini-2.5-flash-lite",
       geminiKey: map.get("gemini_key") || env.GOOGLE_GENERATIVE_AI_API_KEY || "",
       deepgramKey: map.get("deepgram_key") || env.DEEPGRAM_API_KEY || "",
       customModelName,
@@ -42,7 +42,7 @@ async function resolveConfig(env: Env): Promise<ResolvedConfig> {
   } catch (err) {
     console.error("Failed to load admin config from D1, using env defaults:", err);
     return {
-      geminiModel: env.GEMINI_MODEL || "gemini-flash-lite-latest",
+      geminiModel: env.GEMINI_MODEL || "gemini-2.5-flash-lite",
       geminiKey: env.GOOGLE_GENERATIVE_AI_API_KEY || "",
       deepgramKey: env.DEEPGRAM_API_KEY || "",
       customModelName: "",
@@ -483,6 +483,19 @@ async function streamGeminiCompletion(
   }
   parts.push({ text: prompt });
 
+  // Only Gemini 2.5 Flash / Flash-Lite / Pro accept thinkingConfig. Older
+  // aliases (gemini-flash-lite-latest, gemini-1.5-*, gemma-*) reject the
+  // field with a 400 "Thinking budget is not supported for this model".
+  // https://ai.google.dev/gemini-api/docs/thinking
+  const supportsThinkingConfig = /^gemini-2\.5-/i.test(modelName);
+  const generationConfig: Record<string, unknown> = {
+    maxOutputTokens: 8192,
+  };
+  if (supportsThinkingConfig) {
+    // Disable thinking to reduce latency + cost on interactive completions.
+    generationConfig.thinkingConfig = { thinkingBudget: 0 };
+  }
+
   const requestBody = JSON.stringify({
     contents: [
       {
@@ -490,15 +503,7 @@ async function streamGeminiCompletion(
         role: "user",
       },
     ],
-    generationConfig: {
-      maxOutputTokens: 8192,
-      // Disable Gemini 2.5 "thinking" for lower latency + cheaper completions.
-      // https://ai.google.dev/gemini-api/docs/thinking — thinkingBudget=0 turns
-      // off the internal reasoning pass entirely on Flash / Flash-Lite.
-      thinkingConfig: {
-        thinkingBudget: 0,
-      },
-    },
+    generationConfig,
   });
 
   try {
