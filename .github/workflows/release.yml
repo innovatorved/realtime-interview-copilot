@@ -109,7 +109,11 @@ jobs:
           tag_name: ${{ steps.tag.outputs.name }}
           name: ${{ steps.tag.outputs.name }}
           draft: false
-          prerelease: ${{ contains(steps.tag.outputs.name, 'beta') || contains(steps.tag.outputs.name, 'alpha') || contains(steps.tag.outputs.name, 'rc') }}
+          # Mark only alpha / rc pre-releases as prerelease; beta builds are
+          # promoted to the "Latest" channel so users see them on the Releases
+          # page by default.
+          prerelease: ${{ contains(steps.tag.outputs.name, 'alpha') || contains(steps.tag.outputs.name, 'rc') }}
+          make_latest: "true"
           generate_release_notes: true
           fail_on_unmatched_files: false
           files: |
