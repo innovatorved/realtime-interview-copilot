@@ -68,6 +68,28 @@ interface CompletionRequestBody {
   bg?: string;
   flag?: string;
   prompt?: string;
+  /** Optional image attached to the prompt as a data URL (e.g. data:image/png;base64,...). */
+  image?: string;
+}
+
+interface InlineImage {
+  mimeType: string;
+  base64: string;
+}
+
+function parseImageDataUrl(input: string | undefined): InlineImage | null {
+  if (!input) return null;
+  // Expected format: data:<mime>;base64,<data>
+  const match = /^data:([^;]+);base64,(.+)$/.exec(input.trim());
+  if (!match) return null;
+  const mime = match[1];
+  const data = match[2];
+  // Only accept common web image types and cap size to prevent abuse.
+  // Validation protects against unexpected mime types being forwarded.
+  if (!/^image\/(png|jpeg|jpg|webp|gif)$/i.test(mime)) return null;
+  // Rough base64 size check: limit to ~8MB decoded. base64 is ~4/3 of bytes.
+  if (data.length > (8 * 1024 * 1024 * 4) / 3) return null;
+  return { mimeType: mime, base64: data };
 }
 
 interface WorkerExecutionContext {
@@ -390,6 +412,8 @@ async function handleCompletion(
     finalPrompt = buildSummarizerPrompt(basePrompt);
   }
 
+  const image = parseImageDataUrl(payload.image);
+
   const cfg = await resolveConfig(env);
 
   const activeModel = cfg.useCustom ? cfg.customModelName : cfg.geminiModel;
@@ -407,8 +431,8 @@ async function handleCompletion(
   const writer = stream.writable.getWriter();
 
   const completionFn = cfg.useCustom
-    ? streamOpenAICompatibleCompletion(finalPrompt, cfg.customModelName, cfg.customApiKey, cfg.customBaseUrl, writer, analytics.onText)
-    : streamGeminiCompletion(finalPrompt, cfg.geminiModel, cfg.geminiKey, writer, analytics.onText);
+    ? streamOpenAICompatibleCompletion(finalPrompt, cfg.customModelName, cfg.customApiKey, cfg.customBaseUrl, writer, analytics.onText, image)
+    : streamGeminiCompletion(finalPrompt, cfg.geminiModel, cfg.geminiKey, writer, analytics.onText, image);
 
   const pump = completionFn
     .catch(async (error: unknown) => {
@@ -440,6 +464,7 @@ async function streamGeminiCompletion(
   apiKey: string,
   writer: WritableStreamDefaultWriter<Uint8Array>,
   onText?: (text: string) => void,
+  image?: InlineImage | null,
 ) {
   if (!apiKey) {
     throw new Error("Missing Gemini API key — set via Admin Dashboard or GOOGLE_GENERATIVE_AI_API_KEY env var");
@@ -447,10 +472,21 @@ async function streamGeminiCompletion(
 
   const url = `https://gateway.ai.cloudflare.com/v1/b4ca0337fb21e846c53e1f2611ba436c/gateway04/google-ai-studio/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${apiKey}`;
 
+  const parts: Array<Record<string, unknown>> = [];
+  if (image) {
+    parts.push({
+      inlineData: {
+        mimeType: image.mimeType,
+        data: image.base64,
+      },
+    });
+  }
+  parts.push({ text: prompt });
+
   const requestBody = JSON.stringify({
     contents: [
       {
-        parts: [{ text: prompt }],
+        parts,
         role: "user",
       },
     ],
@@ -541,6 +577,7 @@ async function streamOpenAICompatibleCompletion(
   baseUrl: string,
   writer: WritableStreamDefaultWriter<Uint8Array>,
   onText?: (text: string) => void,
+  image?: InlineImage | null,
 ) {
   if (!apiKey || !baseUrl) {
     throw new Error("Missing custom model API key or base URL — configure in Admin Dashboard Settings");
@@ -548,11 +585,23 @@ async function streamOpenAICompatibleCompletion(
 
   const endpoint = baseUrl.replace(/\/+$/, "") + "/chat/completions";
 
+  const content: Array<Record<string, unknown>> | string = image
+    ? [
+        { type: "text", text: prompt },
+        {
+          type: "image_url",
+          image_url: {
+            url: `data:${image.mimeType};base64,${image.base64}`,
+          },
+        },
+      ]
+    : prompt;
+
   const requestBody = JSON.stringify({
     model: modelName,
     stream: true,
     max_tokens: 8192,
-    messages: [{ role: "user", content: prompt }],
+    messages: [{ role: "user", content }],
   });
 
   try {

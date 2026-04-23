@@ -54,7 +54,7 @@ realtime-worker-api/
 ### 1. Install Dependencies
 ```bash
 cd realtime-worker-api
-pnpm install
+bun install
 ```
 
 ### 2. Configure Environment Variables
@@ -88,14 +88,14 @@ npx wrangler d1 migrations apply realtime-interview-copilot-db --remote
 
 ### 4. Run Development Server
 ```bash
-pnpm dev
+bun run dev
 # or
 npx wrangler dev
 ```
 
 ### 5. Deploy to Production
 ```bash
-pnpm deploy
+bun run deploy
 # or
 npx wrangler deploy
 ```
@@ -322,7 +322,7 @@ The API supports CORS with:
 
 ```bash
 # Development
-pnpm dev                    # Start local server
+bun run dev                    # Start local server
 
 # Database
 npx drizzle-kit generate    # Generate migrations
@@ -331,7 +331,7 @@ npx wrangler d1 migrations apply <name> --local   # Apply local
 npx wrangler d1 migrations apply <name> --remote  # Apply remote
 
 # Deployment
-pnpm deploy                 # Deploy to Cloudflare
+bun run deploy                 # Deploy to Cloudflare
 
 # Utilities
 npx wrangler whoami         # Check auth status

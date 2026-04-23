@@ -1,7 +1,8 @@
 {
   "name": "realtime-interview-copilot",
-  "version": "0.3.0",
+  "version": "0.4.0-beta",
   "private": true,
+  "packageManager": "bun@1.3.10",
   "scripts": {
     "dev": "next dev",
     "dev:https": "next dev --experimental-https",
@@ -9,12 +10,12 @@
     "build:static": "next build && next export",
     "start": "next start",
     "lint": "eslint .",
-    "fix": "npx @biomejs/biome format --write .",
+    "fix": "bunx @biomejs/biome format --write .",
     "build:electron": "node scripts/build-electron.js",
-    "electron:dev": "pnpm run build:electron && concurrently \"PORT=3000 pnpm run dev\" \"wait-on http://localhost:3000 && DEV_PORT=3000 npx --yes electron@latest .\"",
-    "electron:debug": "ELECTRON_DEBUG=true pnpm run build:electron && concurrently \"PORT=3000 pnpm run dev\" \"wait-on http://localhost:3000 && DEV_PORT=3000 npx --yes electron@latest .\"",
-    "electron:build": "pnpm run build:electron && pnpm run build && npx electron-builder",
-    "electron:start": "pnpm run build:electron && npx --yes electron@latest .",
+    "electron:dev": "bun run build:electron && concurrently \"PORT=3000 bun run dev\" \"wait-on http://localhost:3000 && DEV_PORT=3000 electron .\"",
+    "electron:debug": "ELECTRON_DEBUG=true bun run build:electron && concurrently \"PORT=3000 bun run dev\" \"wait-on http://localhost:3000 && DEV_PORT=3000 electron .\"",
+    "electron:build": "bun run build:electron && bun run build && electron-builder",
+    "electron:start": "bun run build:electron && electron .",
     "clean": "rm -rf .next out dist electron/*.js electron/*.js.map"
   },
   "dependencies": {
@@ -50,8 +51,8 @@
     "autoprefixer": "^10.4.23",
     "baseline-browser-mapping": "^2.9.7",
     "concurrently": "^8.2.2",
-    "electron": "^28.3.3",
-    "electron-builder": "^24.13.3",
+    "electron": "^41.3.0",
+    "electron-builder": "^26.8.1",
     "eslint": "^9.39.2",
     "eslint-config-next": "^15.5.9",
     "postcss": "^8.5.6",
@@ -61,9 +62,22 @@
     "wrangler": "^4.54.0"
   },
   "main": "electron/main.js",
+  "trustedDependencies": [
+    "electron",
+    "electron-winstaller",
+    "@biomejs/biome",
+    "@tailwindcss/oxide",
+    "esbuild",
+    "sharp",
+    "core-js",
+    "unrs-resolver",
+    "protobufjs",
+    "workerd"
+  ],
   "build": {
-    "appId": "com.realtime.interview.copilot.nightly",
-    "productName": "Realtime Interview Copilot Nightly",
+    "appId": "com.realtime.interview.copilot.beta",
+    "productName": "Realtime Interview Copilot Beta",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "files": [
       "out/**/*",
       "electron/**/*",

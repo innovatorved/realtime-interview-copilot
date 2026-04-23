@@ -12,13 +12,6 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Loader2, MicOffIcon } from "lucide-react";
 import { TranscriptionSegment, TranscriptionWord } from "@/lib/types";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useClientReady } from "@/hooks/useClientReady";
 import { BACKEND_API_URL } from "@/lib/constant";
 import posthog from "posthog-js";
@@ -26,12 +19,6 @@ import posthog from "posthog-js";
 interface RecorderTranscriberProps {
   addTextinTranscription: (text: string) => void;
   addTranscriptionSegment?: (segment: TranscriptionSegment) => void;
-}
-
-interface AudioDeviceInfo {
-  deviceId: string;
-  label: string;
-  kind: string;
 }
 
 type SessionState = "idle" | "fetching-key" | "connecting" | "live";
@@ -42,11 +29,9 @@ export default function RecorderTranscriber({
 }: RecorderTranscriberProps) {
   const isClientReady = useClientReady();
 
-  const [audioDevices, setAudioDevices] = useState<AudioDeviceInfo[]>([]);
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
-  const [isLoadingDevices, setIsLoadingDevices] = useState(false);
   const [isElectron, setIsElectron] = useState<boolean | null>(null);
   const [sessionState, setSessionState] = useState<SessionState>("idle");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const connectionRef = useRef<LiveClient | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -58,55 +43,6 @@ export default function RecorderTranscriber({
   addTextRef.current = addTextinTranscription;
   const addSegmentRef = useRef(addTranscriptionSegment);
   addSegmentRef.current = addTranscriptionSegment;
-
-  const loadAudioDevices = useCallback(async () => {
-    setIsLoadingDevices(true);
-    try {
-      try {
-        const tempStream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-        });
-        tempStream.getTracks().forEach((track) => track.stop());
-      } catch {
-        // Permission not yet granted; device labels may be empty
-      }
-
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const audioInputs = devices.filter(
-        (device) => device.kind === "audioinput",
-      );
-
-      const deviceList: AudioDeviceInfo[] = audioInputs.map((d) => ({
-        deviceId: d.deviceId,
-        label: d.label || `Device ${d.deviceId.slice(0, 8)}`,
-        kind: d.kind,
-      }));
-
-      setAudioDevices(deviceList);
-
-      const blackholeDevice = audioInputs.find((device) =>
-        device.label.toLowerCase().includes("blackhole"),
-      );
-      const virtualDevice =
-        blackholeDevice ||
-        audioInputs.find(
-          (device) =>
-            device.label.toLowerCase().includes("vb-audio") ||
-            device.label.toLowerCase().includes("virtual cable") ||
-            device.label.toLowerCase().includes("loopback"),
-        );
-
-      if (virtualDevice) {
-        setSelectedDeviceId(virtualDevice.deviceId);
-      } else if (audioInputs.length > 0) {
-        setSelectedDeviceId(audioInputs[0].deviceId);
-      }
-    } catch (error) {
-      console.error("Error loading audio devices:", error);
-    } finally {
-      setIsLoadingDevices(false);
-    }
-  }, []);
 
   const teardown = useCallback(() => {
     if (mediaRecorderRef.current) {
@@ -134,53 +70,37 @@ export default function RecorderTranscriber({
     const isStale = () => sessionIdRef.current !== thisSession;
 
     setSessionState("fetching-key");
+    setErrorMessage(null);
 
     let media: MediaStream;
     try {
-      if (isElectron) {
-        if (!selectedDeviceId) {
-          alert("Please select an audio device first!");
-          setSessionState("idle");
-          return;
-        }
+      // getDisplayMedia requires a video track; in Electron our main-process
+      // handler (setDisplayMediaRequestHandler) auto-selects the primary
+      // screen and pairs it with system-audio loopback, so no picker appears.
+      // In the browser build, the user picks a tab/window and enables
+      // "Share audio" to grant system/tab audio.
+      // NOTE: Electron 41 / Chromium rejects advanced audio constraints
+      // (echoCancellation, sampleRate, channelCount, etc.) on
+      // getDisplayMedia with "Invalid capture constraints". For display
+      // capture we must pass `audio: true` (or an empty object) and let
+      // the loopback source decide the format.
+      media = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true,
+      });
 
-        const selectedDevice = audioDevices.find(
-          (d) => d.deviceId === selectedDeviceId,
-        );
+      media.getVideoTracks().forEach((track) => track.stop());
 
-        if (!selectedDevice) {
-          alert("Selected audio device not found. Please select again.");
-          await loadAudioDevices();
-          setSessionState("idle");
-          return;
-        }
-
-        media = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            deviceId: { exact: selectedDevice.deviceId },
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-            sampleRate: 48000,
-            channelCount: 2,
-          } as MediaTrackConstraints,
-          video: false,
-        });
-      } else {
-        media = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: true,
-        });
-        media.getVideoTracks().forEach((track) => track.stop());
+      if (media.getAudioTracks().length === 0) {
+        media.getTracks().forEach((t) => t.stop());
+        throw new Error("No system audio track available");
       }
     } catch (error) {
-      alert(
-        "Could not access audio. Please ensure:\n" +
-          "- On Mac: BlackHole is installed and set as input device\n" +
-          "- On Windows: VB-Audio Virtual Cable or similar is configured\n" +
-          "- Microphone permissions are granted\n\n" +
-          `Error: ${error}`,
-      );
+      const msg = error instanceof Error ? error.message : String(error);
+      const hint = isElectron
+        ? "Grant Screen Recording permission in System Settings, then try again."
+        : "Pick the tab or window playing audio and enable \"Share audio\".";
+      setErrorMessage(`Could not capture system audio. ${hint} (${msg})`);
       setSessionState("idle");
       return;
     }
@@ -205,7 +125,7 @@ export default function RecorderTranscriber({
       apiKeyResponse = object as CreateProjectKeyResponse;
     } catch (e) {
       console.error("Failed to get API key:", e);
-      alert("Failed to get API key. Please try again.");
+      setErrorMessage("Failed to get API key. Please try again.");
       teardown();
       return;
     }
@@ -248,9 +168,7 @@ export default function RecorderTranscriber({
 
       posthog.capture("recording_started", {
         platform: isElectron ? "electron" : "browser",
-        device_label: isElectron
-          ? audioDevices.find((d) => d.deviceId === selectedDeviceId)?.label
-          : "screen_capture",
+        capture_mode: "system_audio_loopback",
       });
     });
 
@@ -312,13 +230,7 @@ export default function RecorderTranscriber({
         addSegmentRef.current(segment);
       }
     });
-  }, [
-    isElectron,
-    selectedDeviceId,
-    audioDevices,
-    loadAudioDevices,
-    teardown,
-  ]);
+  }, [isElectron, teardown]);
 
   const stopSession = useCallback(() => {
     sessionIdRef.current++;
@@ -330,8 +242,7 @@ export default function RecorderTranscriber({
 
   useEffect(() => {
     setIsElectron(typeof window !== "undefined" && !!window.electronAPI);
-    loadAudioDevices();
-  }, [loadAudioDevices]);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -353,51 +264,16 @@ export default function RecorderTranscriber({
               <span>{sessionState === "fetching-key" ? "Fetching API key…" : "Connecting…"}</span>
             </div>
           ) : (
-            <>
-              {isElectron && (
-                <div className="relative flex-1 min-w-0">
-                  <Select
-                    value={selectedDeviceId}
-                    onValueChange={setSelectedDeviceId}
-                    disabled={isActive || isLoadingDevices}
-                  >
-                    <SelectTrigger className="h-8 bg-transparent border-0 text-zinc-300 text-xs hover:text-white focus:ring-0 px-2 shadow-none w-full">
-                      <div className="flex items-center gap-2 truncate">
-                        <span className="text-zinc-500 text-[10px] uppercase tracking-wider font-semibold">
-                          Input
-                        </span>
-                        <SelectValue placeholder="Select device..." />
-                      </div>
-                    </SelectTrigger>
-                    <SelectContent className="bg-zinc-900 border-white/10 text-zinc-100">
-                      {audioDevices.map((device) => (
-                        <SelectItem
-                          key={device.deviceId}
-                          value={device.deviceId}
-                          className="text-white text-xs"
-                        >
-                          <div className="flex items-center gap-1.5">
-                            {(device.label.toLowerCase().includes("blackhole") ||
-                              device.label.toLowerCase().includes("vb-audio") ||
-                              device.label
-                                .toLowerCase()
-                                .includes("virtual cable") ||
-                              device.label.toLowerCase().includes("loopback")) && (
-                              <span className="text-green-400 text-xs">✓</span>
-                            )}
-                            <span className="truncate max-w-[180px]">
-                              {device.label}
-                            </span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {isElectron && <div className="w-px h-4 bg-white/10 mx-1" />}
-            </>
+            <div className="flex-1 flex items-center gap-2 px-2 min-w-0">
+              <span className="text-zinc-500 text-[10px] uppercase tracking-wider font-semibold shrink-0">
+                Source
+              </span>
+              <span className="text-zinc-300 text-xs truncate">
+                {isElectron
+                  ? "System audio (loudspeaker)"
+                  : "Browser tab / window audio"}
+              </span>
+            </div>
           )}
 
           <Button
@@ -409,7 +285,7 @@ export default function RecorderTranscriber({
             )}
             size="sm"
             onClick={isActive ? stopSession : startSession}
-            disabled={(isElectron === true && !selectedDeviceId) || isBusy}
+            disabled={isBusy || !isClientReady}
           >
             {!isActive ? (
               <div className="flex items-center gap-2">
@@ -451,6 +327,23 @@ export default function RecorderTranscriber({
             </span>
           )}
         </div>
+
+        {errorMessage && (
+          <div
+            role="alert"
+            className="flex items-start gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/25 text-red-200 text-[11px] leading-snug"
+          >
+            <span className="flex-1">{errorMessage}</span>
+            <button
+              type="button"
+              onClick={() => setErrorMessage(null)}
+              className="shrink-0 text-red-300/70 hover:text-red-200 transition-colors"
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

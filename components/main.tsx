@@ -4,6 +4,7 @@ import { Copilot } from "@/components/copilot";
 import History from "@/components/History";
 import { QuestionAssistant } from "@/components/QuestionAssistant";
 import { InterviewPresets } from "@/components/InterviewPresets";
+import { ScreenRecordingOnboard } from "@/components/ScreenRecordingOnboard";
 import { useNotes } from "@/hooks/useNotes";
 import { usePresets } from "@/hooks/usePresets";
 import { useExport } from "@/hooks/useExport";
@@ -37,6 +38,35 @@ export default function MainPage() {
       setIsElectron(true);
     }
   }, []);
+
+  // Global Cmd/Ctrl+Shift+1 hotkey: main process captures the screen and
+  // tells us to open Ask AI with the screenshot pre-attached.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const api = window.electronAPI;
+    if (!api?.screen?.onCaptureAndAsk) return;
+
+    const off = api.screen.onCaptureAndAsk(async () => {
+      try {
+        const result = await api.screen.capture();
+        if (!result.success) {
+          console.error("Screen capture failed:", result.error);
+          return;
+        }
+        setActiveTab("ask-ai");
+        // Broadcast to the Ask AI panel
+        window.dispatchEvent(
+          new CustomEvent<string>("ask-ai:attach-screenshot", {
+            detail: result.dataUrl,
+          }),
+        );
+      } catch (err) {
+        console.error("Failed to handle screen capture hotkey:", err);
+      }
+    });
+
+    return () => off();
+  }, [setActiveTab]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -258,9 +288,9 @@ export default function MainPage() {
 
           <div
             className={cn(
-              "h-full transition-opacity duration-200",
+              "h-full min-h-0 transition-opacity duration-200",
               activeTab === "ask-ai"
-                ? "block opacity-100"
+                ? "flex flex-col opacity-100"
                 : "hidden opacity-0",
             )}
           >
@@ -284,6 +314,8 @@ export default function MainPage() {
           </div>
         </div>
       </main>
+
+      <ScreenRecordingOnboard />
 
       {!isElectron && (
         <div className="sm:hidden glass-nav border-t border-white/[0.04] px-2 py-1.5 safe-area-inset-bottom">

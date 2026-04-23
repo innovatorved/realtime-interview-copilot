@@ -1,5 +1,16 @@
 import { contextBridge, ipcRenderer } from "electron";
 
+type ScreenAccessStatus =
+  | "not-determined"
+  | "granted"
+  | "denied"
+  | "restricted"
+  | "unknown";
+
+type ScreenCaptureResult =
+  | { success: true; dataUrl: string }
+  | { success: false; error: string };
+
 contextBridge.exposeInMainWorld("electronAPI", {
   windowMinimize: () => ipcRenderer.invoke("window-minimize"),
   windowMaximize: () => ipcRenderer.invoke("window-maximize"),
@@ -11,12 +22,28 @@ contextBridge.exposeInMainWorld("electronAPI", {
   windowSetSize: (width: number, height: number) =>
     ipcRenderer.invoke("window-set-size", width, height),
   appQuit: () => ipcRenderer.invoke("app-quit"),
+  appRelaunch: () => ipcRenderer.invoke("app-relaunch"),
   getAudioDevices: () => ipcRenderer.invoke("get-audio-devices"),
   platform: process.platform,
   isElectron: true,
+  supportsSystemAudio: true,
+  screen: {
+    getAccess: (): Promise<ScreenAccessStatus> =>
+      ipcRenderer.invoke("screen:get-access"),
+    openSettings: (): Promise<boolean> =>
+      ipcRenderer.invoke("screen:open-settings"),
+    triggerPrompt: (): Promise<ScreenAccessStatus> =>
+      ipcRenderer.invoke("screen:trigger-prompt"),
+    capture: (): Promise<ScreenCaptureResult> =>
+      ipcRenderer.invoke("screen:capture"),
+    onCaptureAndAsk: (callback: () => void) => {
+      const handler = () => callback();
+      ipcRenderer.on("screen:capture-and-ask", handler);
+      return () => ipcRenderer.removeListener("screen:capture-and-ask", handler);
+    },
+  },
 });
 
-// Type definitions for TypeScript
 export interface ElectronAPI {
   windowMinimize: () => Promise<void>;
   windowMaximize: () => Promise<boolean>;
@@ -26,7 +53,16 @@ export interface ElectronAPI {
   windowIsMaximized: () => Promise<boolean>;
   windowSetSize: (width: number, height: number) => Promise<void>;
   appQuit: () => Promise<void>;
+  appRelaunch: () => Promise<void>;
   getAudioDevices: () => Promise<{ success: boolean; error?: any }>;
   platform: string;
   isElectron: boolean;
+  supportsSystemAudio: boolean;
+  screen: {
+    getAccess: () => Promise<ScreenAccessStatus>;
+    openSettings: () => Promise<boolean>;
+    triggerPrompt: () => Promise<ScreenAccessStatus>;
+    capture: () => Promise<ScreenCaptureResult>;
+    onCaptureAndAsk: (callback: () => void) => () => void;
+  };
 }
