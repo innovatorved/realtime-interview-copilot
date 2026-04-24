@@ -131,6 +131,46 @@ const adminDeletePresetSchema = z.object({
   presetId: safeIdSchema,
 });
 
+// ─── AI Gateway / Health schemas ──────────────────────────────────────────
+
+const HEALTH_CACHE_TTL_MS = 30_000;
+
+// Allow-list prevents SSRF / header injection by forwarding only known keys.
+const AI_GATEWAY_LOG_QUERY_KEYS = [
+  "page",
+  "per_page",
+  "start_date",
+  "end_date",
+  "provider",
+  "model",
+  "model_type",
+  "success",
+  "cached",
+  "search",
+  "order_by",
+  "order_by_direction",
+  "direction",
+  "min_duration",
+  "max_duration",
+  "min_cost",
+  "max_cost",
+  "min_tokens_in",
+  "max_tokens_in",
+  "min_tokens_out",
+  "max_tokens_out",
+  "min_total_tokens",
+  "max_total_tokens",
+  "feedback",
+  "meta_info",
+] as const;
+
+const SUMMARY_WINDOW_MS: Record<string, number> = {
+  "1h": 3_600_000,
+  "24h": 86_400_000,
+  "7d": 7 * 86_400_000,
+  "30d": 30 * 86_400_000,
+};
+
 // ─── Types ─────────────────────────────────────────────────────────────────
 
 export type AuditEventType =
@@ -221,6 +261,34 @@ function sanitizeSearch(q: string | null): string | null {
   return t.slice(0, MAX_QUERY_LEN);
 }
 
+// ─── Module-level caches ───────────────────────────────────────────────────
+
+interface HealthCheckResult {
+  ok: boolean;
+  latencyMs: number;
+  error?: string;
+  lastProbe: string;
+  source?: string;
+  configured?: boolean;
+  accountConfigured?: boolean;
+  gatewayConfigured?: boolean;
+}
+const healthCache = new Map<string, { ts: number; result: HealthCheckResult }>();
+
+function getCachedHealth(key: string): HealthCheckResult | null {
+  const entry = healthCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > HEALTH_CACHE_TTL_MS) {
+    healthCache.delete(key);
+    return null;
+  }
+  return entry.result;
+}
+
+function setCachedHealth(key: string, result: HealthCheckResult) {
+  healthCache.set(key, { ts: Date.now(), result });
+}
+
 // ─── Plugin ────────────────────────────────────────────────────────────────
 
 export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
@@ -305,6 +373,194 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
 
   function isAdmin(email: string) {
     return adminSet.size > 0 && adminSet.has(email.toLowerCase());
+  }
+
+  // ── AI Gateway helpers ───────────────────────────────────────────
+
+  interface CfGatewayConfig {
+    accountId: string;
+    gatewayId: string;
+    apiToken: string;
+  }
+
+  async function resolveCfConfig(): Promise<CfGatewayConfig> {
+    const db = opts.getDb();
+    const rows = await db.select().from(adminConfig).catch(() => [] as { key: string; value: string }[]);
+    const map = new Map(rows.map((r) => [r.key, r.value]));
+    const runtime = opts.runtimeInfo?.() ?? {};
+    return {
+      accountId: String(map.get("cf_account_id") ?? runtime.cfAccountId ?? ""),
+      gatewayId: String(map.get("cf_gateway_id") ?? runtime.cfGatewayId ?? ""),
+      apiToken: String(map.get("cf_api_token") ?? runtime.cfApiToken ?? ""),
+    };
+  }
+
+  async function resolveActiveAiConfig() {
+    const db = opts.getDb();
+    const rows = await db.select().from(adminConfig).catch(() => [] as { key: string; value: string }[]);
+    const map = new Map(rows.map((r) => [r.key, r.value]));
+    const runtime = opts.runtimeInfo?.() ?? {};
+    const customModelName = map.get("custom_model_name") || "";
+    const customBaseUrl = map.get("custom_base_url") || "";
+    const customApiKey = map.get("custom_api_key") || "";
+    const useCustom = Boolean(customModelName && customBaseUrl && customApiKey);
+    return {
+      geminiModel: map.get("gemini_model") || String(runtime.geminiModel ?? "") || "gemini-2.5-flash-lite",
+      geminiKey: map.get("gemini_key") || String(runtime.geminiKey ?? ""),
+      geminiKeySource: map.has("gemini_key") ? "dashboard" : (runtime.geminiKeyConfigured ? "env" : "none"),
+      deepgramKey: map.get("deepgram_key") || String(runtime.deepgramKey ?? ""),
+      deepgramKeySource: map.has("deepgram_key") ? "dashboard" : (runtime.deepgramKeyConfigured ? "env" : "none"),
+      customModelName,
+      customBaseUrl,
+      customApiKey,
+      useCustom,
+    };
+  }
+
+  function cfApiBase(cfg: CfGatewayConfig) {
+    // Strict regex guards prevent SSRF via malformed ids.
+    if (!/^[a-zA-Z0-9]{1,64}$/.test(cfg.accountId)) throw new APIError("BAD_REQUEST", { message: "Invalid cf_account_id" });
+    if (!/^[a-zA-Z0-9_-]{1,64}$/.test(cfg.gatewayId)) throw new APIError("BAD_REQUEST", { message: "Invalid cf_gateway_id" });
+    if (!cfg.apiToken) throw new APIError("FAILED_DEPENDENCY", { message: "cf_api_token is not configured" });
+    return `https://api.cloudflare.com/client/v4/accounts/${cfg.accountId}/ai-gateway/gateways/${cfg.gatewayId}`;
+  }
+
+  async function fetchAiGateway(cfg: CfGatewayConfig, pathSuffix: string, query?: URLSearchParams): Promise<{ ok: boolean; status: number; body: unknown }> {
+    const base = cfApiBase(cfg);
+    const qs = query && query.toString() ? `?${query.toString()}` : "";
+    const resp = await fetch(`${base}${pathSuffix}${qs}`, {
+      headers: { Authorization: `Bearer ${cfg.apiToken}`, accept: "application/json" },
+    });
+    let body: unknown = null;
+    try { body = await resp.json(); } catch { body = null; }
+    return { ok: resp.ok, status: resp.status, body };
+  }
+
+  // ── Provider probes ──────────────────────────────────────────────
+
+  async function probeDeepgram(apiKey: string): Promise<HealthCheckResult> {
+    const cached = getCachedHealth("deepgram");
+    if (cached) return cached;
+    const t0 = Date.now();
+    try {
+      if (!apiKey) throw new Error("No API key configured");
+      const resp = await fetch("https://api.deepgram.com/v1/projects", {
+        headers: { Authorization: `Token ${apiKey}`, accept: "application/json" },
+      });
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => "");
+        throw new Error(`HTTP ${resp.status}: ${text.slice(0, 200)}`);
+      }
+      const result: HealthCheckResult = { ok: true, latencyMs: Date.now() - t0, lastProbe: new Date().toISOString() };
+      setCachedHealth("deepgram", result);
+      return result;
+    } catch (e) {
+      const result: HealthCheckResult = {
+        ok: false, latencyMs: Date.now() - t0, lastProbe: new Date().toISOString(),
+        error: e instanceof Error ? e.message : String(e),
+      };
+      setCachedHealth("deepgram", result);
+      return result;
+    }
+  }
+
+  async function probeGemini(cf: CfGatewayConfig, modelName: string, apiKey: string): Promise<HealthCheckResult> {
+    const cached = getCachedHealth("gemini");
+    if (cached) return cached;
+    const t0 = Date.now();
+    try {
+      if (!apiKey) throw new Error("No API key configured");
+      if (!cf.accountId || !cf.gatewayId) throw new Error("AI Gateway not configured");
+      const url = `https://gateway.ai.cloudflare.com/v1/${cf.accountId}/${cf.gatewayId}/google-ai-studio/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: "ping" }] }],
+          generationConfig: { maxOutputTokens: 1 },
+        }),
+      });
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => "");
+        throw new Error(`HTTP ${resp.status}: ${text.slice(0, 200)}`);
+      }
+      await resp.json().catch(() => null);
+      const result: HealthCheckResult = { ok: true, latencyMs: Date.now() - t0, lastProbe: new Date().toISOString() };
+      setCachedHealth("gemini", result);
+      return result;
+    } catch (e) {
+      const result: HealthCheckResult = {
+        ok: false, latencyMs: Date.now() - t0, lastProbe: new Date().toISOString(),
+        error: e instanceof Error ? e.message : String(e),
+      };
+      setCachedHealth("gemini", result);
+      return result;
+    }
+  }
+
+  async function probeCustomModel(modelName: string, baseUrl: string, apiKey: string): Promise<HealthCheckResult> {
+    const cached = getCachedHealth("customModel");
+    if (cached) return cached;
+    const t0 = Date.now();
+    try {
+      if (!modelName || !baseUrl || !apiKey) {
+        const result: HealthCheckResult = {
+          ok: false, latencyMs: 0, lastProbe: new Date().toISOString(),
+          configured: false, error: "Not configured",
+        };
+        setCachedHealth("customModel", result);
+        return result;
+      }
+      const endpoint = baseUrl.replace(/\/+$/, "") + "/chat/completions";
+      const resp = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ model: modelName, max_tokens: 1, messages: [{ role: "user", content: "ping" }] }),
+      });
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => "");
+        throw new Error(`HTTP ${resp.status}: ${text.slice(0, 200)}`);
+      }
+      await resp.json().catch(() => null);
+      const result: HealthCheckResult = { ok: true, latencyMs: Date.now() - t0, lastProbe: new Date().toISOString(), configured: true };
+      setCachedHealth("customModel", result);
+      return result;
+    } catch (e) {
+      const result: HealthCheckResult = {
+        ok: false, latencyMs: Date.now() - t0, lastProbe: new Date().toISOString(),
+        configured: true, error: e instanceof Error ? e.message : String(e),
+      };
+      setCachedHealth("customModel", result);
+      return result;
+    }
+  }
+
+  async function probeAiGateway(cf: CfGatewayConfig): Promise<HealthCheckResult> {
+    const cached = getCachedHealth("aiGateway");
+    if (cached) return cached;
+    const t0 = Date.now();
+    const accountConfigured = Boolean(cf.accountId);
+    const gatewayConfigured = Boolean(cf.gatewayId);
+    try {
+      if (!accountConfigured || !gatewayConfigured) throw new Error("Account / Gateway id not configured");
+      if (!cf.apiToken) throw new Error("cf_api_token not configured");
+      const { ok, status, body } = await fetchAiGateway(cf, "");
+      if (!ok) throw new Error(`HTTP ${status}: ${JSON.stringify(body).slice(0, 200)}`);
+      const result: HealthCheckResult = {
+        ok: true, latencyMs: Date.now() - t0, lastProbe: new Date().toISOString(),
+        accountConfigured, gatewayConfigured,
+      };
+      setCachedHealth("aiGateway", result);
+      return result;
+    } catch (e) {
+      const result: HealthCheckResult = {
+        ok: false, latencyMs: Date.now() - t0, lastProbe: new Date().toISOString(),
+        accountConfigured, gatewayConfigured,
+        error: e instanceof Error ? e.message : String(e),
+      };
+      setCachedHealth("aiGateway", result);
+      return result;
+    }
   }
 
   // ── Plugin definition ────────────────────────────────────────────
@@ -744,7 +1000,8 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
           await db.insert(adminConfig).values({ key, value, updatedAt: now });
         }
 
-        const maskedValue = key.endsWith("_key") ? `${value.slice(0, 4)}...${value.slice(-4)}` : value;
+        const isSecret = key.endsWith("_key") || key.endsWith("_token");
+        const maskedValue = isSecret ? `${value.slice(0, 4)}...${value.slice(-4)}` : value;
         await recordAudit({ eventType: "admin_action", userEmail: adminEmail, metadata: { action: "update_config", key, value: maskedValue } });
         return ctx.json({ ok: true });
       }),
@@ -1147,6 +1404,230 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
           notesCount: notes[0]?.total ?? 0,
           presetsCount: presets[0]?.total ?? 0,
           recentAuditEvents: recentAudit,
+        });
+      }),
+
+      // ── AI Gateway: Logs list / detail / summary ─────────────────
+
+      adminAiGatewayLogs: createAuthEndpoint("/self-hosted-admin/ai-gateway/logs", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
+        const adminEmail = ctx.context.session.user.email;
+        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+
+        const cf = await resolveCfConfig();
+        const url = new URL(ctx.request?.url ?? "http://localhost");
+
+        const forwarded = new URLSearchParams();
+        const forwardedFilters: Record<string, string> = {};
+        for (const key of AI_GATEWAY_LOG_QUERY_KEYS) {
+          const raw = url.searchParams.get(key);
+          if (raw === null) continue;
+          const trimmed = raw.trim();
+          if (!trimmed) continue;
+          if (trimmed.length > 200) continue;
+
+          if (key === "per_page") {
+            // Cloudflare AI Gateway logs API caps per_page at 50.
+            const n = Math.min(50, Math.max(1, Number.parseInt(trimmed, 10) || 20));
+            forwarded.set(key, String(n));
+            forwardedFilters[key] = String(n);
+          } else if (key === "page") {
+            const n = Math.max(1, Number.parseInt(trimmed, 10) || 1);
+            forwarded.set(key, String(n));
+            forwardedFilters[key] = String(n);
+          } else {
+            forwarded.set(key, trimmed);
+            forwardedFilters[key] = trimmed;
+          }
+        }
+        if (!forwarded.has("per_page")) forwarded.set("per_page", "20");
+        if (!forwarded.has("order_by")) forwarded.set("order_by", "created_at");
+        if (!forwarded.has("order_by_direction")) forwarded.set("order_by_direction", "desc");
+
+        const { ok, status, body } = await fetchAiGateway(cf, "/logs", forwarded);
+        if (!ok) {
+          return ctx.json({ ok: false, status, error: body }, { status: 502 });
+        }
+
+        await recordAudit({ eventType: "admin_action", userEmail: adminEmail, metadata: { action: "fetch_ai_gateway_logs", filters: forwardedFilters } });
+        return ctx.json((body ?? {}) as Record<string, unknown>);
+      }),
+
+      adminAiGatewayLogDetail: createAuthEndpoint("/self-hosted-admin/ai-gateway/log", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
+        const adminEmail = ctx.context.session.user.email;
+        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+
+        const url = new URL(ctx.request?.url ?? "http://localhost");
+        const id = url.searchParams.get("id") ?? "";
+        if (!SAFE_ID_RE.test(id)) throw new APIError("BAD_REQUEST", { message: "Invalid log id" });
+
+        const cf = await resolveCfConfig();
+        const { ok, status, body } = await fetchAiGateway(cf, `/logs/${encodeURIComponent(id)}`);
+        if (!ok) {
+          return ctx.json({ ok: false, status, error: body }, { status: 502 });
+        }
+        return ctx.json((body ?? {}) as Record<string, unknown>);
+      }),
+
+      adminAiGatewaySummary: createAuthEndpoint("/self-hosted-admin/ai-gateway/summary", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
+        const adminEmail = ctx.context.session.user.email;
+        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+
+        const url = new URL(ctx.request?.url ?? "http://localhost");
+        const windowKey = url.searchParams.get("window") ?? "24h";
+        const windowMs = SUMMARY_WINDOW_MS[windowKey];
+        if (!windowMs) throw new APIError("BAD_REQUEST", { message: "window must be one of 1h, 24h, 7d, 30d" });
+
+        const cf = await resolveCfConfig();
+        const now = new Date();
+        const start = new Date(now.getTime() - windowMs);
+
+        // CF caps per_page at 50; sample up to 300 rows for aggregation.
+        type LogRow = {
+          provider?: string; model?: string; success?: boolean; cached?: boolean;
+          duration?: number; tokens_in?: number; tokens_out?: number; cost?: number;
+        };
+        const MAX_PAGES = 6;
+        const PER_PAGE = 50;
+        const rows: LogRow[] = [];
+        let totalCount = 0;
+
+        for (let page = 1; page <= MAX_PAGES; page++) {
+          const qs = new URLSearchParams({
+            page: String(page),
+            per_page: String(PER_PAGE),
+            start_date: start.toISOString(),
+            end_date: now.toISOString(),
+            order_by: "created_at",
+            order_by_direction: "desc",
+            meta_info: "true",
+          });
+          const { ok, status, body } = await fetchAiGateway(cf, "/logs", qs);
+          if (!ok) {
+            return ctx.json({ ok: false, status, error: body }, { status: 502 });
+          }
+          const parsed = body as { result?: LogRow[]; result_info?: { total_count?: number } };
+          const result = Array.isArray(parsed?.result) ? parsed.result : [];
+          rows.push(...result);
+          if (page === 1) totalCount = parsed?.result_info?.total_count ?? result.length;
+          if (result.length < PER_PAGE) break;
+        }
+
+        let success = 0, errors = 0, cached = 0;
+        let durSum = 0, durN = 0;
+        let tInSum = 0, tInN = 0;
+        let tOutSum = 0, tOutN = 0;
+        let costSum = 0;
+        const byProvider: Record<string, { count: number; errors: number; cost: number }> = {};
+        const byModel: Record<string, { count: number; errors: number; cost: number }> = {};
+
+        for (const r of rows) {
+          if (r.success) success++; else errors++;
+          if (r.cached) cached++;
+          if (typeof r.duration === "number") { durSum += r.duration; durN++; }
+          if (typeof r.tokens_in === "number") { tInSum += r.tokens_in; tInN++; }
+          if (typeof r.tokens_out === "number") { tOutSum += r.tokens_out; tOutN++; }
+          if (typeof r.cost === "number") costSum += r.cost;
+
+          if (r.provider) {
+            const b = byProvider[r.provider] ??= { count: 0, errors: 0, cost: 0 };
+            b.count++;
+            if (!r.success) b.errors++;
+            if (typeof r.cost === "number") b.cost += r.cost;
+          }
+          if (r.model) {
+            const b = byModel[r.model] ??= { count: 0, errors: 0, cost: 0 };
+            b.count++;
+            if (!r.success) b.errors++;
+            if (typeof r.cost === "number") b.cost += r.cost;
+          }
+        }
+
+        const sampleSize = rows.length;
+        const safeDiv = (a: number, b: number) => (b > 0 ? a / b : 0);
+
+        return ctx.json({
+          window: windowKey,
+          startedAt: start.toISOString(),
+          endedAt: now.toISOString(),
+          totalRequests: totalCount,
+          sampleSize,
+          successRate: safeDiv(success, sampleSize),
+          errorRate: safeDiv(errors, sampleSize),
+          cachedPct: safeDiv(cached, sampleSize),
+          avgDuration: safeDiv(durSum, durN),
+          avgTokensIn: safeDiv(tInSum, tInN),
+          avgTokensOut: safeDiv(tOutSum, tOutN),
+          totalCost: costSum,
+          byProvider,
+          byModel,
+        });
+      }),
+
+      // ── Provider health ──────────────────────────────────────────
+
+      adminProvidersHealth: createAuthEndpoint("/self-hosted-admin/providers/health", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
+        if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+
+        const url = new URL(ctx.request?.url ?? "http://localhost");
+        const deep = url.searchParams.get("deep") === "1" || url.searchParams.get("deep") === "true";
+
+        const [ai, cf] = await Promise.all([resolveActiveAiConfig(), resolveCfConfig()]);
+
+        if (!deep) {
+          const cachedGemini = getCachedHealth("gemini");
+          const cachedDg = getCachedHealth("deepgram");
+          const cachedCustom = getCachedHealth("customModel");
+          const cachedGw = getCachedHealth("aiGateway");
+
+          return ctx.json({
+            deep: false,
+            gemini: cachedGemini ?? {
+              ok: Boolean(ai.geminiKey),
+              latencyMs: 0,
+              lastProbe: "",
+              source: ai.geminiKeySource,
+              configured: Boolean(ai.geminiKey),
+            },
+            deepgram: cachedDg ?? {
+              ok: Boolean(ai.deepgramKey),
+              latencyMs: 0,
+              lastProbe: "",
+              source: ai.deepgramKeySource,
+              configured: Boolean(ai.deepgramKey),
+            },
+            customModel: cachedCustom ?? {
+              ok: false,
+              latencyMs: 0,
+              lastProbe: "",
+              configured: ai.useCustom,
+            },
+            aiGateway: cachedGw ?? {
+              ok: false,
+              latencyMs: 0,
+              lastProbe: "",
+              accountConfigured: Boolean(cf.accountId),
+              gatewayConfigured: Boolean(cf.gatewayId),
+            },
+            activeModel: ai.useCustom ? ai.customModelName : ai.geminiModel,
+            useCustomModel: ai.useCustom,
+          });
+        }
+
+        const [gemini, deepgram, customModel, aiGateway] = await Promise.all([
+          probeGemini(cf, ai.geminiModel, ai.geminiKey),
+          probeDeepgram(ai.deepgramKey),
+          probeCustomModel(ai.customModelName, ai.customBaseUrl, ai.customApiKey),
+          probeAiGateway(cf),
+        ]);
+
+        return ctx.json({
+          deep: true,
+          gemini: { ...gemini, source: ai.geminiKeySource },
+          deepgram: { ...deepgram, source: ai.deepgramKeySource },
+          customModel,
+          aiGateway,
+          activeModel: ai.useCustom ? ai.customModelName : ai.geminiModel,
+          useCustomModel: ai.useCustom,
         });
       }),
 

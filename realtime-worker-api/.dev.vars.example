@@ -14,3 +14,7 @@ ADMIN_EMAILS=you@example.com
 # Optional analytics
 POSTHOG_API_KEY=
 POSTHOG_HOST=
+
+CF_ACCOUNT_ID=
+CF_GATEWAY_ID=
+CF_API_TOKEN=

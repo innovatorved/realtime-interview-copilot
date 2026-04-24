@@ -17,7 +17,13 @@ interface ResolvedConfig {
   customBaseUrl: string;
   customApiKey: string;
   useCustom: boolean;
+  cfAccountId: string;
+  cfGatewayId: string;
+  cfApiToken: string;
 }
+
+const DEFAULT_CF_ACCOUNT_ID = "b4ca0337fb21e846c53e1f2611ba436c";
+const DEFAULT_CF_GATEWAY_ID = "gateway04";
 
 async function resolveConfig(env: Env): Promise<ResolvedConfig> {
   try {
@@ -38,6 +44,9 @@ async function resolveConfig(env: Env): Promise<ResolvedConfig> {
       customBaseUrl,
       customApiKey,
       useCustom,
+      cfAccountId: map.get("cf_account_id") || env.CF_ACCOUNT_ID || DEFAULT_CF_ACCOUNT_ID,
+      cfGatewayId: map.get("cf_gateway_id") || env.CF_GATEWAY_ID || DEFAULT_CF_GATEWAY_ID,
+      cfApiToken: map.get("cf_api_token") || env.CF_API_TOKEN || "",
     };
   } catch (err) {
     console.error("Failed to load admin config from D1, using env defaults:", err);
@@ -49,6 +58,9 @@ async function resolveConfig(env: Env): Promise<ResolvedConfig> {
       customBaseUrl: "",
       customApiKey: "",
       useCustom: false,
+      cfAccountId: env.CF_ACCOUNT_ID || DEFAULT_CF_ACCOUNT_ID,
+      cfGatewayId: env.CF_GATEWAY_ID || DEFAULT_CF_GATEWAY_ID,
+      cfApiToken: env.CF_API_TOKEN || "",
     };
   }
 }
@@ -61,6 +73,12 @@ interface Env extends PostHogEnv {
   BETTER_AUTH_URL: string;
   /** Comma-separated emails allowed to use /api/admin/* (self-hosted dashboard). */
   ADMIN_EMAILS?: string;
+  /** Cloudflare account id that owns the AI Gateway (fallback when not set via admin dashboard). */
+  CF_ACCOUNT_ID?: string;
+  /** Cloudflare AI Gateway id (fallback when not set via admin dashboard). */
+  CF_GATEWAY_ID?: string;
+  /** Cloudflare API token with AI Gateway read scope (fallback when not set via admin dashboard). */
+  CF_API_TOKEN?: string;
   DB: D1Database;
 }
 
@@ -432,7 +450,7 @@ async function handleCompletion(
 
   const completionFn = cfg.useCustom
     ? streamOpenAICompatibleCompletion(finalPrompt, cfg.customModelName, cfg.customApiKey, cfg.customBaseUrl, writer, analytics.onText, image)
-    : streamGeminiCompletion(finalPrompt, cfg.geminiModel, cfg.geminiKey, writer, analytics.onText, image);
+    : streamGeminiCompletion(finalPrompt, cfg.geminiModel, cfg.geminiKey, cfg.cfAccountId, cfg.cfGatewayId, writer, analytics.onText, image);
 
   const pump = completionFn
     .catch(async (error: unknown) => {
@@ -462,6 +480,8 @@ async function streamGeminiCompletion(
   prompt: string,
   modelName: string,
   apiKey: string,
+  cfAccountId: string,
+  cfGatewayId: string,
   writer: WritableStreamDefaultWriter<Uint8Array>,
   onText?: (text: string) => void,
   image?: InlineImage | null,
@@ -470,7 +490,7 @@ async function streamGeminiCompletion(
     throw new Error("Missing Gemini API key — set via Admin Dashboard or GOOGLE_GENERATIVE_AI_API_KEY env var");
   }
 
-  const url = `https://gateway.ai.cloudflare.com/v1/b4ca0337fb21e846c53e1f2611ba436c/gateway04/google-ai-studio/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${apiKey}`;
+  const url = `https://gateway.ai.cloudflare.com/v1/${cfAccountId}/${cfGatewayId}/google-ai-studio/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${apiKey}`;
 
   const parts: Array<Record<string, unknown>> = [];
   if (image) {
