@@ -592,11 +592,7 @@ configured, so it never blocks a release.
 ### 12.2 Windows
 
 - NSIS `.exe` installer, currently unsigned.
-- Long-term plan: join the **SignPath Foundation** OSS code signing
-  program (free for qualifying projects) — application materials are
-  already prepared in `PRIVACY.md` + the SignPath attribution line in the
-  README and release notes.
-- Until signed, users bypass SmartScreen via **More info → Run anyway**.
+- Users bypass SmartScreen via **More info → Run anyway** on first launch.
 
 ---
 
@@ -688,7 +684,7 @@ realtime-interview-copilot/
 ├── public/icons/             App icons for mac/win/linux
 ├── package.json              App version, electron-builder config
 ├── README.md                 Short download + dev guide
-├── PRIVACY.md                Privacy policy for SignPath + users
+├── PRIVACY.md                Privacy policy
 ├── ARCHITECTURE.md           This file
 ├── CONTRIBUTING.md
 └── LICENSE

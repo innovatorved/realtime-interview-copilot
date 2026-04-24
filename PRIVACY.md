@@ -130,8 +130,8 @@ personal information from them.
 ## 7. Security
 
 - Releases are distributed only via GitHub Releases and Homebrew.
-- macOS builds are ad-hoc signed; Windows builds are code-signed through the
-  [SignPath Foundation](https://signpath.org/) OSS program.
+- macOS builds are ad-hoc signed; Windows builds are currently unsigned
+  (users bypass SmartScreen via "More info → Run anyway").
 - All network traffic uses HTTPS.
 - Reporting security issues: email the address below. Please do not open a
   public issue for security reports.
