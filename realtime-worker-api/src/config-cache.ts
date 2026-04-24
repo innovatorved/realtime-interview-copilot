@@ -10,9 +10,51 @@
  */
 
 import { z } from "zod";
+import { eq } from "drizzle-orm";
 import { getDb } from "./db";
-import { adminConfig } from "./db/schema";
+import { adminConfig, userModelParams } from "./db/schema";
 import { KV, KV_TTL_SECONDS } from "./kv-keys";
+import adminCfg from "./config.json";
+
+export type ThinkingBudget = "off" | "low" | "medium" | "high";
+
+export interface ModelParams {
+  maxOutputTokens: number;
+  temperature: number;
+  topP: number;
+  thinkingBudget: ThinkingBudget;
+}
+
+const THINKING_VALUES = ["off", "low", "medium", "high"] as const;
+
+function parseThinking(v: string | undefined): ThinkingBudget {
+  return (THINKING_VALUES as readonly string[]).includes(v ?? "")
+    ? (v as ThinkingBudget)
+    : (adminCfg.modelParams.defaults.thinkingBudget as ThinkingBudget);
+}
+
+function parseIntInRange(v: string | undefined, min: number, max: number, dflt: number): number {
+  const n = v !== undefined ? Number.parseInt(v, 10) : NaN;
+  if (!Number.isFinite(n)) return dflt;
+  return Math.min(max, Math.max(min, Math.trunc(n)));
+}
+
+function parseFloatInRange(v: string | undefined, min: number, max: number, dflt: number): number {
+  const n = v !== undefined ? Number.parseFloat(v) : NaN;
+  if (!Number.isFinite(n)) return dflt;
+  return Math.min(max, Math.max(min, n));
+}
+
+export function globalModelParamsFromMap(map: Map<string, string>): ModelParams {
+  const d = adminCfg.modelParams.defaults;
+  const r = adminCfg.modelParams.ranges;
+  return {
+    maxOutputTokens: parseIntInRange(map.get("model_max_output_tokens"), r.maxOutputTokens.min, r.maxOutputTokens.max, d.maxOutputTokens),
+    temperature: parseFloatInRange(map.get("model_temperature"), r.temperature.min, r.temperature.max, d.temperature),
+    topP: parseFloatInRange(map.get("model_top_p"), r.topP.min, r.topP.max, d.topP),
+    thinkingBudget: parseThinking(map.get("model_thinking_budget")),
+  };
+}
 
 // Shape validator for anything we read back from KV. We strip secret fields
 // from what we cache and require callers to re-fetch those from D1 each
@@ -24,6 +66,10 @@ const NonSecretConfigSchema = z.object({
   useCustom: z.boolean(),
   cfAccountId: z.string(),
   cfGatewayId: z.string(),
+  modelMaxOutputTokens: z.number().int(),
+  modelTemperature: z.number(),
+  modelTopP: z.number(),
+  modelThinkingBudget: z.enum(THINKING_VALUES),
 });
 type NonSecretConfig = z.infer<typeof NonSecretConfigSchema>;
 
@@ -38,6 +84,10 @@ export interface ResolvedConfig {
   cfAccountId: string;
   cfGatewayId: string;
   cfApiToken: string;
+  modelMaxOutputTokens: number;
+  modelTemperature: number;
+  modelTopP: number;
+  modelThinkingBudget: ThinkingBudget;
 }
 
 export interface ConfigCacheEnv {
@@ -64,6 +114,7 @@ async function loadFromD1(env: ConfigCacheEnv): Promise<ResolvedConfig> {
     const customBaseUrl = map.get("custom_base_url") || "";
     const customApiKey = map.get("custom_api_key") || "";
     const useCustom = Boolean(customModelName && customBaseUrl && customApiKey);
+    const mp = globalModelParamsFromMap(map);
 
     return {
       geminiModel: map.get("gemini_model") || env.GEMINI_MODEL || "gemini-2.5-flash-lite",
@@ -76,9 +127,14 @@ async function loadFromD1(env: ConfigCacheEnv): Promise<ResolvedConfig> {
       cfAccountId: map.get("cf_account_id") || env.CF_ACCOUNT_ID || DEFAULT_CF_ACCOUNT_ID,
       cfGatewayId: map.get("cf_gateway_id") || env.CF_GATEWAY_ID || DEFAULT_CF_GATEWAY_ID,
       cfApiToken: map.get("cf_api_token") || env.CF_API_TOKEN || "",
+      modelMaxOutputTokens: mp.maxOutputTokens,
+      modelTemperature: mp.temperature,
+      modelTopP: mp.topP,
+      modelThinkingBudget: mp.thinkingBudget,
     };
   } catch (err) {
     console.error("[config-cache] D1 load failed, falling back to env:", err);
+    const d = adminCfg.modelParams.defaults;
     return {
       geminiModel: env.GEMINI_MODEL || "gemini-2.5-flash-lite",
       geminiKey: env.GOOGLE_GENERATIVE_AI_API_KEY || "",
@@ -90,6 +146,10 @@ async function loadFromD1(env: ConfigCacheEnv): Promise<ResolvedConfig> {
       cfAccountId: env.CF_ACCOUNT_ID || DEFAULT_CF_ACCOUNT_ID,
       cfGatewayId: env.CF_GATEWAY_ID || DEFAULT_CF_GATEWAY_ID,
       cfApiToken: env.CF_API_TOKEN || "",
+      modelMaxOutputTokens: d.maxOutputTokens,
+      modelTemperature: d.temperature,
+      modelTopP: d.topP,
+      modelThinkingBudget: d.thinkingBudget as ThinkingBudget,
     };
   }
 }
@@ -129,6 +189,10 @@ export async function getCachedConfig(env: ConfigCacheEnv): Promise<ResolvedConf
       useCustom: cachedNonSecret.useCustom,
       cfAccountId: cachedNonSecret.cfAccountId,
       cfGatewayId: cachedNonSecret.cfGatewayId,
+      modelMaxOutputTokens: cachedNonSecret.modelMaxOutputTokens,
+      modelTemperature: cachedNonSecret.modelTemperature,
+      modelTopP: cachedNonSecret.modelTopP,
+      modelThinkingBudget: cachedNonSecret.modelThinkingBudget,
     };
   }
 
@@ -140,6 +204,10 @@ export async function getCachedConfig(env: ConfigCacheEnv): Promise<ResolvedConf
     useCustom: fresh.useCustom,
     cfAccountId: fresh.cfAccountId,
     cfGatewayId: fresh.cfGatewayId,
+    modelMaxOutputTokens: fresh.modelMaxOutputTokens,
+    modelTemperature: fresh.modelTemperature,
+    modelTopP: fresh.modelTopP,
+    modelThinkingBudget: fresh.modelThinkingBudget,
   };
   try {
     await env.CONFIG_KV.put(key, JSON.stringify(nonSecret), {
@@ -161,5 +229,61 @@ export async function invalidateConfigCache(env: ConfigCacheEnv): Promise<void> 
     await env.CONFIG_KV.delete(KV.adminConfig());
   } catch (err) {
     console.warn("[config-cache] KV delete failed:", err);
+  }
+}
+
+/**
+ * Returns the effective model generation params for a given user, merging
+ * per-user overrides (from `user_model_params`) on top of the global
+ * defaults from admin_config. Any NULL column in the override row means
+ * "inherit from global".
+ *
+ * Called on every /api/completion request, so the KV-backed
+ * `getCachedConfig` is reused for the global side and only the per-user
+ * row is fetched from D1.
+ */
+export async function getEffectiveModelParams(
+  env: ConfigCacheEnv,
+  userId: string | null | undefined,
+): Promise<ModelParams> {
+  const cfg = await getCachedConfig(env);
+  const globals: ModelParams = {
+    maxOutputTokens: cfg.modelMaxOutputTokens,
+    temperature: cfg.modelTemperature,
+    topP: cfg.modelTopP,
+    thinkingBudget: cfg.modelThinkingBudget,
+  };
+  if (!userId) return globals;
+
+  try {
+    const db = getDb(env);
+    const [row] = await db
+      .select()
+      .from(userModelParams)
+      .where(eq(userModelParams.userId, userId));
+    if (!row) return globals;
+
+    const r = adminCfg.modelParams.ranges;
+    return {
+      maxOutputTokens:
+        row.maxOutputTokens != null
+          ? Math.min(r.maxOutputTokens.max, Math.max(r.maxOutputTokens.min, Math.trunc(row.maxOutputTokens)))
+          : globals.maxOutputTokens,
+      temperature:
+        row.temperature != null
+          ? Math.min(r.temperature.max, Math.max(r.temperature.min, row.temperature))
+          : globals.temperature,
+      topP:
+        row.topP != null
+          ? Math.min(r.topP.max, Math.max(r.topP.min, row.topP))
+          : globals.topP,
+      thinkingBudget:
+        row.thinkingBudget && (THINKING_VALUES as readonly string[]).includes(row.thinkingBudget)
+          ? (row.thinkingBudget as ThinkingBudget)
+          : globals.thinkingBudget,
+    };
+  } catch (err) {
+    console.warn("[config-cache] user model params lookup failed:", err);
+    return globals;
   }
 }

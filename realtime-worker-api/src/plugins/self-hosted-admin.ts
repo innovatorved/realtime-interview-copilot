@@ -39,6 +39,7 @@ import {
   savedNote,
   interviewPreset,
   usageEvent,
+  userModelParams,
 } from "../db/schema";
 import {
   getSystemUsageSummary,
@@ -141,6 +142,31 @@ const adminDeletePresetSchema = z.object({
 
 const revealConfigSchema = z.object({
   key: configKeyEnum,
+});
+
+// ─── Model params schemas ──────────────────────────────────────────
+
+const THINKING_BUDGETS = ["off", "low", "medium", "high"] as const;
+
+const modelParamsBodySchema = z.object({
+  maxOutputTokens: z.number().int().min(1).max(32768).optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  topP: z.number().min(0).max(1).optional(),
+  thinkingBudget: z.enum(THINKING_BUDGETS).optional(),
+});
+
+// Per-user body: same 4 params, but each may be explicitly null to "clear"
+// that override. userId is required.
+const userModelParamsBodySchema = z.object({
+  userId: safeIdSchema,
+  maxOutputTokens: z.number().int().min(1).max(32768).nullable().optional(),
+  temperature: z.number().min(0).max(2).nullable().optional(),
+  topP: z.number().min(0).max(1).nullable().optional(),
+  thinkingBudget: z.enum(THINKING_BUDGETS).nullable().optional(),
+});
+
+const userModelParamsDeleteSchema = z.object({
+  userId: safeIdSchema,
 });
 
 // Upstream fetches performed on behalf of an admin should never hang a
@@ -1136,6 +1162,34 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
           }
         }
 
+        // Range-check numeric / enum model params even when set via the
+        // generic update-config endpoint, so invalid values cannot land
+        // in D1 via the escape hatch.
+        const ranges = adminCfg.modelParams.ranges;
+        if (key === "model_max_output_tokens") {
+          const n = Number.parseInt(value, 10);
+          if (!Number.isFinite(n) || n < ranges.maxOutputTokens.min || n > ranges.maxOutputTokens.max) {
+            throw new APIError("BAD_REQUEST", { message: `model_max_output_tokens must be integer in [${ranges.maxOutputTokens.min}, ${ranges.maxOutputTokens.max}]` });
+          }
+        }
+        if (key === "model_temperature") {
+          const n = Number.parseFloat(value);
+          if (!Number.isFinite(n) || n < ranges.temperature.min || n > ranges.temperature.max) {
+            throw new APIError("BAD_REQUEST", { message: `model_temperature must be in [${ranges.temperature.min}, ${ranges.temperature.max}]` });
+          }
+        }
+        if (key === "model_top_p") {
+          const n = Number.parseFloat(value);
+          if (!Number.isFinite(n) || n < ranges.topP.min || n > ranges.topP.max) {
+            throw new APIError("BAD_REQUEST", { message: `model_top_p must be in [${ranges.topP.min}, ${ranges.topP.max}]` });
+          }
+        }
+        if (key === "model_thinking_budget") {
+          if (!(THINKING_BUDGETS as readonly string[]).includes(value)) {
+            throw new APIError("BAD_REQUEST", { message: `model_thinking_budget must be one of ${THINKING_BUDGETS.join(", ")}` });
+          }
+        }
+
         const now = new Date();
         const existing = await db.select().from(adminConfig).where(eq(adminConfig.key, key));
         if (existing.length > 0) {
@@ -1543,13 +1597,23 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         const [targetUser] = await db.select().from(user).where(eq(user.id, userId));
         if (!targetUser) throw new APIError("NOT_FOUND", { message: "User not found" });
 
-        const [sessions, notes, presets, recentAudit] = await Promise.all([
+        const [sessions, notes, presets, recentAudit, modelParamsRow] = await Promise.all([
           db.select({ id: session.id, expiresAt: session.expiresAt, createdAt: session.createdAt, ipAddress: session.ipAddress, userAgent: session.userAgent })
             .from(session).where(eq(session.userId, userId)).orderBy(desc(session.createdAt)).limit(10),
           db.select({ total: count() }).from(savedNote).where(eq(savedNote.userId, userId)),
           db.select({ total: count() }).from(interviewPreset).where(eq(interviewPreset.userId, userId)),
           db.select().from(auditEvent).where(eq(auditEvent.userId, userId)).orderBy(desc(auditEvent.createdAt)).limit(20),
+          db.select().from(userModelParams).where(eq(userModelParams.userId, userId)),
         ]);
+        const modelParamsOverride = modelParamsRow[0]
+          ? {
+              maxOutputTokens: modelParamsRow[0].maxOutputTokens,
+              temperature: modelParamsRow[0].temperature,
+              topP: modelParamsRow[0].topP,
+              thinkingBudget: modelParamsRow[0].thinkingBudget,
+              updatedAt: modelParamsRow[0].updatedAt,
+            }
+          : null;
 
         // Usage summary over the last 30 days for quick at-a-glance stats.
         const usageSince = new Date(Date.now() - 30 * 86_400_000);
@@ -1564,6 +1628,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
           notesCount: notes[0]?.total ?? 0,
           presetsCount: presets[0]?.total ?? 0,
           recentAuditEvents: recentAudit,
+          modelParamsOverride,
           usage: {
             window: "30d",
             since: usageSince.toISOString(),
@@ -1992,6 +2057,193 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
           useCustomModel: ai.useCustom,
         });
       }),
+
+      // ── Model Parameters (global defaults + per-user overrides) ──
+      //
+      // Global defaults are stored in admin_config under the
+      // `model_*` keys; per-user overrides live in `user_model_params`.
+      // The completion pipeline calls getEffectiveModelParams(userId)
+      // which merges the two, with user overrides winning field-by-field.
+
+      adminGetModelParams: createAuthEndpoint(
+        "/self-hosted-admin/model-params",
+        { method: "GET", use: [sessionMiddleware] },
+        async (ctx) => {
+          if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const rows = await db.select().from(adminConfig);
+          const map = new Map(rows.map((r) => [r.key, r.value]));
+
+          const d = adminCfg.modelParams.defaults;
+          const r = adminCfg.modelParams.ranges;
+
+          // Start from baked-in defaults, overlay admin_config values
+          // when present & parseable. Invalid rows silently fall back to
+          // defaults — the dashboard can see effective values regardless.
+          const effective = {
+            maxOutputTokens: d.maxOutputTokens,
+            temperature: d.temperature,
+            topP: d.topP,
+            thinkingBudget: d.thinkingBudget as typeof THINKING_BUDGETS[number],
+          };
+          const rawMax = Number.parseInt(map.get("model_max_output_tokens") ?? "", 10);
+          if (Number.isFinite(rawMax) && rawMax >= r.maxOutputTokens.min && rawMax <= r.maxOutputTokens.max) {
+            effective.maxOutputTokens = rawMax;
+          }
+          const rawTemp = Number.parseFloat(map.get("model_temperature") ?? "");
+          if (Number.isFinite(rawTemp) && rawTemp >= r.temperature.min && rawTemp <= r.temperature.max) {
+            effective.temperature = rawTemp;
+          }
+          const rawTopP = Number.parseFloat(map.get("model_top_p") ?? "");
+          if (Number.isFinite(rawTopP) && rawTopP >= r.topP.min && rawTopP <= r.topP.max) {
+            effective.topP = rawTopP;
+          }
+          const rawTb = map.get("model_thinking_budget");
+          if (rawTb && (THINKING_BUDGETS as readonly string[]).includes(rawTb)) {
+            effective.thinkingBudget = rawTb as typeof THINKING_BUDGETS[number];
+          }
+
+          return ctx.json({
+            defaults: effective,
+            ranges: adminCfg.modelParams.ranges,
+            bakedDefaults: adminCfg.modelParams.defaults,
+          });
+        },
+      ),
+
+      adminUpdateModelParams: createAuthEndpoint(
+        "/self-hosted-admin/model-params",
+        { method: "POST", use: [sessionMiddleware], body: modelParamsBodySchema },
+        async (ctx) => {
+          const adminEmail = ctx.context.session.user.email;
+          if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const now = new Date();
+          const body = ctx.body;
+
+          const pairs: { key: string; value: string }[] = [];
+          if (body.maxOutputTokens !== undefined) pairs.push({ key: "model_max_output_tokens", value: String(body.maxOutputTokens) });
+          if (body.temperature !== undefined) pairs.push({ key: "model_temperature", value: String(body.temperature) });
+          if (body.topP !== undefined) pairs.push({ key: "model_top_p", value: String(body.topP) });
+          if (body.thinkingBudget !== undefined) pairs.push({ key: "model_thinking_budget", value: body.thinkingBudget });
+
+          for (const { key, value } of pairs) {
+            const existing = await db.select().from(adminConfig).where(eq(adminConfig.key, key));
+            if (existing.length > 0) {
+              await db.update(adminConfig).set({ value, updatedAt: now }).where(eq(adminConfig.key, key));
+            } else {
+              await db.insert(adminConfig).values({ key, value, updatedAt: now });
+            }
+          }
+
+          await recordAudit({
+            eventType: "admin_action",
+            userEmail: adminEmail,
+            metadata: { action: "update_model_params", changed: pairs.map((p) => p.key) },
+          });
+          try { await opts.onConfigChange?.(); } catch (e) { console.warn("[SelfHostedAdmin] onConfigChange failed:", e); }
+          return ctx.json({ ok: true, updated: pairs.length });
+        },
+      ),
+
+      adminGetUserModelParams: createAuthEndpoint(
+        "/self-hosted-admin/user-model-params",
+        { method: "GET", use: [sessionMiddleware] },
+        async (ctx) => {
+          if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const url = new URL(ctx.request?.url ?? "http://localhost");
+          const userId = url.searchParams.get("userId");
+          if (!userId || !SAFE_ID_RE.test(userId)) {
+            throw new APIError("BAD_REQUEST", { message: "Invalid userId" });
+          }
+
+          const [row] = await db.select().from(userModelParams).where(eq(userModelParams.userId, userId));
+          return ctx.json({
+            userId,
+            override: row
+              ? {
+                  maxOutputTokens: row.maxOutputTokens,
+                  temperature: row.temperature,
+                  topP: row.topP,
+                  thinkingBudget: row.thinkingBudget,
+                  updatedAt: row.updatedAt,
+                }
+              : null,
+          });
+        },
+      ),
+
+      adminUpsertUserModelParams: createAuthEndpoint(
+        "/self-hosted-admin/user-model-params",
+        { method: "POST", use: [sessionMiddleware], body: userModelParamsBodySchema },
+        async (ctx) => {
+          const adminEmail = ctx.context.session.user.email;
+          if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const { userId, ...fields } = ctx.body;
+
+          const [existingUser] = await db.select({ id: user.id }).from(user).where(eq(user.id, userId));
+          if (!existingUser) throw new APIError("NOT_FOUND", { message: "User not found" });
+
+          const now = new Date();
+          const [existing] = await db.select().from(userModelParams).where(eq(userModelParams.userId, userId));
+
+          // Build the next row starting from the existing values (or
+          // nulls). Explicit `null` in the body clears a field; `undefined`
+          // keeps whatever was there before.
+          const next = {
+            userId,
+            maxOutputTokens: existing?.maxOutputTokens ?? null,
+            temperature: existing?.temperature ?? null,
+            topP: existing?.topP ?? null,
+            thinkingBudget: existing?.thinkingBudget ?? null,
+            updatedAt: now,
+          };
+          if (fields.maxOutputTokens !== undefined) next.maxOutputTokens = fields.maxOutputTokens;
+          if (fields.temperature !== undefined) next.temperature = fields.temperature;
+          if (fields.topP !== undefined) next.topP = fields.topP;
+          if (fields.thinkingBudget !== undefined) next.thinkingBudget = fields.thinkingBudget;
+
+          if (existing) {
+            await db.update(userModelParams).set({
+              maxOutputTokens: next.maxOutputTokens,
+              temperature: next.temperature,
+              topP: next.topP,
+              thinkingBudget: next.thinkingBudget,
+              updatedAt: now,
+            }).where(eq(userModelParams.userId, userId));
+          } else {
+            await db.insert(userModelParams).values(next);
+          }
+
+          await recordAudit({
+            eventType: "admin_action",
+            userEmail: adminEmail,
+            metadata: { action: "upsert_user_model_params", userId, changed: Object.keys(fields) },
+          });
+          return ctx.json({ ok: true, override: next });
+        },
+      ),
+
+      adminDeleteUserModelParams: createAuthEndpoint(
+        "/self-hosted-admin/user-model-params-delete",
+        { method: "POST", use: [sessionMiddleware], body: userModelParamsDeleteSchema },
+        async (ctx) => {
+          const adminEmail = ctx.context.session.user.email;
+          if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const { userId } = ctx.body;
+
+          await db.delete(userModelParams).where(eq(userModelParams.userId, userId));
+          await recordAudit({
+            eventType: "admin_action",
+            userEmail: adminEmail,
+            metadata: { action: "delete_user_model_params", userId },
+          });
+          return ctx.json({ ok: true });
+        },
+      ),
 
       // ── Cleanup expired rate limits / sessions ───────────────────
 

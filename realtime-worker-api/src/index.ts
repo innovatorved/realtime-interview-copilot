@@ -2,7 +2,7 @@ import { auth, TRUSTED_ORIGINS as AUTH_TRUSTED_ORIGINS } from "./auth";
 import { getDb } from "./db";
 import { savedNote, interviewPreset, user as userTable } from "./db/schema";
 import { eq, desc, like, or, and, sql, count } from "drizzle-orm";
-import { getCachedConfig } from "./config-cache";
+import { getCachedConfig, getEffectiveModelParams, type ModelParams } from "./config-cache";
 import { KV, KV_TTL_SECONDS } from "./kv-keys";
 import { validateOutboundUrl } from "./url-guard";
 import {
@@ -656,9 +656,11 @@ async function handleCompletion(
     get ready() { return writer.ready; },
   } as WritableStreamDefaultWriter<Uint8Array>;
 
+  const modelParams = await getEffectiveModelParams(env, trackedUser?.id ?? null);
+
   const completionFn = cfg.useCustom
-    ? streamOpenAICompatibleCompletion(finalPrompt, cfg.customModelName, cfg.customApiKey, cfg.customBaseUrl, trackingWriter, image)
-    : streamGeminiCompletion(finalPrompt, cfg.geminiModel, cfg.geminiKey, cfg.cfAccountId, cfg.cfGatewayId, trackingWriter, image);
+    ? streamOpenAICompatibleCompletion(finalPrompt, cfg.customModelName, cfg.customApiKey, cfg.customBaseUrl, trackingWriter, modelParams, image)
+    : streamGeminiCompletion(finalPrompt, cfg.geminiModel, cfg.geminiKey, cfg.cfAccountId, cfg.cfGatewayId, trackingWriter, modelParams, image);
 
   const pump = completionFn
     .catch(async (error: unknown) => {
@@ -698,6 +700,7 @@ async function streamGeminiCompletion(
   cfAccountId: string,
   cfGatewayId: string,
   writer: WritableStreamDefaultWriter<Uint8Array>,
+  params: ModelParams,
   image?: InlineImage | null,
 ) {
   if (!apiKey) {
@@ -719,23 +722,30 @@ async function streamGeminiCompletion(
   }
   parts.push({ text: prompt });
 
-  // Disable "thinking" / chain-of-thought on every family that supports it so
-  // responses start immediately and no raw thoughts leak into the stream.
-  //   - Gemini 2.5 family  → thinkingBudget: 0
-  //   - Gemini 3 family    → thinkingLevel: "low"
-  //   - Gemma 4 family     → thinkingLevel: "MINIMAL" (only MINIMAL|HIGH valid)
+  // Admin-configurable generation parameters. Thinking budget is mapped
+  // per model family (each family accepts a different key/value shape):
+  //   - Gemini 2.5 family  → thinkingBudget: integer token cap
+  //   - Gemini 3 family    → thinkingLevel: "low" | "medium" | "high"
+  //   - Gemma 4 family     → thinkingLevel: "MINIMAL" | "HIGH" (only these are valid)
   //   - Older aliases (gemini-1.5-*, gemini-flash-lite-latest, gemma-2/3) do
   //     not accept thinkingConfig at all — sending it returns HTTP 400.
   // https://ai.google.dev/gemini-api/docs/thinking
   const generationConfig: Record<string, unknown> = {
-    maxOutputTokens: 8192,
+    maxOutputTokens: params.maxOutputTokens,
+    temperature: params.temperature,
+    topP: params.topP,
   };
+  const budget = params.thinkingBudget;
   if (/^gemini-2\.5-/i.test(modelName)) {
-    generationConfig.thinkingConfig = { thinkingBudget: 0 };
+    // Map enum → integer budget. "off" disables thinking entirely.
+    const map25: Record<typeof budget, number> = { off: 0, low: 1024, medium: 4096, high: 16384 };
+    generationConfig.thinkingConfig = { thinkingBudget: map25[budget] };
   } else if (/^gemini-3/i.test(modelName)) {
-    generationConfig.thinkingConfig = { thinkingLevel: "low" };
+    const map3: Record<typeof budget, string> = { off: "low", low: "low", medium: "medium", high: "high" };
+    generationConfig.thinkingConfig = { thinkingLevel: map3[budget] };
   } else if (/^gemma-4-/i.test(modelName)) {
-    generationConfig.thinkingConfig = { thinkingLevel: "MINIMAL" };
+    const mapG4: Record<typeof budget, string> = { off: "MINIMAL", low: "MINIMAL", medium: "HIGH", high: "HIGH" };
+    generationConfig.thinkingConfig = { thinkingLevel: mapG4[budget] };
   }
 
   const requestBody = JSON.stringify({
@@ -839,6 +849,7 @@ async function streamOpenAICompatibleCompletion(
   apiKey: string,
   baseUrl: string,
   writer: WritableStreamDefaultWriter<Uint8Array>,
+  params: ModelParams,
   image?: InlineImage | null,
 ) {
   if (!apiKey || !baseUrl) {
@@ -862,7 +873,9 @@ async function streamOpenAICompatibleCompletion(
   const requestBody = JSON.stringify({
     model: modelName,
     stream: true,
-    max_tokens: 8192,
+    max_tokens: params.maxOutputTokens,
+    temperature: params.temperature,
+    top_p: params.topP,
     messages: [{ role: "user", content }],
   });
 

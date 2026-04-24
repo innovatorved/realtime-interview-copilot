@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const user = sqliteTable(
   "user",
@@ -162,6 +162,22 @@ export const rateLimitEntry = sqliteTable(
 export const adminConfig = sqliteTable("admin_config", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+});
+
+/**
+ * Per-user LLM generation parameter overrides. Any NULL column means
+ * "inherit the global default from admin_config". Written only by admins
+ * via /self-hosted-admin/user-model-params.
+ */
+export const userModelParams = sqliteTable("user_model_params", {
+  userId: text("userId")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  maxOutputTokens: integer("maxOutputTokens"),
+  temperature: real("temperature"),
+  topP: real("topP"),
+  thinkingBudget: text("thinkingBudget"),
   updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
 });
 
