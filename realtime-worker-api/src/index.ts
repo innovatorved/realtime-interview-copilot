@@ -5,6 +5,12 @@ import { eq, desc, like, or, and, sql, count } from "drizzle-orm";
 import { getCachedConfig } from "./config-cache";
 import { KV, KV_TTL_SECONDS } from "./kv-keys";
 import { validateOutboundUrl } from "./url-guard";
+import {
+  startUsage,
+  recordUsage,
+  getUserUsageSummary,
+  getUsageTimeseries,
+} from "./usage";
 
 // ─── Constants & Limits ─────────────────────────────────────────────────────
 
@@ -375,6 +381,11 @@ export default {
       return withCors(response, request);
     }
 
+    if (path === "/api/usage/me" && request.method === "GET") {
+      const response = await handleUsageMe(request, env, ctx, url);
+      return withCors(response, request);
+    }
+
     if (path.startsWith("/api/auth")) {
       try {
         const response = await auth(env).handler(request);
@@ -410,6 +421,10 @@ async function handleDeepgram(
     try {
       const { success } = await env.COMPLETION_LIMITER.limit({ key });
       if (!success) {
+        recordUsage(env, ctx, request, authResult, "deepgram_key", {
+          status: "rate_limited",
+          errorCode: "429",
+        });
         return jsonResponse({ error: "Rate limit exceeded. Try again in a minute." }, 429);
       }
     } catch (err) {
@@ -418,10 +433,13 @@ async function handleDeepgram(
     }
   }
 
+  const tracker = startUsage(env, ctx, request, authResult, "deepgram_key");
+
   const cfg = await getCachedConfig(env);
   const apiKey = cfg.deepgramKey;
 
   if (!apiKey) {
+    tracker.finish({ status: "error", errorCode: "missing_key" });
     return jsonResponse(
       { error: "Missing Deepgram API key — set via Admin Dashboard or DEEPGRAM_API_KEY env var" },
       500,
@@ -443,6 +461,7 @@ async function handleDeepgram(
     const projectsBody = (await projectsResponse.json()) as DeepgramProjectsResponse;
 
     if (!projectsResponse.ok) {
+      tracker.finish({ status: "error", errorCode: String(projectsResponse.status) });
       return new Response(JSON.stringify(projectsBody), {
         status: projectsResponse.status,
         headers: jsonHeaders,
@@ -452,6 +471,7 @@ async function handleDeepgram(
     const project = projectsBody.projects?.[0];
 
     if (!project) {
+      tracker.finish({ status: "error", errorCode: "no_project" });
       return jsonResponse(
         { error: "Cannot find a Deepgram project. Please create a project first." },
         404,
@@ -478,12 +498,18 @@ async function handleDeepgram(
 
     const createBody = (await createResponse.json()) as DeepgramKeyResponse;
 
+    tracker.finish({
+      status: createResponse.ok ? "ok" : "error",
+      errorCode: createResponse.ok ? null : String(createResponse.status),
+    });
+
     return new Response(JSON.stringify(createBody), {
       status: createResponse.ok ? 200 : createResponse.status,
       headers: jsonHeaders,
     });
   } catch (err) {
     console.warn("[Worker] deepgram upstream failed:", err);
+    tracker.finish({ status: "error", errorCode: "upstream_timeout" });
     return jsonResponse({ error: "Upstream timeout or error talking to Deepgram" }, 504);
   }
 }
@@ -493,6 +519,17 @@ async function handleCompletion(
   env: Env,
   ctx: ExecutionContext,
 ): Promise<Response> {
+  // Resolve the caller up-front so we can attribute usage. Completion is
+  // intentionally lenient (anonymous callers are still rate-limited by IP),
+  // so we only record the user when a session is present.
+  let trackedUser: AuthedUser | null = null;
+  try {
+    const maybe = await getAuthenticatedUser(request, env, ctx);
+    if (isAuthed(maybe)) trackedUser = maybe;
+  } catch {
+    trackedUser = null;
+  }
+
   let payload: CompletionRequestBody;
   try {
     payload = (await request.json()) as CompletionRequestBody;
@@ -532,17 +569,16 @@ async function handleCompletion(
   // may be absent in local dev — fall open only in that case. When the
   // binding is present but throws, fail closed so we cannot be abused.
   if (env.COMPLETION_LIMITER) {
-    let rlUserId: string | null = null;
-    try {
-      const session = await auth(env).api.getSession({ headers: request.headers });
-      rlUserId = session?.user?.id ?? null;
-    } catch {
-      rlUserId = null;
-    }
-    const key = rlUserId ?? `ip:${getClientIp(request)}`;
+    const key = trackedUser?.id ?? `ip:${getClientIp(request)}`;
     try {
       const { success } = await env.COMPLETION_LIMITER.limit({ key });
       if (!success) {
+        recordUsage(env, ctx, request, trackedUser, "completion", {
+          status: "rate_limited",
+          errorCode: "429",
+          flag: typeof payload.flag === "string" ? payload.flag : null,
+          promptChars: basePrompt.length,
+        });
         return jsonResponse({ error: "Rate limit exceeded. Try again in a minute." }, 429);
       }
     } catch (err) {
@@ -576,18 +612,71 @@ async function handleCompletion(
   const stream = new TransformStream();
   const writer = stream.writable.getWriter();
 
+  // Track response size by wrapping the writer. The streaming helpers emit
+  // SSE frames like `data: {"text":"..."}` — we count the inner text chars
+  // (not the SSE envelope) so the stored `responseChars` matches the text the
+  // user actually sees.
+  let responseChars = 0;
+  let streamError: string | null = null;
+  const activeModel = cfg.useCustom ? cfg.customModelName : cfg.geminiModel;
+  const tracker = startUsage(env, ctx, request, trackedUser, "completion", {
+    flag: typeof payload.flag === "string" ? payload.flag : null,
+    model: activeModel,
+    promptChars: finalPrompt.length,
+    metadata: {
+      hasImage: Boolean(image),
+      useCustomModel: cfg.useCustom,
+    },
+  });
+
+  const trackingWriter: WritableStreamDefaultWriter<Uint8Array> = {
+    // Proxy subset used by the streaming helpers.
+    write: (chunk: Uint8Array) => {
+      try {
+        const s = new TextDecoder().decode(chunk);
+        // Parse any `data: {...}` payloads present in the chunk to extract
+        // text / error counts. Best-effort — malformed chunks are ignored.
+        const re = /data:\s*(\{[\s\S]*?\})\s*\n\n/g;
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(s)) !== null) {
+          try {
+            const parsed = JSON.parse(m[1]);
+            if (typeof parsed.text === "string") responseChars += parsed.text.length;
+            if (typeof parsed.error === "string") streamError = parsed.error.slice(0, 200);
+          } catch { /* ignore */ }
+        }
+      } catch { /* never block on analytics */ }
+      return writer.write(chunk);
+    },
+    close: () => writer.close(),
+    abort: (reason?: unknown) => writer.abort(reason),
+    releaseLock: () => writer.releaseLock(),
+    get closed() { return writer.closed; },
+    get desiredSize() { return writer.desiredSize; },
+    get ready() { return writer.ready; },
+  } as WritableStreamDefaultWriter<Uint8Array>;
+
   const completionFn = cfg.useCustom
-    ? streamOpenAICompatibleCompletion(finalPrompt, cfg.customModelName, cfg.customApiKey, cfg.customBaseUrl, writer, image)
-    : streamGeminiCompletion(finalPrompt, cfg.geminiModel, cfg.geminiKey, cfg.cfAccountId, cfg.cfGatewayId, writer, image);
+    ? streamOpenAICompatibleCompletion(finalPrompt, cfg.customModelName, cfg.customApiKey, cfg.customBaseUrl, trackingWriter, image)
+    : streamGeminiCompletion(finalPrompt, cfg.geminiModel, cfg.geminiKey, cfg.cfAccountId, cfg.cfGatewayId, trackingWriter, image);
 
   const pump = completionFn
     .catch(async (error: unknown) => {
       const message = error instanceof Error
         ? { error: error.message }
         : { error: String(error) };
+      streamError = typeof message.error === "string" ? message.error.slice(0, 200) : "error";
       await writer.write(encoder.encode(`data: ${JSON.stringify(message)}\n\n`));
     })
     .finally(async () => {
+      try {
+        tracker.finish({
+          status: streamError ? "error" : "ok",
+          errorCode: streamError ?? null,
+          responseChars,
+          model: activeModel,
+        });
+      } catch { /* never throw from tracker */ }
       await writer.close();
     });
 
@@ -928,6 +1017,10 @@ async function handleGetNotes(
 
   const total = totalResult[0]?.total ?? 0;
 
+  recordUsage(env, ctx, request, user, "note_list", {
+    metadata: { returned: notes.length, page, limit },
+  });
+
   return jsonResponse({
     notes,
     pagination: {
@@ -992,6 +1085,11 @@ async function handleCreateNote(
 
   await db.insert(savedNote).values(note);
 
+  recordUsage(env, ctx, request, user, "note_create", {
+    promptChars: content.length,
+    metadata: { tag, noteId: id },
+  });
+
   return jsonResponse({ note }, 201);
 }
 
@@ -1013,6 +1111,10 @@ async function handleDeleteNote(
   await db
     .delete(savedNote)
     .where(and(eq(savedNote.id, noteId), eq(savedNote.userId, user.id)));
+
+  recordUsage(env, ctx, request, user, "note_delete", {
+    metadata: { noteId },
+  });
 
   return jsonResponse({ success: true });
 }
@@ -1039,6 +1141,10 @@ async function handleGetPresets(
       ),
     )
     .orderBy(interviewPreset.name);
+
+  recordUsage(env, ctx, request, user, "preset_list", {
+    metadata: { returned: presets.length },
+  });
 
   return jsonResponse({ presets });
 }
@@ -1111,10 +1217,19 @@ async function handleExport(
   }
 
   if (notes.length === 0) {
+    recordUsage(env, ctx, request, user, `export_${format}`, {
+      status: "error",
+      errorCode: "no_notes",
+    });
     return jsonResponse({ error: "No notes found to export" }, 404);
   }
 
   const markdown = buildExportMarkdown(notes, user.name);
+
+  recordUsage(env, ctx, request, user, `export_${format}`, {
+    responseChars: markdown.length,
+    metadata: { noteCount: notes.length },
+  });
 
   if (format === "markdown") {
     return new Response(markdown, {
@@ -1131,6 +1246,50 @@ async function handleExport(
     headers: {
       "Content-Type": "text/html; charset=utf-8",
     },
+  });
+}
+
+// ─── Usage (user-facing) ─────────────────────────────────────────────────────
+
+const USAGE_WINDOWS: Record<string, number> = {
+  "24h": 86_400_000,
+  "7d": 7 * 86_400_000,
+  "30d": 30 * 86_400_000,
+  "90d": 90 * 86_400_000,
+};
+
+async function handleUsageMe(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+  url: URL,
+): Promise<Response> {
+  const authResult = await getAuthenticatedUser(request, env, ctx);
+  if (!isAuthed(authResult)) return authErrorResponse(authResult.error);
+
+  const windowKey = (url.searchParams.get("window") ?? "30d").trim();
+  const windowMs = USAGE_WINDOWS[windowKey];
+  if (!windowMs) {
+    return jsonResponse({ error: "window must be one of 24h, 7d, 30d, 90d" }, 400);
+  }
+
+  const since = new Date(Date.now() - windowMs);
+  const db = getDb(env);
+
+  const summary = await getUserUsageSummary(db, authResult.id, since);
+
+  // Choose a sensible bucket width so the chart has ~30 points regardless
+  // of window size.
+  const bucketSeconds = Math.max(60, Math.floor(windowMs / 1000 / 30));
+  const series = await getUsageTimeseries(env.DB, since, bucketSeconds, authResult.id);
+
+  return jsonResponse({
+    window: windowKey,
+    since: since.toISOString(),
+    bucketSeconds,
+    totals: summary.totals,
+    perAction: summary.perAction,
+    timeseries: series,
   });
 }
 

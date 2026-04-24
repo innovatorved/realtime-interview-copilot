@@ -42,6 +42,9 @@ next-env.d.ts
 
 .dev.vars
 
+# local-only reference docs (never pushed)
+/docs/local/
+
 # electron
 /dist
 /electron/*.js

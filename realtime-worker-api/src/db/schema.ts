@@ -164,3 +164,52 @@ export const adminConfig = sqliteTable("admin_config", {
   value: text("value").notNull(),
   updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
 });
+
+/**
+ * Per-user, per-endpoint usage event. One row is inserted each time an
+ * authenticated user performs a billable/tracked action (completion, deepgram
+ * key mint, note create, etc). Used for both user-facing usage dashboards and
+ * admin per-user usage breakdowns.
+ *
+ *  - action:       coarse bucket e.g. "completion", "deepgram_key",
+ *                  "note_create", "note_delete", "preset_list",
+ *                  "export_markdown", "export_pdf".
+ *  - flag:         sub-classification for completions (copilot / summarizer / raw).
+ *  - model:        underlying LLM model actually used (when known).
+ *  - promptChars / responseChars: approximate input/output size (char count,
+ *                  cheap to compute on the worker — we do NOT store prompt
+ *                  bodies for privacy reasons).
+ *  - durationMs:   wall-clock time the worker spent servicing the request.
+ *  - status:       "ok" | "error" | "rate_limited".
+ *  - errorCode:    short machine-readable error tag (e.g. HTTP status) when
+ *                  status != "ok".
+ *  - ipAddress / userAgent: useful for abuse detection; never indexed so
+ *                  they can be dropped later if desired.
+ *  - metadata:     JSON stringified bag for extra fields (e.g. imageUsed).
+ */
+export const usageEvent = sqliteTable(
+  "usage_event",
+  {
+    id: text("id").primaryKey(),
+    userId: text("userId").references(() => user.id, { onDelete: "cascade" }),
+    userEmail: text("userEmail"),
+    action: text("action").notNull(),
+    flag: text("flag"),
+    model: text("model"),
+    promptChars: integer("promptChars").default(0),
+    responseChars: integer("responseChars").default(0),
+    durationMs: integer("durationMs").default(0),
+    status: text("status").notNull().default("ok"),
+    errorCode: text("errorCode"),
+    ipAddress: text("ipAddress"),
+    userAgent: text("userAgent"),
+    metadata: text("metadata"),
+    createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("usage_event_user_created_idx").on(table.userId, table.createdAt),
+    index("usage_event_action_idx").on(table.action),
+    index("usage_event_created_idx").on(table.createdAt),
+    index("usage_event_status_idx").on(table.status),
+  ],
+);
