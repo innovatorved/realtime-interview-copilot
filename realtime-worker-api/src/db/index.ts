@@ -14,6 +14,6 @@ export interface Env {
   DB: D1Database;
 }
 
-export const getDb = (env: Env) => {
+export const getDb = (env: { DB: D1Database }) => {
   return drizzle(env.DB, { schema });
 };

@@ -40,7 +40,7 @@ import {
   interviewPreset,
 } from "../db/schema";
 import type * as schemaTypes from "../db/schema";
-import { count, desc, eq, gte, like, or, and, lt, sql, asc, inArray } from "drizzle-orm";
+import { count, desc, eq, gte, like, or, and, lt, asc } from "drizzle-orm";
 import { z } from "zod";
 import adminCfg from "../config.json";
 
@@ -215,6 +215,8 @@ export interface SelfHostedAdminOptions {
     blockDisposableEmails?: boolean;
   };
   runtimeInfo?: () => Record<string, unknown>;
+  /** Invoked whenever admin_config is written/deleted so KV caches can flush. */
+  onConfigChange?: () => Promise<void> | void;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -1003,6 +1005,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         const isSecret = key.endsWith("_key") || key.endsWith("_token");
         const maskedValue = isSecret ? `${value.slice(0, 4)}...${value.slice(-4)}` : value;
         await recordAudit({ eventType: "admin_action", userEmail: adminEmail, metadata: { action: "update_config", key, value: maskedValue } });
+        try { await opts.onConfigChange?.(); } catch (e) { console.warn("[SelfHostedAdmin] onConfigChange failed:", e); }
         return ctx.json({ ok: true });
       }),
 
@@ -1013,6 +1016,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         const { key } = ctx.body;
         await db.delete(adminConfig).where(eq(adminConfig.key, key));
         await recordAudit({ eventType: "admin_action", userEmail: adminEmail, metadata: { action: "delete_config", key } });
+        try { await opts.onConfigChange?.(); } catch (e) { console.warn("[SelfHostedAdmin] onConfigChange failed:", e); }
         return ctx.json({ ok: true });
       }),
 
@@ -1078,7 +1082,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
 
         let affected = 0;
         for (const uid of userIds) {
-          const result = await db.update(user).set({ isApproved: approve, updatedAt: new Date() }).where(eq(user.id, uid));
+          await db.update(user).set({ isApproved: approve, updatedAt: new Date() }).where(eq(user.id, uid));
           affected++;
         }
 

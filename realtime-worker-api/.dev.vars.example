@@ -11,10 +11,6 @@ BETTER_AUTH_URL=http://localhost:8787
 # Comma-separated emails allowed to access /api/admin/* and the /admin UI
 ADMIN_EMAILS=you@example.com
 
-# Optional analytics
-POSTHOG_API_KEY=
-POSTHOG_HOST=
-
 CF_ACCOUNT_ID=
 CF_GATEWAY_ID=
 CF_API_TOKEN=

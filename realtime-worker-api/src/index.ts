@@ -1,71 +1,16 @@
 import { auth } from "./auth";
-import { trackLLMGeneration, type PostHogEnv } from "./posthog";
 import { getDb } from "./db";
-import { savedNote, interviewPreset, user as userTable, adminConfig } from "./db/schema";
+import { savedNote, interviewPreset, user as userTable } from "./db/schema";
 import { eq, desc, like, or, and, sql, count } from "drizzle-orm";
+import { getCachedConfig } from "./config-cache";
+import { KV, KV_TTL_SECONDS } from "./kv-keys";
 
 enum FLAGS {
   COPILOT = "copilot",
   SUMMARIZER = "summarizer",
 }
 
-interface ResolvedConfig {
-  geminiModel: string;
-  geminiKey: string;
-  deepgramKey: string;
-  customModelName: string;
-  customBaseUrl: string;
-  customApiKey: string;
-  useCustom: boolean;
-  cfAccountId: string;
-  cfGatewayId: string;
-  cfApiToken: string;
-}
-
-const DEFAULT_CF_ACCOUNT_ID = "b4ca0337fb21e846c53e1f2611ba436c";
-const DEFAULT_CF_GATEWAY_ID = "gateway04";
-
-async function resolveConfig(env: Env): Promise<ResolvedConfig> {
-  try {
-    const db = getDb(env);
-    const rows = await db.select().from(adminConfig);
-    const map = new Map(rows.map((r) => [r.key, r.value]));
-
-    const customModelName = map.get("custom_model_name") || "";
-    const customBaseUrl = map.get("custom_base_url") || "";
-    const customApiKey = map.get("custom_api_key") || "";
-    const useCustom = Boolean(customModelName && customBaseUrl && customApiKey);
-
-    return {
-      geminiModel: map.get("gemini_model") || env.GEMINI_MODEL || "gemini-2.5-flash-lite",
-      geminiKey: map.get("gemini_key") || env.GOOGLE_GENERATIVE_AI_API_KEY || "",
-      deepgramKey: map.get("deepgram_key") || env.DEEPGRAM_API_KEY || "",
-      customModelName,
-      customBaseUrl,
-      customApiKey,
-      useCustom,
-      cfAccountId: map.get("cf_account_id") || env.CF_ACCOUNT_ID || DEFAULT_CF_ACCOUNT_ID,
-      cfGatewayId: map.get("cf_gateway_id") || env.CF_GATEWAY_ID || DEFAULT_CF_GATEWAY_ID,
-      cfApiToken: map.get("cf_api_token") || env.CF_API_TOKEN || "",
-    };
-  } catch (err) {
-    console.error("Failed to load admin config from D1, using env defaults:", err);
-    return {
-      geminiModel: env.GEMINI_MODEL || "gemini-2.5-flash-lite",
-      geminiKey: env.GOOGLE_GENERATIVE_AI_API_KEY || "",
-      deepgramKey: env.DEEPGRAM_API_KEY || "",
-      customModelName: "",
-      customBaseUrl: "",
-      customApiKey: "",
-      useCustom: false,
-      cfAccountId: env.CF_ACCOUNT_ID || DEFAULT_CF_ACCOUNT_ID,
-      cfGatewayId: env.CF_GATEWAY_ID || DEFAULT_CF_GATEWAY_ID,
-      cfApiToken: env.CF_API_TOKEN || "",
-    };
-  }
-}
-
-interface Env extends PostHogEnv {
+interface Env {
   DEEPGRAM_API_KEY: string;
   GOOGLE_GENERATIVE_AI_API_KEY: string;
   GEMINI_MODEL?: string;
@@ -80,6 +25,12 @@ interface Env extends PostHogEnv {
   /** Cloudflare API token with AI Gateway read scope (fallback when not set via admin dashboard). */
   CF_API_TOKEN?: string;
   DB: D1Database;
+  /** General-purpose KV namespace for the worker (see src/kv-keys.ts). */
+  CONFIG_KV?: KVNamespace;
+  /** Cloudflare built-in rate limiter for /api/completion. */
+  COMPLETION_LIMITER?: {
+    limit: (opts: { key: string }) => Promise<{ success: boolean }>;
+  };
 }
 
 interface CompletionRequestBody {
@@ -97,22 +48,13 @@ interface InlineImage {
 
 function parseImageDataUrl(input: string | undefined): InlineImage | null {
   if (!input) return null;
-  // Expected format: data:<mime>;base64,<data>
   const match = /^data:([^;]+);base64,(.+)$/.exec(input.trim());
   if (!match) return null;
   const mime = match[1];
   const data = match[2];
-  // Only accept common web image types and cap size to prevent abuse.
-  // Validation protects against unexpected mime types being forwarded.
   if (!/^image\/(png|jpeg|jpg|webp|gif)$/i.test(mime)) return null;
-  // Rough base64 size check: limit to ~8MB decoded. base64 is ~4/3 of bytes.
   if (data.length > (8 * 1024 * 1024 * 4) / 3) return null;
   return { mimeType: mime, base64: data };
-}
-
-interface WorkerExecutionContext {
-  waitUntil(promise: Promise<unknown>): void;
-  passThroughOnException?(): void;
 }
 
 const jsonHeaders = {
@@ -169,12 +111,18 @@ function handleOptions(request: Request): Response {
   });
 }
 
-const ACTIVITY_UPDATE_INTERVAL_MS = 5 * 60 * 1000;
-const lastActivityUpdates = new Map<string, number>();
+function getClientIp(request: Request): string {
+  return (
+    request.headers.get("cf-connecting-ip") ??
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    "unknown"
+  );
+}
 
 async function getAuthenticatedUser(
   request: Request,
   env: Env,
+  ctx: ExecutionContext,
 ): Promise<{ id: string; email: string; name: string } | null> {
   try {
     const session = await auth(env).api.getSession({
@@ -183,11 +131,30 @@ async function getAuthenticatedUser(
     if (!session?.user) return null;
 
     const userId = session.user.id;
-    const now = Date.now();
-    const lastUpdate = lastActivityUpdates.get(userId) ?? 0;
-    if (now - lastUpdate > ACTIVITY_UPDATE_INTERVAL_MS) {
-      lastActivityUpdates.set(userId, now);
-      getDb(env).update(userTable).set({ lastActiveAt: new Date() }).where(eq(userTable.id, userId)).execute().catch(() => {});
+
+    // KV-backed throttle so lastActiveAt writes happen at most every 5 minutes
+    // per user, consistent across isolates.
+    if (env.CONFIG_KV) {
+      const key = KV.userActivity(userId);
+      const seen = await env.CONFIG_KV.get(key).catch(() => null);
+      if (!seen) {
+        ctx.waitUntil(
+          (async () => {
+            try {
+              await env.CONFIG_KV!.put(key, "1", {
+                expirationTtl: KV_TTL_SECONDS.userActivity,
+              });
+              await getDb(env)
+                .update(userTable)
+                .set({ lastActiveAt: new Date() })
+                .where(eq(userTable.id, userId))
+                .execute();
+            } catch (e) {
+              console.warn("[Worker] activity update failed:", e);
+            }
+          })(),
+        );
+      }
     }
 
     return {
@@ -253,11 +220,48 @@ const badFinishReasons = [
   "MALFORMED_FUNCTION_CALL",
 ];
 
+// ─── Retry helper ────────────────────────────────────────────────────────────
+
+const RETRYABLE_STATUS = new Set([429, 502, 503, 504]);
+
+/**
+ * Issue an HTTP request with bounded retries for transient upstream failures.
+ * Only the initial request (headers + connection) is retried — once the body
+ * has started streaming we hand control to the caller.
+ */
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  opts: { retries: number; baseMs: number; timeoutMs: number },
+): Promise<Response> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= opts.retries; attempt++) {
+    const signal = AbortSignal.timeout(opts.timeoutMs);
+    try {
+      const resp = await fetch(url, { ...init, signal });
+      if (resp.ok || !RETRYABLE_STATUS.has(resp.status) || attempt === opts.retries) {
+        return resp;
+      }
+      // Drain body so the connection can be reused, then back off.
+      try { await resp.body?.cancel(); } catch { /* ignore */ }
+      lastErr = new Error(`upstream ${resp.status}`);
+    } catch (err) {
+      lastErr = err;
+      if (attempt === opts.retries) throw err;
+    }
+    const delay = opts.baseMs * Math.pow(2, attempt) + Math.floor(Math.random() * 100);
+    await new Promise((r) => setTimeout(r, delay));
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+}
+
+// ─── Fetch handler ───────────────────────────────────────────────────────────
+
 export default {
   async fetch(
     request: Request,
     env: Env,
-    ctx: WorkerExecutionContext,
+    ctx: ExecutionContext,
   ): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/$/, "");
@@ -282,30 +286,27 @@ export default {
       return withCors(response, request);
     }
 
-    // --- Notes CRUD ---
     if (path === "/api/notes" && request.method === "GET") {
-      const response = await handleGetNotes(request, env, url);
+      const response = await handleGetNotes(request, env, ctx, url);
       return withCors(response, request);
     }
     if (path === "/api/notes" && request.method === "POST") {
-      const response = await handleCreateNote(request, env);
+      const response = await handleCreateNote(request, env, ctx);
       return withCors(response, request);
     }
     if (path.match(/^\/api\/notes\/[^/]+$/) && request.method === "DELETE") {
       const noteId = path.split("/").pop()!;
-      const response = await handleDeleteNote(request, env, noteId);
+      const response = await handleDeleteNote(request, env, ctx, noteId);
       return withCors(response, request);
     }
 
-    // --- Presets ---
     if (path === "/api/presets" && request.method === "GET") {
-      const response = await handleGetPresets(request, env);
+      const response = await handleGetPresets(request, env, ctx);
       return withCors(response, request);
     }
 
-    // --- Export ---
     if (path === "/api/export" && request.method === "POST") {
-      const response = await handleExport(request, env);
+      const response = await handleExport(request, env, ctx);
       return withCors(response, request);
     }
 
@@ -327,7 +328,7 @@ export default {
 };
 
 async function handleDeepgram(env: Env): Promise<Response> {
-  const cfg = await resolveConfig(env);
+  const cfg = await getCachedConfig(env);
   const apiKey = cfg.deepgramKey;
 
   if (!apiKey) {
@@ -402,7 +403,7 @@ async function handleDeepgram(env: Env): Promise<Response> {
 async function handleCompletion(
   request: Request,
   env: Env,
-  ctx: WorkerExecutionContext,
+  ctx: ExecutionContext,
 ): Promise<Response> {
   let payload: CompletionRequestBody;
   try {
@@ -423,6 +424,30 @@ async function handleCompletion(
     });
   }
 
+  // Rate limit: keyed by user id when authenticated, else client IP. The
+  // binding may be absent in local dev — fall open in that case.
+  if (env.COMPLETION_LIMITER) {
+    let rlUserId: string | null = null;
+    try {
+      const session = await auth(env).api.getSession({ headers: request.headers });
+      rlUserId = session?.user?.id ?? null;
+    } catch {
+      rlUserId = null;
+    }
+    const key = rlUserId ?? `ip:${getClientIp(request)}`;
+    try {
+      const { success } = await env.COMPLETION_LIMITER.limit({ key });
+      if (!success) {
+        return new Response(
+          JSON.stringify({ error: "Rate limit exceeded. Try again in a minute." }),
+          { status: 429, headers: jsonHeaders },
+        );
+      }
+    } catch (err) {
+      console.warn("[Worker] rate limiter threw, falling open:", err);
+    }
+  }
+
   let finalPrompt = basePrompt;
   if (payload.flag === FLAGS.COPILOT) {
     finalPrompt = buildPrompt(payload.bg, basePrompt);
@@ -432,29 +457,17 @@ async function handleCompletion(
 
   const image = parseImageDataUrl(payload.image);
 
-  const cfg = await resolveConfig(env);
-
-  const activeModel = cfg.useCustom ? cfg.customModelName : cfg.geminiModel;
-  const analytics = trackLLMGeneration({
-    env,
-    model: activeModel,
-    prompt: finalPrompt,
-    getUser: async () => {
-      const session = await auth(env).api.getSession({ headers: request.headers });
-      return session?.user ? { id: session.user.id, email: session.user.email, name: session.user.name } : null;
-    },
-  });
+  const cfg = await getCachedConfig(env);
 
   const stream = new TransformStream();
   const writer = stream.writable.getWriter();
 
   const completionFn = cfg.useCustom
-    ? streamOpenAICompatibleCompletion(finalPrompt, cfg.customModelName, cfg.customApiKey, cfg.customBaseUrl, writer, analytics.onText, image)
-    : streamGeminiCompletion(finalPrompt, cfg.geminiModel, cfg.geminiKey, cfg.cfAccountId, cfg.cfGatewayId, writer, analytics.onText, image);
+    ? streamOpenAICompatibleCompletion(finalPrompt, cfg.customModelName, cfg.customApiKey, cfg.customBaseUrl, writer, image)
+    : streamGeminiCompletion(finalPrompt, cfg.geminiModel, cfg.geminiKey, cfg.cfAccountId, cfg.cfGatewayId, writer, image);
 
   const pump = completionFn
     .catch(async (error: unknown) => {
-      analytics.onError(error instanceof Error ? error : String(error));
       const message = error instanceof Error
         ? { error: error.message }
         : { error: String(error) };
@@ -462,7 +475,6 @@ async function handleCompletion(
     })
     .finally(async () => {
       await writer.close();
-      ctx.waitUntil(analytics.finalize());
     });
 
   ctx.waitUntil(pump);
@@ -483,7 +495,6 @@ async function streamGeminiCompletion(
   cfAccountId: string,
   cfGatewayId: string,
   writer: WritableStreamDefaultWriter<Uint8Array>,
-  onText?: (text: string) => void,
   image?: InlineImage | null,
 ) {
   if (!apiKey) {
@@ -533,13 +544,17 @@ async function streamGeminiCompletion(
   });
 
   try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+    const response = await fetchWithRetry(
+      url,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: requestBody,
       },
-      body: requestBody,
-    });
+      { retries: 2, baseMs: 250, timeoutMs: 10_000 },
+    );
 
     if (!response.ok) {
       let errorBody = "Could not read error body";
@@ -582,7 +597,6 @@ async function streamGeminiCompletion(
             if (text !== null && text !== "") {
               const sseData = JSON.stringify({ text });
               await writer.write(encoder.encode(`data: ${sseData}\n\n`));
-              onText?.(text);
             }
           } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e);
@@ -613,7 +627,6 @@ async function streamOpenAICompatibleCompletion(
   apiKey: string,
   baseUrl: string,
   writer: WritableStreamDefaultWriter<Uint8Array>,
-  onText?: (text: string) => void,
   image?: InlineImage | null,
 ) {
   if (!apiKey || !baseUrl) {
@@ -642,14 +655,18 @@ async function streamOpenAICompatibleCompletion(
   });
 
   try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+    const response = await fetchWithRetry(
+      endpoint,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: requestBody,
       },
-      body: requestBody,
-    });
+      { retries: 2, baseMs: 250, timeoutMs: 10_000 },
+    );
 
     if (!response.ok) {
       let errorBody = "Could not read error body";
@@ -681,7 +698,6 @@ async function streamOpenAICompatibleCompletion(
           const delta = parsed.choices?.[0]?.delta?.content;
           if (delta) {
             await writer.write(encoder.encode(`data: ${JSON.stringify({ text: delta })}\n\n`));
-            onText?.(delta);
           }
         } catch { /* skip malformed chunks */ }
       }
@@ -743,9 +759,10 @@ function extractTextFromChunk(chunk: any): string | null {
 async function handleGetNotes(
   request: Request,
   env: Env,
+  ctx: ExecutionContext,
   url: URL,
 ): Promise<Response> {
-  const user = await getAuthenticatedUser(request, env);
+  const user = await getAuthenticatedUser(request, env, ctx);
   if (!user) return jsonResponse({ error: "Unauthorized" }, 401);
 
   const db = getDb(env);
@@ -798,11 +815,12 @@ async function handleGetNotes(
 async function handleCreateNote(
   request: Request,
   env: Env,
+  ctx: ExecutionContext,
 ): Promise<Response> {
-  const user = await getAuthenticatedUser(request, env);
+  const user = await getAuthenticatedUser(request, env, ctx);
   if (!user) return jsonResponse({ error: "Unauthorized" }, 401);
 
-  let body: { content?: string; tag?: string; title?: string };
+  let body: { content?: string; tag?: string };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -832,9 +850,10 @@ async function handleCreateNote(
 async function handleDeleteNote(
   request: Request,
   env: Env,
+  ctx: ExecutionContext,
   noteId: string,
 ): Promise<Response> {
-  const user = await getAuthenticatedUser(request, env);
+  const user = await getAuthenticatedUser(request, env, ctx);
   if (!user) return jsonResponse({ error: "Unauthorized" }, 401);
 
   const db = getDb(env);
@@ -850,8 +869,9 @@ async function handleDeleteNote(
 async function handleGetPresets(
   request: Request,
   env: Env,
+  ctx: ExecutionContext,
 ): Promise<Response> {
-  const user = await getAuthenticatedUser(request, env);
+  const user = await getAuthenticatedUser(request, env, ctx);
   if (!user) return jsonResponse({ error: "Unauthorized" }, 401);
 
   const db = getDb(env);
@@ -874,14 +894,14 @@ async function handleGetPresets(
 interface ExportRequestBody {
   format: "markdown" | "pdf";
   noteIds?: string[];
-  all?: boolean;
 }
 
 async function handleExport(
   request: Request,
   env: Env,
+  ctx: ExecutionContext,
 ): Promise<Response> {
-  const user = await getAuthenticatedUser(request, env);
+  const user = await getAuthenticatedUser(request, env, ctx);
   if (!user) return jsonResponse({ error: "Unauthorized" }, 401);
 
   let body: ExportRequestBody;

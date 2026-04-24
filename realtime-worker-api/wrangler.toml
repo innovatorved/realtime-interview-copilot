@@ -11,3 +11,22 @@ binding = "DB"
 database_name = "realtime-interview-copilot-db"
 database_id = "836c3d2f-b104-419d-ad77-e1ac5c38a397"
 migrations_dir = "drizzle"
+
+# General-purpose KV for the worker. Used today for:
+#   - admin_config:*  (cached dashboard settings, 5 min TTL, invalidated on write)
+#   - activity:*      (per-user lastActive throttle, 5 min TTL)
+# Future caches / flags / tokens should share this namespace via src/kv-keys.ts
+# so we don't create a new binding every time.
+# Create with: wrangler kv namespace create CONFIG_KV
+# Then paste the id below.
+[[kv_namespaces]]
+binding = "CONFIG_KV"
+id = "6a114e2cb0504aed86bc71df3df45c7b"
+
+# Built-in Cloudflare Rate Limiting binding. Protects /api/completion from
+# abuse and runaway scripts without a separate service.
+[[unsafe.bindings]]
+name = "COMPLETION_LIMITER"
+type = "ratelimit"
+namespace_id = "1001"
+simple = { limit = 30, period = 60 }

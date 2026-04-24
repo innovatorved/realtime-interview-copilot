@@ -4,8 +4,9 @@ import { getDb, Env } from "./db";
 import * as schema from "./db/schema";
 import { hashPassword, verifyPassword } from "./crypto";
 import { selfHostedAdmin } from "./plugins/self-hosted-admin";
+import { invalidateConfigCache } from "./config-cache";
 
-export const auth = (env: Env) => {
+export const auth = (env: Env & { CONFIG_KV?: KVNamespace }) => {
   const db = getDb(env);
 
   const adminEmails = (env.ADMIN_EMAILS?.trim() ?? "")
@@ -52,6 +53,7 @@ export const auth = (env: Env) => {
         getDb: () => db,
         d1: env.DB,
         adminEmails,
+        onConfigChange: () => invalidateConfigCache(env),
         sentinel: {
           maxLoginAttemptsPerHour: 10,
           maxSignupsPerHour: 5,
@@ -63,7 +65,6 @@ export const auth = (env: Env) => {
           deepgramKey: env.DEEPGRAM_API_KEY?.trim() || "",
           geminiKeyConfigured: Boolean(env.GOOGLE_GENERATIVE_AI_API_KEY?.trim()),
           deepgramKeyConfigured: Boolean(env.DEEPGRAM_API_KEY?.trim()),
-          posthogConfigured: Boolean((env as unknown as Record<string, string>).POSTHOG_API_KEY?.trim()),
           cfAccountId: (env as unknown as Record<string, string>).CF_ACCOUNT_ID?.trim() || "",
           cfGatewayId: (env as unknown as Record<string, string>).CF_GATEWAY_ID?.trim() || "",
           cfApiToken: (env as unknown as Record<string, string>).CF_API_TOKEN?.trim() || "",
