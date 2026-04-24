@@ -25,13 +25,21 @@ export default function MainPage() {
     notes,
     pagination,
     isLoading: notesLoading,
+    error: notesError,
     fetchNotes,
     createNote,
     deleteNote,
   } = useNotes({ initialLimit: 8 });
 
-  const { presets, fetchPresets } = usePresets();
-  const { isExporting, exportNotes } = useExport();
+  const { presets, error: presetsError, fetchPresets } = usePresets();
+  const { isExporting, error: exportError, exportNotes } = useExport();
+  const [saveNoteError, setSaveNoteError] = useState<string | null>(null);
+  const [dismissedError, setDismissedError] = useState(false);
+  const topError =
+    saveNoteError ?? notesError ?? presetsError ?? exportError ?? null;
+  useEffect(() => {
+    if (topError) setDismissedError(false);
+  }, [topError]);
 
   useLayoutEffect(() => {
     if (typeof window !== "undefined" && window.electronAPI) {
@@ -100,7 +108,11 @@ export default function MainPage() {
 
   const handleSaveNote = useCallback(
     async (content: string, tag: string) => {
-      await createNote(content, tag);
+      setSaveNoteError(null);
+      const saved = await createNote(content, tag);
+      if (!saved) {
+        setSaveNoteError("Failed to save note. Please try again.");
+      }
     },
     [createNote],
   );
@@ -192,6 +204,21 @@ export default function MainPage() {
         </nav>
       )}
 
+      {topError && !dismissedError && (
+        <div
+          role="alert"
+          className="mx-3 mt-2 flex items-start justify-between gap-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200"
+        >
+          <span className="truncate">{topError}</span>
+          <button
+            type="button"
+            className="shrink-0 text-red-300 hover:text-red-100"
+            onClick={() => setDismissedError(true)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       <main className="flex-1 overflow-hidden min-h-0">
         <div className={cn("h-full min-h-0", isElectron ? "pt-10" : "")}>
           <div

@@ -9,9 +9,23 @@
  * undefined (local dev, first deploy before namespace id is pasted in, etc.).
  */
 
+import { z } from "zod";
 import { getDb } from "./db";
 import { adminConfig } from "./db/schema";
 import { KV, KV_TTL_SECONDS } from "./kv-keys";
+
+// Shape validator for anything we read back from KV. We strip secret fields
+// from what we cache and require callers to re-fetch those from D1 each
+// request — an attacker who compromises KV should not get keys for free.
+const NonSecretConfigSchema = z.object({
+  geminiModel: z.string(),
+  customModelName: z.string(),
+  customBaseUrl: z.string(),
+  useCustom: z.boolean(),
+  cfAccountId: z.string(),
+  cfGatewayId: z.string(),
+});
+type NonSecretConfig = z.infer<typeof NonSecretConfigSchema>;
 
 export interface ResolvedConfig {
   geminiModel: string;
@@ -86,18 +100,49 @@ export async function getCachedConfig(env: ConfigCacheEnv): Promise<ResolvedConf
   }
 
   const key = KV.adminConfig();
+  // KV only stores the non-secret shape; secret fields are loaded from D1
+  // every request. We still strictly validate what we read back — a
+  // malformed / truncated JSON blob must not reach the hot path.
+  let cachedNonSecret: NonSecretConfig | null = null;
   try {
-    const cached = await env.CONFIG_KV.get<ResolvedConfig>(key, "json");
-    if (cached && typeof cached === "object" && "geminiModel" in cached) {
-      return cached;
+    const raw = await env.CONFIG_KV.get<unknown>(key, "json");
+    if (raw) {
+      const parsed = NonSecretConfigSchema.safeParse(raw);
+      if (parsed.success) {
+        cachedNonSecret = parsed.data;
+      } else {
+        console.warn("[config-cache] KV blob failed schema; refreshing");
+      }
     }
   } catch (err) {
     console.warn("[config-cache] KV read failed, falling back to D1:", err);
   }
 
+  if (cachedNonSecret) {
+    // We always hit D1 for the secret columns so they never live in KV.
+    const fresh = await loadFromD1(env);
+    return {
+      ...fresh,
+      geminiModel: cachedNonSecret.geminiModel,
+      customModelName: cachedNonSecret.customModelName,
+      customBaseUrl: cachedNonSecret.customBaseUrl,
+      useCustom: cachedNonSecret.useCustom,
+      cfAccountId: cachedNonSecret.cfAccountId,
+      cfGatewayId: cachedNonSecret.cfGatewayId,
+    };
+  }
+
   const fresh = await loadFromD1(env);
+  const nonSecret: NonSecretConfig = {
+    geminiModel: fresh.geminiModel,
+    customModelName: fresh.customModelName,
+    customBaseUrl: fresh.customBaseUrl,
+    useCustom: fresh.useCustom,
+    cfAccountId: fresh.cfAccountId,
+    cfGatewayId: fresh.cfGatewayId,
+  };
   try {
-    await env.CONFIG_KV.put(key, JSON.stringify(fresh), {
+    await env.CONFIG_KV.put(key, JSON.stringify(nonSecret), {
       expirationTtl: KV_TTL_SECONDS.adminConfig,
     });
   } catch (err) {

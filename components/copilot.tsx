@@ -14,8 +14,7 @@ import { BACKEND_API_URL } from "@/lib/constant";
 import { authClient } from "@/lib/auth-client";
 import { sendGTMEvent } from "@next/third-parties/google";
 import posthog from "posthog-js";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import SafeMarkdown from "@/components/SafeMarkdown";
 import { BookmarkPlus, Sparkles, Zap } from "lucide-react";
 
 const RecorderTranscriber = dynamic(() => import("@/components/recorder"), {
@@ -54,9 +53,14 @@ export function Copilot({
     }
   }, [transcriptionSegments]);
 
+  // Preset context (from the active preset) always wins over the cached
+  // value. Hydration below only runs once on mount, so we flip this flag to
+  // skip the storage read whenever the preset already provided context.
+  const bgHydratedRef = useRef(false);
   useEffect(() => {
     if (presetContext) {
       setBg(presetContext);
+      bgHydratedRef.current = true;
     }
   }, [presetContext]);
 
@@ -143,7 +147,12 @@ export function Copilot({
     setTranscriptionSegments([]);
   };
 
-  const stop = () => {
+  const stop = (e?: React.MouseEvent<HTMLButtonElement>) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.currentTarget.blur();
+    }
     if (controller.current) {
       controller.current.abort();
       controller.current = null;
@@ -153,12 +162,14 @@ export function Copilot({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    e.stopPropagation();
+    if (isLoading) return;
+    if (controller.current) return;
 
     setError(null);
     setCompletion("");
     setIsLoading(true);
 
-    if (controller.current) controller.current.abort();
     controller.current = new AbortController();
 
     sendGTMEvent({ event: "generate_completion", flag: flag });
@@ -193,6 +204,11 @@ export function Copilot({
       }
 
       const decoder = new TextDecoder();
+      // SSE events are delimited by a blank line. We buffer across reads so a
+      // chunk that splits in the middle of `data: {...}` is parsed correctly,
+      // and we cap the buffer so a broken upstream can't balloon memory.
+      let buffer = "";
+      const SSE_CLIENT_BUFFER_MAX = 1_000_000;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -201,10 +217,15 @@ export function Copilot({
           break;
         }
 
-        const chunk = decoder.decode(value, { stream: true });
+        buffer += decoder.decode(value, { stream: true });
+        if (buffer.length > SSE_CLIENT_BUFFER_MAX) {
+          throw new Error("SSE buffer overflow");
+        }
 
-        const eventStrings = chunk.split("\n\n");
-        for (const eventString of eventStrings) {
+        let sepIdx: number;
+        while ((sepIdx = buffer.indexOf("\n\n")) !== -1) {
+          const eventString = buffer.slice(0, sepIdx);
+          buffer = buffer.slice(sepIdx + 2);
           if (!eventString.trim()) continue;
 
           const dataMatch = eventString.match(/data: (.*)/);
@@ -243,16 +264,28 @@ export function Copilot({
     }
   };
 
+  // Background context can include resume / JD / PII. Keep it in
+  // sessionStorage so it's cleared when the tab closes rather than surviving
+  // indefinitely in localStorage. Also skip hydration if the preset already
+  // populated the field.
   useEffect(() => {
-    const savedBg = localStorage.getItem("bg");
-    if (savedBg) {
-      setBg(savedBg);
+    if (bgHydratedRef.current) return;
+    try {
+      const savedBg = sessionStorage.getItem("bg");
+      if (savedBg) setBg(savedBg);
+    } catch {
+      // sessionStorage unavailable (e.g. disabled storage)
     }
+    bgHydratedRef.current = true;
   }, []);
 
   useEffect(() => {
     if (!bg) return;
-    localStorage.setItem("bg", bg);
+    try {
+      sessionStorage.setItem("bg", bg);
+    } catch {
+      // Quota or unavailable — non-fatal.
+    }
   }, [bg]);
 
   const handleSave = () => {
@@ -349,8 +382,7 @@ export function Copilot({
 
               <Button
                 className="h-9 px-6 accent-gradient text-white font-medium shadow-lg hover:shadow-emerald-500/20 transition-all active:scale-[0.97] text-xs tracking-wide rounded-xl"
-                disabled={isLoading}
-                type="submit"
+                type={isLoading ? "button" : "submit"}
                 onClick={isLoading ? stop : undefined}
               >
                 {isLoading ? (
@@ -446,9 +478,7 @@ export function Copilot({
             </div>
           ) : (
             <div className="prose prose-invert prose-xs max-w-none text-zinc-300 text-xs leading-relaxed pl-0.5 pr-1">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {completion}
-              </ReactMarkdown>
+              <SafeMarkdown>{completion}</SafeMarkdown>
             </div>
           )}
         </div>

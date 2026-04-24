@@ -34,13 +34,35 @@ export function useExport() {
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
         } else {
+          // Render the server HTML in a sandboxed iframe served via a blob
+          // URL. This isolates the exported document from our origin and
+          // cookies; even if the HTML were ever to contain injected script,
+          // it cannot touch the app. We trigger print() after load.
           const html = await res.text();
-          const printWindow = window.open("", "_blank");
-          if (!printWindow) {
-            throw new Error("Pop-up blocked. Please allow pop-ups to export as PDF.");
-          }
-          printWindow.document.write(html);
-          printWindow.document.close();
+          const blob = new Blob([html], { type: "text/html" });
+          const url = URL.createObjectURL(blob);
+          const iframe = document.createElement("iframe");
+          iframe.setAttribute("sandbox", "allow-same-origin allow-modals");
+          iframe.style.position = "fixed";
+          iframe.style.right = "0";
+          iframe.style.bottom = "0";
+          iframe.style.width = "0";
+          iframe.style.height = "0";
+          iframe.style.border = "0";
+          iframe.src = url;
+          iframe.onload = () => {
+            try {
+              iframe.contentWindow?.focus();
+              iframe.contentWindow?.print();
+            } catch {
+              // Print may be blocked; the user can still save the .md export.
+            }
+            setTimeout(() => {
+              URL.revokeObjectURL(url);
+              iframe.remove();
+            }, 60_000);
+          };
+          document.body.appendChild(iframe);
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);

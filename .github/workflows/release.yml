@@ -45,7 +45,15 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Trust postinstall scripts
-        run: bun pm trust --all || true
+        # Explicitly allowlist only the native modules that need postinstall
+        # scripts to build binaries. Avoid `--all`, which runs postinstall
+        # hooks from every transitive dep and is a supply-chain footgun.
+        shell: bash
+        run: |
+          set -euo pipefail
+          for pkg in electron esbuild sharp @img/sharp-darwin-arm64 @img/sharp-darwin-x64 @img/sharp-linux-x64 @img/sharp-win32-x64; do
+            bun pm trust "$pkg" || true
+          done
 
       - name: Build Electron main + preload
         run: bun run build:electron
@@ -80,6 +88,8 @@ jobs:
     name: Publish GitHub Release
     needs: build
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

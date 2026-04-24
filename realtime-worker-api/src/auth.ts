@@ -6,6 +6,19 @@ import { hashPassword, verifyPassword } from "./crypto";
 import { selfHostedAdmin } from "./plugins/self-hosted-admin";
 import { invalidateConfigCache } from "./config-cache";
 
+/**
+ * Canonical list of browser origins we accept. Shared with the worker's CORS
+ * layer (see src/index.ts) so Better Auth's origin check and the CORS
+ * Access-Control-Allow-Origin response never disagree.
+ */
+export const TRUSTED_ORIGINS = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "https://copilot.vedgupta.in",
+  "https://interview-copilot-admin.vedgupta.in",
+  "https://realtime-worker-api-prod.vedgupta.in",
+] as const;
+
 export const auth = (env: Env & { CONFIG_KV?: KVNamespace }) => {
   const db = getDb(env);
 
@@ -35,12 +48,7 @@ export const auth = (env: Env & { CONFIG_KV?: KVNamespace }) => {
         },
       },
     },
-    trustedOrigins: [
-      "http://localhost:3000",
-      "http://localhost:3001",
-      "https://interview-copilot-admin.vedgupta.in",
-      "https://realtime-worker-api-prod.vedgupta.in",
-    ],
+    trustedOrigins: [...TRUSTED_ORIGINS],
     secret: env.BETTER_AUTH_SECRET,
     advanced: {
       defaultCookieAttributes: {

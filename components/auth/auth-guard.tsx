@@ -11,6 +11,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { data: session, isPending, error } = authClient.useSession();
   const [authenticated, setAuthenticated] = useState(false);
+  // Mark the router as used so stricter lint rules don't drop it; we keep it
+  // for future redirects triggered from this component.
+  void router;
 
   useEffect(() => {
     if (!isPending) {
@@ -53,12 +56,48 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
+  if (error) {
+    // Surface session errors instead of getting stuck on Loading…, and give
+    // the user a way to retry and to fall back to the sign-in flow.
+    const msg = error instanceof Error ? error.message : String(error);
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen text-white gap-3 px-6">
+        <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
+          <span className="text-2xl">⚠️</span>
+        </div>
+        <h1 className="text-xl font-semibold">Could not verify your session</h1>
+        <p className="text-sm text-zinc-400 text-center max-w-md">{msg}</p>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            className="text-sm px-3 py-1.5 rounded-md bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200"
+            onClick={() => window.location.reload()}
+          >
+            Retry
+          </button>
+          <button
+            type="button"
+            className="text-sm px-3 py-1.5 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
+            onClick={() => setAuthenticated(false)}
+          >
+            Sign in again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!authenticated) {
     return <AuthWizard onSuccess={() => setAuthenticated(true)} />;
   }
 
-  // @ts-ignore - isBanned is added to schema but types might not be inferred yet in client
-  if (session?.user && session.user.isBanned) {
+  // Better Auth's generated user type doesn't include our custom
+  // approval/ban columns. Narrow through a local interface instead of
+  // @ts-ignore so TS still catches misspellings.
+  const extendedUser = session?.user as
+    | { email: string; isBanned?: boolean; isApproved?: boolean }
+    | undefined;
+  if (extendedUser?.isBanned) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen text-white gap-4 px-6">
         <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
@@ -82,9 +121,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // @ts-ignore - isApproved is added to schema but types might not be inferred yet in client
-  if (session?.user && !session.user.isApproved) {
-    return <WaitingForApproval email={session.user.email} />;
+  if (extendedUser && !extendedUser.isApproved) {
+    return <WaitingForApproval email={extendedUser.email} />;
   }
 
   return <>{children}</>;

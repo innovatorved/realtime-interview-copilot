@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { BACKEND_API_URL } from "@/lib/constant";
 import type { SavedNote, NotesResponse, PaginationInfo } from "@/lib/types";
 
@@ -19,6 +19,13 @@ export function useNotes({ initialLimit = 10 }: UseNotesOptions = {}) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // Cancel any in-flight list fetch if the consumer unmounts so we don't
+  // setState on a dead component.
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
   const listFiltersRef = useRef<{ search: string; tag: string }>({
     search: "",
     tag: "",

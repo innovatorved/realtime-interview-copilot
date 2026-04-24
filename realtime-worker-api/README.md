@@ -25,7 +25,7 @@ realtime-worker-api/
 │   ├── index.ts         # Main API routes & handlers
 │   ├── auth.ts          # Better Auth configuration
 │   ├── crypto.ts        # Password hashing utilities
-│   ├── posthog.ts       # Analytics tracking
+│   ├── url-guard.ts     # Outbound URL SSRF allowlist
 │   └── db/
 │       ├── index.ts     # Drizzle ORM setup
 │       └── schema.ts    # Database schema

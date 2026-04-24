@@ -43,6 +43,7 @@ import type * as schemaTypes from "../db/schema";
 import { count, desc, eq, gte, like, or, and, lt, asc } from "drizzle-orm";
 import { z } from "zod";
 import adminCfg from "../config.json";
+import { validateOutboundUrl } from "../url-guard";
 
 // ─── Central Config ─────────────────────────────────────────────────────────
 
@@ -130,6 +131,25 @@ const adminUpdatePresetSchema = z.object({
 const adminDeletePresetSchema = z.object({
   presetId: safeIdSchema,
 });
+
+const revealConfigSchema = z.object({
+  key: configKeyEnum,
+});
+
+// Upstream fetches performed on behalf of an admin should never hang a
+// request. All admin-triggered outbound calls share this timeout.
+const ADMIN_FETCH_TIMEOUT_MS = 10_000;
+const SECRET_KEY_SUFFIXES = ["_key", "_token", "_api_key", "_secret"] as const;
+
+function isSecretConfigKey(key: string): boolean {
+  return SECRET_KEY_SUFFIXES.some((s) => key.endsWith(s));
+}
+
+function maskSecret(value: string): string {
+  if (!value) return "";
+  if (value.length <= 8) return "••••";
+  return `${value.slice(0, 4)}…${value.slice(-4)}`;
+}
 
 // ─── AI Gateway / Health schemas ──────────────────────────────────────────
 
@@ -349,28 +369,58 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
     }
   }
 
+  /**
+   * Fail-closed atomic rate limit.
+   *
+   * The row id is a deterministic hash of the rate-limit key (`rl:<key>`),
+   * which makes the primary-key INSERT-or-UPDATE single-statement and
+   * eliminates the select→update race the previous implementation had.
+   * ON CONFLICT(id) uses the existing PRIMARY KEY (no migration required)
+   * and we read the post-write count back via RETURNING so concurrent
+   * attempts on the same key serialise cleanly.
+   */
   async function checkRateLimit(key: string, maxAttempts: number) {
-    const db = opts.getDb();
-    const now = new Date();
-    const windowStart = new Date(now.getTime() - RATE_LIMIT_WINDOW_MS);
-    await db.delete(rateLimitEntry).where(lt(rateLimitEntry.expiresAt, now));
-    const [existing] = await db
-      .select()
-      .from(rateLimitEntry)
-      .where(and(eq(rateLimitEntry.key, key), gte(rateLimitEntry.windowStart, windowStart)));
-    if (existing) {
-      const newCount = existing.count + 1;
-      await db.update(rateLimitEntry).set({ count: newCount }).where(eq(rateLimitEntry.id, existing.id));
+    try {
+      const now = new Date();
+      const nowSec = Math.floor(now.getTime() / 1000);
+      const expiresSec = nowSec + Math.floor(RATE_LIMIT_WINDOW_MS / 1000);
+      const cutoffSec = nowSec - Math.floor(RATE_LIMIT_WINDOW_MS / 1000);
+
+      // Periodic cleanup of expired rows. Best-effort; failures must not
+      // change the decision below.
+      try {
+        const db = opts.getDb();
+        await db.delete(rateLimitEntry).where(lt(rateLimitEntry.expiresAt, now));
+      } catch { /* best-effort */ }
+
+      // Deterministic id so repeated calls with the same `key` target the
+      // same row and ON CONFLICT(id) can upsert atomically.
+      const idBytes = new TextEncoder().encode(`rl:${key}`);
+      const digest = await crypto.subtle.digest("SHA-256", idBytes);
+      const id = Array.from(new Uint8Array(digest))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("")
+        .slice(0, 64);
+
+      const result = await opts.d1
+        .prepare(
+          `INSERT INTO rate_limit (id, key, count, windowStart, expiresAt)
+           VALUES (?1, ?2, 1, ?3, ?4)
+           ON CONFLICT(id) DO UPDATE SET
+             count = CASE WHEN rate_limit.windowStart < ?5 THEN 1 ELSE rate_limit.count + 1 END,
+             windowStart = CASE WHEN rate_limit.windowStart < ?5 THEN ?3 ELSE rate_limit.windowStart END,
+             expiresAt = CASE WHEN rate_limit.windowStart < ?5 THEN ?4 ELSE rate_limit.expiresAt END
+           RETURNING count`,
+        )
+        .bind(id, key, nowSec, expiresSec, cutoffSec)
+        .first<{ count: number }>();
+
+      const newCount = result?.count ?? 1;
       return { allowed: newCount <= maxAttempts, count: newCount };
+    } catch (err) {
+      console.error("[SelfHostedAdmin] rate limit check failed, failing closed:", err);
+      return { allowed: false, count: maxAttempts + 1 };
     }
-    await db.insert(rateLimitEntry).values({
-      id: crypto.randomUUID(),
-      key,
-      count: 1,
-      windowStart: now,
-      expiresAt: new Date(now.getTime() + RATE_LIMIT_WINDOW_MS),
-    });
-    return { allowed: true, count: 1 };
   }
 
   function isAdmin(email: string) {
@@ -430,12 +480,21 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
   async function fetchAiGateway(cfg: CfGatewayConfig, pathSuffix: string, query?: URLSearchParams): Promise<{ ok: boolean; status: number; body: unknown }> {
     const base = cfApiBase(cfg);
     const qs = query && query.toString() ? `?${query.toString()}` : "";
-    const resp = await fetch(`${base}${pathSuffix}${qs}`, {
-      headers: { Authorization: `Bearer ${cfg.apiToken}`, accept: "application/json" },
-    });
-    let body: unknown = null;
-    try { body = await resp.json(); } catch { body = null; }
-    return { ok: resp.ok, status: resp.status, body };
+    try {
+      const resp = await fetch(`${base}${pathSuffix}${qs}`, {
+        headers: { Authorization: `Bearer ${cfg.apiToken}`, accept: "application/json" },
+        signal: AbortSignal.timeout(ADMIN_FETCH_TIMEOUT_MS),
+      });
+      let body: unknown = null;
+      try { body = await resp.json(); } catch { body = null; }
+      return { ok: resp.ok, status: resp.status, body };
+    } catch (err) {
+      return {
+        ok: false,
+        status: 504,
+        body: { error: err instanceof Error ? err.message : String(err) },
+      };
+    }
   }
 
   // ── Provider probes ──────────────────────────────────────────────
@@ -448,6 +507,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
       if (!apiKey) throw new Error("No API key configured");
       const resp = await fetch("https://api.deepgram.com/v1/projects", {
         headers: { Authorization: `Token ${apiKey}`, accept: "application/json" },
+        signal: AbortSignal.timeout(ADMIN_FETCH_TIMEOUT_MS),
       });
       if (!resp.ok) {
         const text = await resp.text().catch(() => "");
@@ -473,14 +533,16 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
     try {
       if (!apiKey) throw new Error("No API key configured");
       if (!cf.accountId || !cf.gatewayId) throw new Error("AI Gateway not configured");
-      const url = `https://gateway.ai.cloudflare.com/v1/${cf.accountId}/${cf.gatewayId}/google-ai-studio/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+      // Use header-based auth so the API key never appears in URLs/logs.
+      const url = `https://gateway.ai.cloudflare.com/v1/${cf.accountId}/${cf.gatewayId}/google-ai-studio/v1beta/models/${modelName}:generateContent`;
       const resp = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
         body: JSON.stringify({
           contents: [{ role: "user", parts: [{ text: "ping" }] }],
           generationConfig: { maxOutputTokens: 1 },
         }),
+        signal: AbortSignal.timeout(ADMIN_FETCH_TIMEOUT_MS),
       });
       if (!resp.ok) {
         const text = await resp.text().catch(() => "");
@@ -513,11 +575,24 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         setCachedHealth("customModel", result);
         return result;
       }
+      // Reject internal / private / loopback custom URLs before we issue the
+      // probe (SSRF defence in depth — the admin endpoint layer also gates
+      // which URLs can be stored).
+      const ssrf = validateOutboundUrl(baseUrl);
+      if (!ssrf.ok) {
+        const result: HealthCheckResult = {
+          ok: false, latencyMs: Date.now() - t0, lastProbe: new Date().toISOString(),
+          configured: true, error: `Blocked URL: ${ssrf.reason}`,
+        };
+        setCachedHealth("customModel", result);
+        return result;
+      }
       const endpoint = baseUrl.replace(/\/+$/, "") + "/chat/completions";
       const resp = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({ model: modelName, max_tokens: 1, messages: [{ role: "user", content: "ping" }] }),
+        signal: AbortSignal.timeout(ADMIN_FETCH_TIMEOUT_MS),
       });
       if (!resp.ok) {
         const text = await resp.text().catch(() => "");
@@ -983,16 +1058,54 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const rows = await db.select().from(adminConfig);
+        // Mask secret-like keys by default so a compromised admin session
+        // (or admin-UI XSS) cannot exfiltrate full provider keys. Use
+        // adminRevealConfig for one-off access to a specific secret.
         const config: Record<string, string> = {};
-        for (const r of rows) config[r.key] = r.value;
-        return ctx.json({ config });
+        const masked: string[] = [];
+        for (const r of rows) {
+          if (isSecretConfigKey(r.key)) {
+            config[r.key] = maskSecret(r.value);
+            masked.push(r.key);
+          } else {
+            config[r.key] = r.value;
+          }
+        }
+        return ctx.json({ config, maskedKeys: masked });
       }),
+
+      adminRevealConfig: createAuthEndpoint(
+        "/self-hosted-admin/reveal-config",
+        { method: "POST", use: [sessionMiddleware], body: revealConfigSchema },
+        async (ctx) => {
+          const adminEmail = ctx.context.session.user.email;
+          if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const { key } = ctx.body;
+          const [row] = await db.select().from(adminConfig).where(eq(adminConfig.key, key));
+          if (!row) throw new APIError("NOT_FOUND", { message: "Config key not found" });
+          await recordAudit({
+            eventType: "admin_action",
+            userEmail: adminEmail,
+            metadata: { action: "reveal_config", key },
+          });
+          return ctx.json({ key, value: row.value });
+        },
+      ),
 
       adminUpdateConfig: createAuthEndpoint("/self-hosted-admin/update-config", { method: "POST", use: [sessionMiddleware], body: updateConfigSchema }, async (ctx) => {
         const adminEmail = ctx.context.session.user.email;
         if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const { key, value } = ctx.body;
+
+        // Gate host-like keys through the SSRF allowlist before persisting.
+        if (key === "custom_base_url") {
+          const check = validateOutboundUrl(value);
+          if (!check.ok) {
+            throw new APIError("BAD_REQUEST", { message: `custom_base_url rejected: ${check.reason}` });
+          }
+        }
 
         const now = new Date();
         const existing = await db.select().from(adminConfig).where(eq(adminConfig.key, key));
@@ -1024,12 +1137,19 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
         const { modelName, baseUrl, apiKey } = ctx.body;
 
+        // SSRF guard: never probe internal / private / loopback URLs.
+        const ssrf = validateOutboundUrl(baseUrl);
+        if (!ssrf.ok) {
+          return ctx.json({ ok: false, error: `URL rejected: ${ssrf.reason}` });
+        }
+
         const endpoint = baseUrl.replace(/\/+$/, "") + "/chat/completions";
         try {
           const resp = await fetch(endpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
             body: JSON.stringify({ model: modelName, max_tokens: 32, messages: [{ role: "user", content: "Say hello in one word." }] }),
+            signal: AbortSignal.timeout(ADMIN_FETCH_TIMEOUT_MS),
           });
           if (!resp.ok) {
             const errText = await resp.text().catch(() => "");

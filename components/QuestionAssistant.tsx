@@ -14,8 +14,7 @@ import {
   ArrowDown,
 } from "lucide-react";
 import { BACKEND_API_URL } from "@/lib/constant";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import SafeMarkdown from "@/components/SafeMarkdown";
 import posthog from "posthog-js";
 
 interface QuestionAssistantProps {
@@ -135,11 +134,14 @@ export function QuestionAssistant({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    e.stopPropagation();
     // Guard against Enter-submitting (or the action button re-submitting)
-    // the form while a request is already in flight. Without this, pressing
-    // the Stop button was aborting the controller AND letting the form
-    // submit, which kicked off a fresh request — looking like a restart.
+    // the form while a request is already in flight OR immediately after
+    // Stop — without this, the same click that aborted the controller
+    // could be interpreted as a fresh submit on the next render and kick
+    // off a duplicate request.
     if (isLoading) return;
+    if (controller.current) return;
     if (!question.trim() && !attachedImage) return;
 
     setError(null);
@@ -148,7 +150,6 @@ export function QuestionAssistant({
     stickToBottomRef.current = true;
     setShowScrollDown(false);
 
-    if (controller.current) controller.current.abort();
     controller.current = new AbortController();
 
     posthog.capture("question_asked", {
@@ -224,7 +225,15 @@ export function QuestionAssistant({
     }
   };
 
-  const handleStop = useCallback(() => {
+  const handleStop = useCallback((e?: React.MouseEvent<HTMLButtonElement>) => {
+    // Belt + braces: prevent the click from bubbling up and triggering a
+    // form submit (which would restart the request), and blur the button so
+    // a subsequent Enter key press doesn't re-activate it.
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.currentTarget.blur();
+    }
     if (controller.current) {
       controller.current.abort();
       controller.current = null;
@@ -405,9 +414,7 @@ export function QuestionAssistant({
                   [&_table]:block [&_table]:overflow-x-auto [&_table]:text-[12px]
                   [&_strong]:font-semibold [&_strong]:text-white
                   [&_blockquote]:text-[13px] [&_blockquote]:my-2">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {answer}
-                  </ReactMarkdown>
+                  <SafeMarkdown>{answer}</SafeMarkdown>
                 </div>
                 {isLoading && (
                   <div className="mt-4 flex items-center gap-2 text-[11px] text-emerald-400/70">

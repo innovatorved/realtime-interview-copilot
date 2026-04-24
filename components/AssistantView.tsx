@@ -2,8 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { Card } from "@/components/ui/card";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import SafeMarkdown from "@/components/SafeMarkdown";
 
 interface HistoryItem {
   id: string;
@@ -17,37 +16,40 @@ export function AssistantView() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && window.electronAPI) {
-      // Sync Background Context
-      const unsubscribeContext = window.electronAPI.onSyncContext((text) => {
-        setContext(text);
-      });
+    // The main process does not yet implement onSyncContext /
+    // onSyncCompletion IPC channels. Guard every call so the renderer
+    // can't TypeError if it runs against an older preload build.
+    if (typeof window === "undefined" || !window.electronAPI) return;
+    const api = window.electronAPI;
 
-      // Sync Responses
-      const unsubscribeCompletion = window.electronAPI.onSyncCompletion(
-        (text, isNew) => {
-          if (isNew) {
-            // If we have a current response, push it to history before starting new
-            setCurrentResponse((prev) => {
-              if (prev) {
-                setHistory((h) => [
-                  ...h,
-                  { id: Date.now().toString(), text: prev },
-                ]);
-              }
-              return text;
-            });
-          } else {
-            setCurrentResponse((prev) => prev + text);
-          }
-        },
-      );
+    const unsubscribeContext =
+      typeof api.onSyncContext === "function"
+        ? api.onSyncContext((text) => setContext(text))
+        : undefined;
 
-      return () => {
-        unsubscribeContext();
-        unsubscribeCompletion();
-      };
-    }
+    const unsubscribeCompletion =
+      typeof api.onSyncCompletion === "function"
+        ? api.onSyncCompletion((text, isNew) => {
+            if (isNew) {
+              setCurrentResponse((prev) => {
+                if (prev) {
+                  setHistory((h) => [
+                    ...h,
+                    { id: Date.now().toString(), text: prev },
+                  ]);
+                }
+                return text;
+              });
+            } else {
+              setCurrentResponse((prev) => prev + text);
+            }
+          })
+        : undefined;
+
+    return () => {
+      unsubscribeContext?.();
+      unsubscribeCompletion?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -67,9 +69,7 @@ export function AssistantView() {
               Interview Context
             </h2>
             <div className="text-sm text-gray-200 leading-relaxed font-medium prose prose-invert prose-sm max-w-none">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {context}
-              </ReactMarkdown>
+              <SafeMarkdown>{context}</SafeMarkdown>
             </div>
           </Card>
         )}
@@ -81,9 +81,7 @@ export function AssistantView() {
             className="w-full bg-gray-800/90 backdrop-blur-xl border-gray-700/50 shadow-xl rounded-xl overflow-hidden border p-5 animate-in fade-in slide-in-from-bottom-4 duration-500"
           >
             <div className="text-sm text-gray-300 leading-relaxed prose prose-invert prose-sm max-w-none">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {item.text}
-              </ReactMarkdown>
+              <SafeMarkdown>{item.text}</SafeMarkdown>
             </div>
           </Card>
         ))}
@@ -98,9 +96,7 @@ export function AssistantView() {
               </span>
             </div>
             <div className="text-sm text-white leading-relaxed font-medium prose prose-invert prose-sm max-w-none">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {currentResponse}
-              </ReactMarkdown>
+              <SafeMarkdown>{currentResponse}</SafeMarkdown>
             </div>
           </Card>
         )}

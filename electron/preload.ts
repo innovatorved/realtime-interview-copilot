@@ -23,7 +23,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("window-set-size", width, height),
   appQuit: () => ipcRenderer.invoke("app-quit"),
   appRelaunch: () => ipcRenderer.invoke("app-relaunch"),
-  getAudioDevices: () => ipcRenderer.invoke("get-audio-devices"),
   platform: process.platform,
   isElectron: true,
   supportsSystemAudio: true,
@@ -54,7 +53,6 @@ export interface ElectronAPI {
   windowSetSize: (width: number, height: number) => Promise<void>;
   appQuit: () => Promise<void>;
   appRelaunch: () => Promise<void>;
-  getAudioDevices: () => Promise<{ success: boolean; error?: any }>;
   platform: string;
   isElectron: boolean;
   supportsSystemAudio: boolean;

@@ -19,16 +19,17 @@ export interface ElectronAPI {
   windowIsAlwaysOnTop: () => Promise<boolean>;
   windowIsMaximized: () => Promise<boolean>;
   windowSetSize: (width: number, height: number) => Promise<void>;
-  windowOpenAssistant: () => Promise<void>;
-  syncCompletion: (text: string, isNew: boolean) => Promise<void>;
-  onSyncCompletion: (
+  // Optional because the main process does not currently register these
+  // IPC channels. Renderers must feature-detect before calling.
+  windowOpenAssistant?: () => Promise<void>;
+  syncCompletion?: (text: string, isNew: boolean) => Promise<void>;
+  onSyncCompletion?: (
     callback: (text: string, isNew: boolean) => void,
   ) => () => void;
-  syncContext: (text: string) => Promise<void>;
-  onSyncContext: (callback: (text: string) => void) => () => void;
+  syncContext?: (text: string) => Promise<void>;
+  onSyncContext?: (callback: (text: string) => void) => () => void;
   appQuit: () => Promise<void>;
   appRelaunch: () => Promise<void>;
-  getAudioDevices: () => Promise<{ success: boolean; error?: any }>;
   platform: string;
   isElectron: boolean;
   supportsSystemAudio: boolean;

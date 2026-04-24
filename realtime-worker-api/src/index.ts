@@ -1,9 +1,30 @@
-import { auth } from "./auth";
+import { auth, TRUSTED_ORIGINS as AUTH_TRUSTED_ORIGINS } from "./auth";
 import { getDb } from "./db";
 import { savedNote, interviewPreset, user as userTable } from "./db/schema";
 import { eq, desc, like, or, and, sql, count } from "drizzle-orm";
 import { getCachedConfig } from "./config-cache";
 import { KV, KV_TTL_SECONDS } from "./kv-keys";
+import { validateOutboundUrl } from "./url-guard";
+
+// ─── Constants & Limits ─────────────────────────────────────────────────────
+
+const MAX_PROMPT_CHARS = 32_000;
+const MAX_BG_CHARS = 16_000;
+const MAX_NOTE_CONTENT_CHARS = 50_000;
+const MAX_NOTE_TAG_CHARS = 100;
+const MAX_NOTE_IDS_PER_EXPORT = 500;
+const DEEPGRAM_TIMEOUT_MS = 10_000;
+const SSE_BUFFER_MAX = 256 * 1024; // 256KB cap to avoid unbounded growth.
+
+function escapeHtml(input: string): string {
+  return input
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 
 enum FLAGS {
   COPILOT = "copilot",
@@ -67,17 +88,17 @@ const ALLOWED_METHODS = "GET,POST,PUT,DELETE,OPTIONS";
 const ALLOWED_HEADERS = "Content-Type,Authorization";
 const CORS_MAX_AGE = "86400";
 
-const TRUSTED_ORIGINS = new Set([
-  "http://localhost:3000",
-  "http://localhost:3001",
-  "https://copilot.vedgupta.in",
-  "https://interview-copilot-admin.vedgupta.in",
-  "https://realtime-worker-api-prod.vedgupta.in",
-]);
+// Single source of truth for allowed origins, re-exported to Better Auth so
+// CORS and the auth trusted-origin check never drift (previously the prod
+// copilot domain was missing from Better Auth's allowlist).
+const TRUSTED_ORIGINS: ReadonlySet<string> = new Set<string>(AUTH_TRUSTED_ORIGINS);
 
 function buildCorsHeaders(request: Request) {
   const origin = request.headers.get("Origin");
-  const allowOrigin = origin && TRUSTED_ORIGINS.has(origin) ? origin : TRUSTED_ORIGINS.values().next().value!;
+  const allowOrigin =
+    origin && TRUSTED_ORIGINS.has(origin)
+      ? origin
+      : (TRUSTED_ORIGINS.values().next().value as string);
 
   return {
     "Access-Control-Allow-Origin": allowOrigin,
@@ -119,52 +140,96 @@ function getClientIp(request: Request): string {
   );
 }
 
+type AuthFailureReason = "unauthorized" | "pending_approval" | "banned";
+
+interface AuthedUser {
+  id: string;
+  email: string;
+  name: string;
+}
+
 async function getAuthenticatedUser(
   request: Request,
   env: Env,
   ctx: ExecutionContext,
-): Promise<{ id: string; email: string; name: string } | null> {
+): Promise<AuthedUser | { error: AuthFailureReason }> {
+  let session;
   try {
-    const session = await auth(env).api.getSession({
-      headers: request.headers,
-    });
-    if (!session?.user) return null;
-
-    const userId = session.user.id;
-
-    // KV-backed throttle so lastActiveAt writes happen at most every 5 minutes
-    // per user, consistent across isolates.
-    if (env.CONFIG_KV) {
-      const key = KV.userActivity(userId);
-      const seen = await env.CONFIG_KV.get(key).catch(() => null);
-      if (!seen) {
-        ctx.waitUntil(
-          (async () => {
-            try {
-              await env.CONFIG_KV!.put(key, "1", {
-                expirationTtl: KV_TTL_SECONDS.userActivity,
-              });
-              await getDb(env)
-                .update(userTable)
-                .set({ lastActiveAt: new Date() })
-                .where(eq(userTable.id, userId))
-                .execute();
-            } catch (e) {
-              console.warn("[Worker] activity update failed:", e);
-            }
-          })(),
-        );
-      }
-    }
-
-    return {
-      id: userId,
-      email: session.user.email,
-      name: session.user.name,
-    };
-  } catch {
-    return null;
+    session = await auth(env).api.getSession({ headers: request.headers });
+  } catch (e) {
+    // Distinguish internal errors from "no session" so operators get a signal
+    // but the caller still sees 401 (the safe default).
+    console.warn("[Worker] getSession failed:", e);
+    return { error: "unauthorized" };
   }
+  if (!session?.user) return { error: "unauthorized" };
+
+  const userId = session.user.id;
+
+  // Load approval / ban flags every request so revocations take effect
+  // immediately (sessions are not invalidated when an admin bans a user).
+  let flags: { isApproved: boolean | null; isBanned: boolean | null } | null = null;
+  try {
+    const rows = await getDb(env)
+      .select({ isApproved: userTable.isApproved, isBanned: userTable.isBanned })
+      .from(userTable)
+      .where(eq(userTable.id, userId))
+      .limit(1);
+    flags = rows[0] ?? null;
+  } catch (e) {
+    console.warn("[Worker] flag lookup failed:", e);
+    return { error: "unauthorized" };
+  }
+
+  if (flags?.isBanned === true) return { error: "banned" };
+  if (flags?.isApproved !== true) return { error: "pending_approval" };
+
+  // KV-backed throttle so lastActiveAt writes happen at most every 5 minutes
+  // per user, consistent across isolates.
+  if (env.CONFIG_KV) {
+    const key = KV.userActivity(userId);
+    const seen = await env.CONFIG_KV.get(key).catch(() => null);
+    if (!seen) {
+      ctx.waitUntil(
+        (async () => {
+          try {
+            await env.CONFIG_KV!.put(key, "1", {
+              expirationTtl: KV_TTL_SECONDS.userActivity,
+            });
+            await getDb(env)
+              .update(userTable)
+              .set({ lastActiveAt: new Date() })
+              .where(eq(userTable.id, userId))
+              .execute();
+          } catch (e) {
+            console.warn("[Worker] activity update failed:", e);
+          }
+        })(),
+      );
+    }
+  }
+
+  return {
+    id: userId,
+    email: session.user.email,
+    name: session.user.name,
+  };
+}
+
+function authErrorResponse(reason: AuthFailureReason): Response {
+  switch (reason) {
+    case "banned":
+      return jsonResponse({ error: "Account suspended" }, 403);
+    case "pending_approval":
+      return jsonResponse({ error: "Account pending approval" }, 403);
+    case "unauthorized":
+    default:
+      return jsonResponse({ error: "Unauthorized" }, 401);
+  }
+}
+
+function isAuthed(result: AuthedUser | { error: AuthFailureReason }): result is AuthedUser {
+  return !("error" in result);
 }
 
 function jsonResponse(data: unknown, status = 200): Response {
@@ -274,7 +339,7 @@ export default {
       (request.method === "POST" || request.method === "GET") &&
       (path === "/api/deepgram" || path === "/deepgram")
     ) {
-      const response = await handleDeepgram(env);
+      const response = await handleDeepgram(request, env, ctx);
       return withCors(response, request);
     }
 
@@ -315,7 +380,7 @@ export default {
         const response = await auth(env).handler(request);
         return withCors(response, request);
       } catch (e) {
-        console.error("[Worker] Auth error:", e);
+        console.error("[Worker] Auth error:", e instanceof Error ? e.message : "unknown");
         return withCors(
           jsonResponse({ error: "Authentication error" }, 500),
           request,
@@ -327,17 +392,39 @@ export default {
   },
 };
 
-async function handleDeepgram(env: Env): Promise<Response> {
+async function handleDeepgram(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<Response> {
+  // Require authentication so the project's paid Deepgram key is never minted
+  // for anonymous callers.
+  const authResult = await getAuthenticatedUser(request, env, ctx);
+  if (!isAuthed(authResult)) return authErrorResponse(authResult.error);
+
+  // Per-user rate limit. Use COMPLETION_LIMITER binding when available; fail
+  // closed when the binding throws (except when the binding itself is absent
+  // in local dev — there we intentionally fall open so the loopback works).
+  if (env.COMPLETION_LIMITER) {
+    const key = `deepgram:${authResult.id}`;
+    try {
+      const { success } = await env.COMPLETION_LIMITER.limit({ key });
+      if (!success) {
+        return jsonResponse({ error: "Rate limit exceeded. Try again in a minute." }, 429);
+      }
+    } catch (err) {
+      console.warn("[Worker] deepgram rate limiter threw, failing closed:", err);
+      return jsonResponse({ error: "Rate limiter unavailable" }, 503);
+    }
+  }
+
   const cfg = await getCachedConfig(env);
   const apiKey = cfg.deepgramKey;
 
   if (!apiKey) {
-    return new Response(
-      JSON.stringify({ error: "Missing Deepgram API key — set via Admin Dashboard or DEEPGRAM_API_KEY env var" }),
-      {
-        status: 500,
-        headers: jsonHeaders,
-      },
+    return jsonResponse(
+      { error: "Missing Deepgram API key — set via Admin Dashboard or DEEPGRAM_API_KEY env var" },
+      500,
     );
   }
 
@@ -346,58 +433,59 @@ async function handleDeepgram(env: Env): Promise<Response> {
     accept: "application/json",
   };
 
-  const projectsResponse = await fetch("https://api.deepgram.com/v1/projects", {
-    method: "GET",
-    headers: authHeaders,
-  });
-
-  const projectsBody =
-    (await projectsResponse.json()) as DeepgramProjectsResponse;
-
-  if (!projectsResponse.ok) {
-    return new Response(JSON.stringify(projectsBody), {
-      status: projectsResponse.status,
-      headers: jsonHeaders,
+  try {
+    const projectsResponse = await fetch("https://api.deepgram.com/v1/projects", {
+      method: "GET",
+      headers: authHeaders,
+      signal: AbortSignal.timeout(DEEPGRAM_TIMEOUT_MS),
     });
-  }
 
-  const project = projectsBody.projects?.[0];
+    const projectsBody = (await projectsResponse.json()) as DeepgramProjectsResponse;
 
-  if (!project) {
-    return new Response(
-      JSON.stringify({
-        error: "Cannot find a Deepgram project. Please create a project first.",
-      }),
-      {
-        status: 404,
+    if (!projectsResponse.ok) {
+      return new Response(JSON.stringify(projectsBody), {
+        status: projectsResponse.status,
         headers: jsonHeaders,
+      });
+    }
+
+    const project = projectsBody.projects?.[0];
+
+    if (!project) {
+      return jsonResponse(
+        { error: "Cannot find a Deepgram project. Please create a project first." },
+        404,
+      );
+    }
+
+    const createResponse = await fetch(
+      `https://api.deepgram.com/v1/projects/${project.project_id}/keys`,
+      {
+        method: "POST",
+        headers: {
+          ...authHeaders,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          comment: `Temporary API key (user ${authResult.id})`,
+          scopes: ["usage:write"],
+          tags: ["cloudflare-worker", `user:${authResult.id}`],
+          time_to_live_in_seconds: 60,
+        }),
+        signal: AbortSignal.timeout(DEEPGRAM_TIMEOUT_MS),
       },
     );
+
+    const createBody = (await createResponse.json()) as DeepgramKeyResponse;
+
+    return new Response(JSON.stringify(createBody), {
+      status: createResponse.ok ? 200 : createResponse.status,
+      headers: jsonHeaders,
+    });
+  } catch (err) {
+    console.warn("[Worker] deepgram upstream failed:", err);
+    return jsonResponse({ error: "Upstream timeout or error talking to Deepgram" }, 504);
   }
-
-  const createResponse = await fetch(
-    `https://api.deepgram.com/v1/projects/${project.project_id}/keys`,
-    {
-      method: "POST",
-      headers: {
-        ...authHeaders,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        comment: "Temporary API key",
-        scopes: ["usage:write"],
-        tags: ["cloudflare-worker"],
-        time_to_live_in_seconds: 60,
-      }),
-    },
-  );
-
-  const createBody = (await createResponse.json()) as DeepgramKeyResponse;
-
-  return new Response(JSON.stringify(createBody), {
-    status: createResponse.ok ? 200 : createResponse.status,
-    headers: jsonHeaders,
-  });
 }
 
 async function handleCompletion(
@@ -409,23 +497,40 @@ async function handleCompletion(
   try {
     payload = (await request.json()) as CompletionRequestBody;
   } catch (error) {
-    return new Response(JSON.stringify({ error: "Invalid JSON payload" }), {
-      status: 400,
-      headers: jsonHeaders,
-    });
+    return jsonResponse({ error: "Invalid JSON payload" }, 400);
   }
 
-  const basePrompt = (payload?.prompt ?? "").trim();
+  if (payload === null || typeof payload !== "object") {
+    return jsonResponse({ error: "Invalid payload" }, 400);
+  }
 
+  const basePrompt = typeof payload.prompt === "string" ? payload.prompt.trim() : "";
   if (!basePrompt) {
-    return new Response(JSON.stringify({ error: "prompt is required" }), {
-      status: 400,
-      headers: jsonHeaders,
-    });
+    return jsonResponse({ error: "prompt is required" }, 400);
+  }
+  if (basePrompt.length > MAX_PROMPT_CHARS) {
+    return jsonResponse({ error: `prompt exceeds ${MAX_PROMPT_CHARS} characters` }, 413);
   }
 
-  // Rate limit: keyed by user id when authenticated, else client IP. The
-  // binding may be absent in local dev — fall open in that case.
+  if (payload.bg !== undefined) {
+    if (typeof payload.bg !== "string") {
+      return jsonResponse({ error: "bg must be a string" }, 400);
+    }
+    if (payload.bg.length > MAX_BG_CHARS) {
+      return jsonResponse({ error: `bg exceeds ${MAX_BG_CHARS} characters` }, 413);
+    }
+  }
+
+  if (payload.flag !== undefined && typeof payload.flag !== "string") {
+    return jsonResponse({ error: "flag must be a string" }, 400);
+  }
+  if (payload.image !== undefined && typeof payload.image !== "string") {
+    return jsonResponse({ error: "image must be a string data URL" }, 400);
+  }
+
+  // Rate limit: keyed by user id when authenticated, else client IP. Binding
+  // may be absent in local dev — fall open only in that case. When the
+  // binding is present but throws, fail closed so we cannot be abused.
   if (env.COMPLETION_LIMITER) {
     let rlUserId: string | null = null;
     try {
@@ -438,13 +543,11 @@ async function handleCompletion(
     try {
       const { success } = await env.COMPLETION_LIMITER.limit({ key });
       if (!success) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Try again in a minute." }),
-          { status: 429, headers: jsonHeaders },
-        );
+        return jsonResponse({ error: "Rate limit exceeded. Try again in a minute." }, 429);
       }
     } catch (err) {
-      console.warn("[Worker] rate limiter threw, falling open:", err);
+      console.warn("[Worker] rate limiter threw, failing closed:", err);
+      return jsonResponse({ error: "Rate limiter unavailable" }, 503);
     }
   }
 
@@ -458,6 +561,17 @@ async function handleCompletion(
   const image = parseImageDataUrl(payload.image);
 
   const cfg = await getCachedConfig(env);
+
+  // When an admin-configured custom base URL is in use, reject the request
+  // up-front if the URL targets internal / link-local / loopback hosts. This
+  // blocks SSRF via the admin dashboard even if an attacker gained admin.
+  if (cfg.useCustom) {
+    const check = validateOutboundUrl(cfg.customBaseUrl);
+    if (!check.ok) {
+      console.warn("[Worker] refused custom base URL:", check.reason);
+      return jsonResponse({ error: "Custom model base URL is not permitted" }, 400);
+    }
+  }
 
   const stream = new TransformStream();
   const writer = stream.writable.getWriter();
@@ -501,7 +615,9 @@ async function streamGeminiCompletion(
     throw new Error("Missing Gemini API key — set via Admin Dashboard or GOOGLE_GENERATIVE_AI_API_KEY env var");
   }
 
-  const url = `https://gateway.ai.cloudflare.com/v1/${cfAccountId}/${cfGatewayId}/google-ai-studio/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${apiKey}`;
+  // Use header-based auth (x-goog-api-key) rather than ?key= so the API key
+  // never shows up in URLs, access logs, or Referer headers on errors.
+  const url = `https://gateway.ai.cloudflare.com/v1/${cfAccountId}/${cfGatewayId}/google-ai-studio/v1beta/models/${modelName}:streamGenerateContent?alt=sse`;
 
   const parts: Array<Record<string, unknown>> = [];
   if (image) {
@@ -550,6 +666,7 @@ async function streamGeminiCompletion(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-goog-api-key": apiKey,
         },
         body: requestBody,
       },
@@ -584,6 +701,9 @@ async function streamGeminiCompletion(
       if (done) break;
 
       buffer += value;
+      if (buffer.length > SSE_BUFFER_MAX) {
+        throw new Error(`SSE buffer exceeded ${SSE_BUFFER_MAX} bytes`);
+      }
 
       let match;
       while ((match = buffer.match(SSERegex)) !== null) {
@@ -611,7 +731,10 @@ async function streamGeminiCompletion(
 
     await writer.write(encoder.encode("data: [DONE]\n\n"));
   } catch (error: unknown) {
-    console.error("Error streaming from Gemini API:", error);
+    console.error(
+      "Error streaming from Gemini API:",
+      error instanceof Error ? error.message : "unknown",
+    );
     const errPayload = error instanceof Error ? { error: error.message } : { error: String(error) };
     try {
       await writer.write(encoder.encode(`data: ${JSON.stringify(errPayload)}\n\n`));
@@ -684,6 +807,9 @@ async function streamOpenAICompatibleCompletion(
       if (done) break;
 
       buffer += value;
+      if (buffer.length > SSE_BUFFER_MAX) {
+        throw new Error(`SSE buffer exceeded ${SSE_BUFFER_MAX} bytes`);
+      }
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
 
@@ -762,8 +888,9 @@ async function handleGetNotes(
   ctx: ExecutionContext,
   url: URL,
 ): Promise<Response> {
-  const user = await getAuthenticatedUser(request, env, ctx);
-  if (!user) return jsonResponse({ error: "Unauthorized" }, 401);
+  const auth = await getAuthenticatedUser(request, env, ctx);
+  if (!isAuthed(auth)) return authErrorResponse(auth.error);
+  const user = auth;
 
   const db = getDb(env);
   const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1", 10));
@@ -817,18 +944,39 @@ async function handleCreateNote(
   env: Env,
   ctx: ExecutionContext,
 ): Promise<Response> {
-  const user = await getAuthenticatedUser(request, env, ctx);
-  if (!user) return jsonResponse({ error: "Unauthorized" }, 401);
+  const auth = await getAuthenticatedUser(request, env, ctx);
+  if (!isAuthed(auth)) return authErrorResponse(auth.error);
+  const user = auth;
 
-  let body: { content?: string; tag?: string };
+  let body: { content?: unknown; tag?: unknown };
   try {
     body = (await request.json()) as typeof body;
   } catch {
     return jsonResponse({ error: "Invalid JSON" }, 400);
   }
 
-  const content = (body.content ?? "").trim();
+  if (body === null || typeof body !== "object") {
+    return jsonResponse({ error: "Invalid body" }, 400);
+  }
+
+  const rawContent = typeof body.content === "string" ? body.content : "";
+  const content = rawContent.trim();
   if (!content) return jsonResponse({ error: "content is required" }, 400);
+  if (content.length > MAX_NOTE_CONTENT_CHARS) {
+    return jsonResponse({ error: `content exceeds ${MAX_NOTE_CONTENT_CHARS} characters` }, 413);
+  }
+
+  let tag = "Copilot";
+  if (body.tag !== undefined) {
+    if (typeof body.tag !== "string") {
+      return jsonResponse({ error: "tag must be a string" }, 400);
+    }
+    const trimmed = body.tag.trim();
+    if (trimmed.length === 0 || trimmed.length > MAX_NOTE_TAG_CHARS) {
+      return jsonResponse({ error: `tag must be 1..${MAX_NOTE_TAG_CHARS} characters` }, 400);
+    }
+    tag = trimmed;
+  }
 
   const db = getDb(env);
   const id = crypto.randomUUID();
@@ -838,7 +986,7 @@ async function handleCreateNote(
     id,
     userId: user.id,
     content,
-    tag: body.tag ?? "Copilot",
+    tag,
     createdAt: now,
   };
 
@@ -853,8 +1001,13 @@ async function handleDeleteNote(
   ctx: ExecutionContext,
   noteId: string,
 ): Promise<Response> {
-  const user = await getAuthenticatedUser(request, env, ctx);
-  if (!user) return jsonResponse({ error: "Unauthorized" }, 401);
+  const auth = await getAuthenticatedUser(request, env, ctx);
+  if (!isAuthed(auth)) return authErrorResponse(auth.error);
+  const user = auth;
+
+  if (!/^[a-zA-Z0-9_-]{1,128}$/.test(noteId)) {
+    return jsonResponse({ error: "Invalid note id" }, 400);
+  }
 
   const db = getDb(env);
   await db
@@ -871,8 +1024,9 @@ async function handleGetPresets(
   env: Env,
   ctx: ExecutionContext,
 ): Promise<Response> {
-  const user = await getAuthenticatedUser(request, env, ctx);
-  if (!user) return jsonResponse({ error: "Unauthorized" }, 401);
+  const auth = await getAuthenticatedUser(request, env, ctx);
+  if (!isAuthed(auth)) return authErrorResponse(auth.error);
+  const user = auth;
 
   const db = getDb(env);
   const presets = await db
@@ -901,8 +1055,9 @@ async function handleExport(
   env: Env,
   ctx: ExecutionContext,
 ): Promise<Response> {
-  const user = await getAuthenticatedUser(request, env, ctx);
-  if (!user) return jsonResponse({ error: "Unauthorized" }, 401);
+  const auth = await getAuthenticatedUser(request, env, ctx);
+  if (!isAuthed(auth)) return authErrorResponse(auth.error);
+  const user = auth;
 
   let body: ExportRequestBody;
   try {
@@ -914,6 +1069,20 @@ async function handleExport(
   const format = body.format;
   if (format !== "markdown" && format !== "pdf") {
     return jsonResponse({ error: "format must be 'markdown' or 'pdf'" }, 400);
+  }
+
+  if (body.noteIds !== undefined) {
+    if (!Array.isArray(body.noteIds)) {
+      return jsonResponse({ error: "noteIds must be an array" }, 400);
+    }
+    if (body.noteIds.length > MAX_NOTE_IDS_PER_EXPORT) {
+      return jsonResponse({ error: `noteIds must be <= ${MAX_NOTE_IDS_PER_EXPORT}` }, 400);
+    }
+    for (const id of body.noteIds) {
+      if (typeof id !== "string" || !/^[a-zA-Z0-9_-]{1,128}$/.test(id)) {
+        return jsonResponse({ error: "noteIds contains an invalid id" }, 400);
+      }
+    }
   }
 
   const db = getDb(env);
@@ -1000,16 +1169,22 @@ function buildExportMarkdown(
 }
 
 function buildExportHTML(markdown: string, userName: string): string {
-  const escapedContent = markdown
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  // Escape every dynamic value: both the body content and the user-supplied
+  // display name (previously interpolated raw into <title>, allowing a
+  // crafted name to close the tag and inject script in the downloaded HTML).
+  const escapedContent = escapeHtml(markdown);
+  const escapedName = escapeHtml(userName ?? "");
 
+  // Tight CSP so the generated file cannot load remote resources. We allow
+  // `'unsafe-inline'` on script-src only for the one print() invocation, but
+  // connect/img/etc stay `'none'` so no data can be exfiltrated if any
+  // injection slipped through.
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Interview Notes — ${userName}</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'none'; connect-src 'none'; font-src 'none';">
+  <title>Interview Notes — ${escapedName}</title>
   <style>
     body { font-family: 'Inter', -apple-system, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; line-height: 1.7; }
     h1 { font-size: 1.8rem; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.5rem; }

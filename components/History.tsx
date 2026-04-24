@@ -15,8 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { SavedNote, PaginationInfo } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import SafeMarkdown from "@/components/SafeMarkdown";
 
 interface HistoryProps {
   notes: SavedNote[];
@@ -409,9 +408,7 @@ export default function History({
                         isSidebar && "[&_*]:text-[11px]",
                       )}
                     >
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {note.content}
-                      </ReactMarkdown>
+                      <SafeMarkdown>{note.content}</SafeMarkdown>
                     </div>
                   ) : (
                     <p className="whitespace-pre-wrap break-words">
