@@ -11,6 +11,13 @@ import {
   getUserUsageSummary,
   getUsageTimeseries,
 } from "./usage";
+import {
+  handleByokStatus,
+  handleByokUpsertCredential,
+  handleByokDeleteCredential,
+  handleByokToggleCredential,
+  handleByokRuntimeConfig,
+} from "./byok/routes";
 
 // ─── Constants & Limits ─────────────────────────────────────────────────────
 
@@ -51,6 +58,8 @@ interface Env {
   CF_GATEWAY_ID?: string;
   /** Cloudflare API token with AI Gateway read scope (fallback when not set via admin dashboard). */
   CF_API_TOKEN?: string;
+  /** Base64 32-byte AES-GCM key used to encrypt BYOK tokens at rest. */
+  BYOK_ENC_KEY?: string;
   DB: D1Database;
   /** General-purpose KV namespace for the worker (see src/kv-keys.ts). */
   CONFIG_KV?: KVNamespace;
@@ -384,6 +393,43 @@ export default {
     if (path === "/api/usage/me" && request.method === "GET") {
       const response = await handleUsageMe(request, env, ctx, url);
       return withCors(response, request);
+    }
+
+    // ── BYOK routes (gated by `byok` feature flag) ────────────────
+    if (path.startsWith("/api/byok")) {
+      const authResult = await getAuthenticatedUser(request, env, ctx);
+      if (!isAuthed(authResult)) {
+        return withCors(authErrorResponse(authResult.error), request);
+      }
+      const u = { id: authResult.id, email: authResult.email };
+
+      if (path === "/api/byok/status" && request.method === "GET") {
+        return withCors(await handleByokStatus(request, env, u), request);
+      }
+      if (path === "/api/byok/runtime-config" && request.method === "GET") {
+        return withCors(await handleByokRuntimeConfig(request, env, ctx, u), request);
+      }
+      if (path === "/api/byok/credential" && request.method === "POST") {
+        return withCors(await handleByokUpsertCredential(request, env, ctx, u), request);
+      }
+      const credentialMatch = /^\/api\/byok\/credential\/([a-zA-Z0-9_-]+)(\/toggle)?$/.exec(path);
+      if (credentialMatch) {
+        const provider = credentialMatch[1]!;
+        const isToggle = !!credentialMatch[2];
+        if (isToggle && request.method === "POST") {
+          return withCors(
+            await handleByokToggleCredential(request, env, ctx, u, provider),
+            request,
+          );
+        }
+        if (!isToggle && request.method === "DELETE") {
+          return withCors(
+            await handleByokDeleteCredential(request, env, ctx, u, provider),
+            request,
+          );
+        }
+      }
+      return withCors(jsonResponse({ error: "Not found" }, 404), request);
     }
 
     if (path.startsWith("/api/auth")) {

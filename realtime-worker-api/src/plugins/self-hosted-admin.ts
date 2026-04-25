@@ -40,7 +40,21 @@ import {
   interviewPreset,
   usageEvent,
   userModelParams,
+  byokCredential,
 } from "../db/schema";
+import {
+  FLAG_KEYS,
+  FLAG_REGISTRY,
+  isKnownFlag,
+  type FlagKey,
+} from "../feature-flags/registry";
+import {
+  clearFlag as ffClearFlag,
+  getFlagForUsers,
+  listForFlag as ffListForFlag,
+  listForUser as ffListForUser,
+  setFlag as ffSetFlag,
+} from "../feature-flags/service";
 import {
   getSystemUsageSummary,
   getTopUsersByUsage,
@@ -116,6 +130,36 @@ const bulkBanSchema = z.object({
 
 const adminDeleteNoteSchema = z.object({
   noteId: safeIdSchema,
+});
+
+// ── Feature flag (generic) + BYOK admin schemas ─────────────────
+// Flag keys are validated against FLAG_REGISTRY at runtime, but Zod
+// still bounds the string so a typo can't blow past length limits.
+const flagKeySchema = z.string().min(1).max(64).regex(/^[a-z0-9_]+$/);
+
+const featureFlagSetSchema = z.object({
+  userId: safeIdSchema,
+  flagKey: flagKeySchema,
+  enabled: z.boolean(),
+  // `value` is only accepted when the flag's registry entry has hasValue=true.
+  // Service layer enforces this; we accept any JSON-serializable value here.
+  value: z.unknown().optional(),
+});
+
+const featureFlagDeleteSchema = z.object({
+  userId: safeIdSchema,
+  flagKey: flagKeySchema,
+});
+
+const byokAdminDisableSchema = z.object({
+  userId: safeIdSchema,
+  provider: z.enum(["deepgram", "openai"]),
+  disabledByAdmin: z.boolean(),
+});
+
+const byokAdminDeleteSchema = z.object({
+  userId: safeIdSchema,
+  provider: z.enum(["deepgram", "openai"]),
 });
 
 const adminCreatePresetSchema = z.object({
@@ -247,7 +291,8 @@ export type AuditEventType =
   | "security_rate_limited"
   | "security_disposable_email"
   | "security_credential_stuffing"
-  | "admin_action";
+  | "admin_action"
+  | "feature_flag_changed";
 
 export type SecurityAction = "log" | "challenge" | "block";
 
@@ -955,7 +1000,27 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
             ? db.select({ total: count() }).from(user).where(where)
             : db.select({ total: count() }).from(user),
         ]);
-        return ctx.json({ users: rows, total });
+
+        // Inline flags column so the admin table can render BYOK / future
+        // flag toggles per row without N+1 round-trips. One bulk query per
+        // registered flag, then merged into each row.
+        const userIds = rows.map((r) => r.id);
+        const flagsByUser = new Map<string, Record<FlagKey, boolean>>();
+        for (const id of userIds) {
+          flagsByUser.set(id, Object.fromEntries(FLAG_KEYS.map((k) => [k, FLAG_REGISTRY[k].defaultEnabled])) as Record<FlagKey, boolean>);
+        }
+        for (const flagKey of FLAG_KEYS) {
+          const m = await getFlagForUsers(db, flagKey, userIds);
+          for (const [uid, enabled] of m.entries()) {
+            const cur = flagsByUser.get(uid);
+            if (cur) cur[flagKey] = enabled;
+          }
+        }
+        const usersWithFlags = rows.map((r) => ({
+          ...r,
+          flags: flagsByUser.get(r.id) ?? {},
+        }));
+        return ctx.json({ users: usersWithFlags, total });
       }),
 
       adminUpdateUser: createAuthEndpoint("/self-hosted-admin/update-user", { method: "POST", use: [sessionMiddleware], body: updateUserSchema }, async (ctx) => {
@@ -2240,6 +2305,266 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
             eventType: "admin_action",
             userEmail: adminEmail,
             metadata: { action: "delete_user_model_params", userId },
+          });
+          return ctx.json({ ok: true });
+        },
+      ),
+
+      // ── Generic feature-flag admin endpoints ─────────────────────
+      //
+      // These FIVE endpoints serve EVERY flag forever. New flags only
+      // need a single line in src/feature-flags/registry.ts — no admin
+      // API or admin UI work is required. The `/registry` endpoint lets
+      // the admin dashboard auto-render toggles for every known flag.
+
+      adminFeatureFlagRegistry: createAuthEndpoint(
+        "/self-hosted-admin/feature-flag/registry",
+        { method: "GET", use: [sessionMiddleware] },
+        async (ctx) => {
+          if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+          return ctx.json({
+            flags: FLAG_KEYS.map((k) => ({
+              key: k,
+              description: FLAG_REGISTRY[k].description,
+              defaultEnabled: FLAG_REGISTRY[k].defaultEnabled,
+              hasValue: FLAG_REGISTRY[k].hasValue,
+            })),
+          });
+        },
+      ),
+
+      adminFeatureFlagSet: createAuthEndpoint(
+        "/self-hosted-admin/feature-flag/set",
+        { method: "POST", use: [sessionMiddleware], body: featureFlagSetSchema },
+        async (ctx) => {
+          const adminEmail = ctx.context.session.user.email;
+          if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+          const { userId, flagKey, enabled, value } = ctx.body;
+          if (!isKnownFlag(flagKey)) {
+            throw new APIError("BAD_REQUEST", { message: `Unknown flag: ${flagKey}` });
+          }
+
+          const db = opts.getDb();
+          const [existing] = await db.select({ id: user.id, email: user.email }).from(user).where(eq(user.id, userId));
+          if (!existing) throw new APIError("NOT_FOUND", { message: "User not found" });
+
+          let result;
+          try {
+            result = await ffSetFlag(db, {
+              userId,
+              key: flagKey,
+              enabled,
+              value,
+              adminEmail,
+            });
+          } catch (e) {
+            throw new APIError("BAD_REQUEST", {
+              message: e instanceof Error ? e.message : "Invalid flag value",
+            });
+          }
+
+          await recordAudit({
+            eventType: "feature_flag_changed",
+            userId,
+            userEmail: existing.email,
+            metadata: {
+              adminEmail,
+              flagKey,
+              before: result.before,
+              after: result.after,
+            },
+          });
+
+          return ctx.json({ ok: true, ...result });
+        },
+      ),
+
+      adminFeatureFlagListByUser: createAuthEndpoint(
+        "/self-hosted-admin/feature-flag/list-by-user",
+        { method: "GET", use: [sessionMiddleware] },
+        async (ctx) => {
+          if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+          const url = new URL(ctx.request?.url ?? "http://localhost");
+          const userId = url.searchParams.get("userId");
+          if (!userId || !SAFE_ID_RE.test(userId)) {
+            throw new APIError("BAD_REQUEST", { message: "Invalid userId" });
+          }
+          const db = opts.getDb();
+          const flags = await ffListForUser(db, userId);
+          return ctx.json({ userId, flags });
+        },
+      ),
+
+      adminFeatureFlagListByFlag: createAuthEndpoint(
+        "/self-hosted-admin/feature-flag/list-by-flag",
+        { method: "GET", use: [sessionMiddleware] },
+        async (ctx) => {
+          if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+          const url = new URL(ctx.request?.url ?? "http://localhost");
+          const rawKey = url.searchParams.get("flagKey") ?? "";
+          if (!isKnownFlag(rawKey)) {
+            throw new APIError("BAD_REQUEST", { message: "Unknown flagKey" });
+          }
+          const limit = parseLimit(url.searchParams.get("limit"));
+          const offset = parseOffset(url.searchParams.get("offset"));
+          const db = opts.getDb();
+          const rows = await ffListForFlag(db, rawKey, { limit, offset });
+          return ctx.json({ flagKey: rawKey, rows, limit, offset });
+        },
+      ),
+
+      adminFeatureFlagDelete: createAuthEndpoint(
+        "/self-hosted-admin/feature-flag/delete",
+        { method: "POST", use: [sessionMiddleware], body: featureFlagDeleteSchema },
+        async (ctx) => {
+          const adminEmail = ctx.context.session.user.email;
+          if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+          const { userId, flagKey } = ctx.body;
+          if (!isKnownFlag(flagKey)) {
+            throw new APIError("BAD_REQUEST", { message: `Unknown flag: ${flagKey}` });
+          }
+          const db = opts.getDb();
+          await ffClearFlag(db, userId, flagKey);
+          await recordAudit({
+            eventType: "feature_flag_changed",
+            userId,
+            metadata: { adminEmail, flagKey, action: "reset_to_default" },
+          });
+          return ctx.json({ ok: true });
+        },
+      ),
+
+      // ── BYOK-specific admin endpoints ────────────────────────────
+      //
+      // Flag toggling for BYOK reuses the generic /feature-flag/set —
+      // these endpoints only manage CREDENTIALS, which genuinely need
+      // their own table because they store secrets (token ciphertext).
+      // Tokens are NEVER returned in plaintext from any admin endpoint.
+
+      adminByokList: createAuthEndpoint(
+        "/self-hosted-admin/byok/list",
+        { method: "GET", use: [sessionMiddleware] },
+        async (ctx) => {
+          if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const url = new URL(ctx.request?.url ?? "http://localhost");
+          const userId = url.searchParams.get("userId");
+          if (userId && !SAFE_ID_RE.test(userId)) {
+            throw new APIError("BAD_REQUEST", { message: "Invalid userId" });
+          }
+
+          const limit = parseLimit(url.searchParams.get("limit"));
+          const offset = parseOffset(url.searchParams.get("offset"));
+
+          const baseQuery = userId
+            ? db
+                .select({
+                  id: byokCredential.id,
+                  userId: byokCredential.userId,
+                  userEmail: user.email,
+                  provider: byokCredential.provider,
+                  baseUrl: byokCredential.baseUrl,
+                  tokenLast4: byokCredential.tokenLast4,
+                  modelName: byokCredential.modelName,
+                  active: byokCredential.active,
+                  disabledByAdmin: byokCredential.disabledByAdmin,
+                  createdAt: byokCredential.createdAt,
+                  updatedAt: byokCredential.updatedAt,
+                })
+                .from(byokCredential)
+                .innerJoin(user, eq(user.id, byokCredential.userId))
+                .where(eq(byokCredential.userId, userId))
+            : db
+                .select({
+                  id: byokCredential.id,
+                  userId: byokCredential.userId,
+                  userEmail: user.email,
+                  provider: byokCredential.provider,
+                  baseUrl: byokCredential.baseUrl,
+                  tokenLast4: byokCredential.tokenLast4,
+                  modelName: byokCredential.modelName,
+                  active: byokCredential.active,
+                  disabledByAdmin: byokCredential.disabledByAdmin,
+                  createdAt: byokCredential.createdAt,
+                  updatedAt: byokCredential.updatedAt,
+                })
+                .from(byokCredential)
+                .innerJoin(user, eq(user.id, byokCredential.userId));
+
+          const rows = await baseQuery
+            .orderBy(desc(byokCredential.updatedAt))
+            .limit(limit)
+            .offset(offset);
+
+          // Mask the token explicitly so accidental UI logging shows ****
+          // even if the row is serialised somewhere we didn't anticipate.
+          const masked = rows.map((r) => ({
+            ...r,
+            tokenMasked: `••••${r.tokenLast4}`,
+          }));
+          return ctx.json({ credentials: masked });
+        },
+      ),
+
+      adminByokAdminDisable: createAuthEndpoint(
+        "/self-hosted-admin/byok/admin-disable",
+        { method: "POST", use: [sessionMiddleware], body: byokAdminDisableSchema },
+        async (ctx) => {
+          const adminEmail = ctx.context.session.user.email;
+          if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const { userId, provider, disabledByAdmin } = ctx.body;
+
+          const result = await db
+            .update(byokCredential)
+            .set({ disabledByAdmin, updatedAt: new Date() })
+            .where(
+              and(
+                eq(byokCredential.userId, userId),
+                eq(byokCredential.provider, provider),
+              ),
+            )
+            .returning({ id: byokCredential.id });
+
+          if (result.length === 0) {
+            throw new APIError("NOT_FOUND", { message: "Credential not found" });
+          }
+          await recordAudit({
+            eventType: "admin_action",
+            userEmail: adminEmail,
+            userId,
+            metadata: {
+              action: "byok_admin_disable",
+              provider,
+              disabledByAdmin,
+            },
+          });
+          return ctx.json({ ok: true, disabledByAdmin });
+        },
+      ),
+
+      adminByokDelete: createAuthEndpoint(
+        "/self-hosted-admin/byok/delete",
+        { method: "POST", use: [sessionMiddleware], body: byokAdminDeleteSchema },
+        async (ctx) => {
+          const adminEmail = ctx.context.session.user.email;
+          if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const { userId, provider } = ctx.body;
+
+          await db
+            .delete(byokCredential)
+            .where(
+              and(
+                eq(byokCredential.userId, userId),
+                eq(byokCredential.provider, provider),
+              ),
+            );
+          await recordAudit({
+            eventType: "admin_action",
+            userEmail: adminEmail,
+            userId,
+            metadata: { action: "byok_delete", provider },
           });
           return ctx.json({ ok: true });
         },

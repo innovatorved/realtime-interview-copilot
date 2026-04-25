@@ -9,7 +9,29 @@ import {
   shell,
   systemPreferences,
 } from "electron";
+import * as fs from "fs";
 import * as path from "path";
+
+// ── BYOK dynamic CSP support ─────────────────────────────────────
+//
+// Users with the `byok` feature flag can supply their own Deepgram +
+// OpenAI-compatible endpoints. The renderer talks to those endpoints
+// directly, so the host has to be allow-listed in the renderer's
+// Content-Security-Policy `connect-src`.
+//
+// Strategy:
+//   1. The worker is the source of truth: only hosts returned by
+//      /api/byok/runtime-config (session-cookie gated) ever make it
+//      into the CSP.
+//   2. We persist the last-known good hosts to userData so the very
+//      first request after a cold start (before login completes)
+//      already has CSP coverage and avoids a flicker of failed loads.
+//   3. The renderer can request a refresh after saving credentials
+//      via `electronAPI.refreshCsp()`.
+const BYOK_HOSTS_FILE = "byok-hosts.json";
+const PROD_BACKEND = "https://realtime-worker-api-prod.vedgupta.in";
+let byokExtraHosts: string[] = [];
+let currentCsp = "";
 
 type ScreenAccessStatus =
   | "not-determined"
@@ -30,6 +52,150 @@ function getScreenAccess(): ScreenAccessStatus {
 }
 
 let mainWindow: BrowserWindow | null = null;
+
+function byokHostsPath(): string {
+  return path.join(app.getPath("userData"), BYOK_HOSTS_FILE);
+}
+
+function loadPersistedByokHosts(): string[] {
+  try {
+    const raw = fs.readFileSync(byokHostsPath(), "utf8");
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (h): h is string => typeof h === "string" && /^[a-z0-9.\-:]+$/i.test(h),
+    );
+  } catch {
+    return [];
+  }
+}
+
+function savePersistedByokHosts(hosts: string[]) {
+  try {
+    fs.writeFileSync(byokHostsPath(), JSON.stringify(hosts), "utf8");
+  } catch (err) {
+    console.warn("[byok] failed to persist hosts:", err);
+  }
+}
+
+function isAllowedByokHost(host: string): boolean {
+  // Hosts come from the worker (which already validated them), but we
+  // defensively re-check here so a compromised renderer can't smuggle
+  // anything into the CSP via the IPC channel.
+  if (typeof host !== "string") return false;
+  if (host.length === 0 || host.length > 256) return false;
+  if (!/^[a-z0-9.\-]+(:\d{1,5})?$/i.test(host)) return false;
+  const lower = host.toLowerCase();
+  if (lower === "localhost" || lower.startsWith("localhost:")) return false;
+  // Block obvious private IPv4 and loopback ranges (mirrors the worker).
+  const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?::\d+)?$/.exec(lower);
+  if (ipv4) {
+    const a = parseInt(ipv4[1]!, 10);
+    const b = parseInt(ipv4[2]!, 10);
+    if (a === 10 || a === 127 || a === 0) return false;
+    if (a === 169 && b === 254) return false;
+    if (a === 172 && b >= 16 && b <= 31) return false;
+    if (a === 192 && b === 168) return false;
+    if (a === 100 && b >= 64 && b <= 127) return false;
+    if (a >= 224) return false;
+  }
+  return true;
+}
+
+function buildCsp(extraHosts: string[]): string {
+  const isPackaged = app.isPackaged && !process.env.DEV_PORT;
+
+  const extraConnect: string[] = [];
+  for (const host of extraHosts) {
+    if (!isAllowedByokHost(host)) continue;
+    extraConnect.push(`https://${host}`);
+    extraConnect.push(`wss://${host}`);
+  }
+  const extra = extraConnect.length > 0 ? ` ${extraConnect.join(" ")}` : "";
+
+  const devCsp =
+    `default-src 'self'; connect-src 'self' http://localhost:8787 https://eu.i.posthog.com https://eu-assets.i.posthog.com https://copilot.vedgupta.in https://realtime-worker-api.innovatorved.workers.dev https://realtime-worker-api-prod.vedgupta.in https://*.deepgram.com https://api.deepgram.com https://www.googletagmanager.com https://www.google-analytics.com wss://*.deepgram.com ws://localhost:* ws://127.0.0.1:*${extra}; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://www.googletagmanager.com https://eu.i.posthog.com https://eu-assets.i.posthog.com https://www.google-analytics.com; font-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';`;
+  const prodCsp =
+    `default-src 'self'; connect-src 'self' https://eu.i.posthog.com https://eu-assets.i.posthog.com https://copilot.vedgupta.in https://realtime-worker-api.innovatorved.workers.dev https://realtime-worker-api-prod.vedgupta.in https://*.deepgram.com https://api.deepgram.com https://www.googletagmanager.com https://www.google-analytics.com wss://*.deepgram.com${extra}; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://www.googletagmanager.com https://eu.i.posthog.com https://eu-assets.i.posthog.com https://www.google-analytics.com; font-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';`;
+  return isPackaged ? prodCsp : devCsp;
+}
+
+async function fetchByokRuntimeHosts(): Promise<string[]> {
+  // The session cookie set by Better Auth lives in the renderer's session;
+  // we fetch via that same session so the worker authorises us as the
+  // logged-in user. Anything else is treated as "not configured".
+  const isPackaged = app.isPackaged && !process.env.DEV_PORT;
+  const backend = isPackaged
+    ? PROD_BACKEND
+    : process.env.BYOK_RUNTIME_API_BASE || PROD_BACKEND;
+  try {
+    const url = `${backend}/api/byok/runtime-config`;
+    const ses = mainWindow?.webContents.session ?? session.defaultSession;
+    const res = await ses.fetch(url, {
+      method: "GET",
+      // Origin needs to match a trusted origin per the worker's CORS layer.
+      headers: { Origin: "http://localhost:3000" },
+    });
+    if (!res.ok) return [];
+    const json = (await res.json()) as {
+      deepgram?: { host?: string } | null;
+      openai?: { host?: string } | null;
+    };
+    const hosts: string[] = [];
+    if (json.deepgram?.host) hosts.push(json.deepgram.host.toLowerCase());
+    if (json.openai?.host) hosts.push(json.openai.host.toLowerCase());
+    return hosts.filter(isAllowedByokHost);
+  } catch (err) {
+    console.warn("[byok] runtime-config fetch failed:", err);
+    return [];
+  }
+}
+
+function applyCsp() {
+  if (!mainWindow) return;
+  currentCsp = buildCsp(byokExtraHosts);
+  mainWindow.webContents.session.webRequest.onHeadersReceived(
+    (details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          "Content-Security-Policy": [currentCsp],
+        },
+      });
+    },
+  );
+}
+
+async function refreshByokCsp(): Promise<{ hosts: string[] }> {
+  const fresh = await fetchByokRuntimeHosts();
+  byokExtraHosts = fresh;
+  savePersistedByokHosts(fresh);
+  applyCsp();
+  applyOriginInjection();
+  return { hosts: fresh };
+}
+
+function applyOriginInjection() {
+  if (!mainWindow) return;
+  const baseUrls = [
+    "https://realtime-worker-api.innovatorved.workers.dev/*",
+    "https://realtime-worker-api-prod.vedgupta.in/*",
+    "https://*.deepgram.com/*",
+    "https://api.deepgram.com/*",
+  ];
+  const byokUrls: string[] = [];
+  for (const host of byokExtraHosts) {
+    if (!isAllowedByokHost(host)) continue;
+    byokUrls.push(`https://${host}/*`);
+  }
+  mainWindow.webContents.session.webRequest.onBeforeSendHeaders(
+    { urls: [...baseUrls, ...byokUrls] },
+    (details, callback) => {
+      details.requestHeaders["Origin"] = "http://localhost:3000";
+      callback({ requestHeaders: details.requestHeaders });
+    },
+  );
+}
 
 function escapeHtml(s: string): string {
   return s
@@ -109,43 +275,17 @@ async function createWindow() {
     show: false,
   });
 
-  // Configure CSP to allow the hosted API. Dev needs HMR websockets and
-  // `unsafe-eval` for Next.js fast refresh; packaged builds drop those so a
-  // renderer compromise can't execute eval-built code or reach arbitrary ws://
-  // endpoints.
-  const isPackaged = app.isPackaged && !process.env.DEV_PORT;
-  const devCsp =
-    "default-src 'self'; connect-src 'self' http://localhost:8787 https://eu.i.posthog.com https://eu-assets.i.posthog.com https://copilot.vedgupta.in https://realtime-worker-api.innovatorved.workers.dev https://realtime-worker-api-prod.vedgupta.in https://*.deepgram.com https://api.deepgram.com https://www.googletagmanager.com https://www.google-analytics.com wss://*.deepgram.com ws://localhost:* ws://127.0.0.1:*; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://www.googletagmanager.com https://eu.i.posthog.com https://eu-assets.i.posthog.com https://www.google-analytics.com; font-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';";
-  const prodCsp =
-    "default-src 'self'; connect-src 'self' https://eu.i.posthog.com https://eu-assets.i.posthog.com https://copilot.vedgupta.in https://realtime-worker-api.innovatorved.workers.dev https://realtime-worker-api-prod.vedgupta.in https://*.deepgram.com https://api.deepgram.com https://www.googletagmanager.com https://www.google-analytics.com wss://*.deepgram.com; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://www.googletagmanager.com https://eu.i.posthog.com https://eu-assets.i.posthog.com https://www.google-analytics.com; font-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';";
-  const csp = isPackaged ? prodCsp : devCsp;
-  mainWindow.webContents.session.webRequest.onHeadersReceived(
-    (details, callback) => {
-      callback({
-        responseHeaders: {
-          ...details.responseHeaders,
-          "Content-Security-Policy": [csp],
-        },
-      });
-    },
-  );
+  // Seed CSP with the previously-known BYOK hosts so the very first
+  // request after a cold start (before we've had a chance to refresh) is
+  // already covered. The renderer can request a refresh after login or
+  // settings save via `electronAPI.refreshCsp()`.
+  byokExtraHosts = loadPersistedByokHosts();
+  applyCsp();
+  applyOriginInjection();
 
-  // Inject Origin header for API requests to fix "Missing or null Origin" error
-  // This is required because Electron sends "file://" or "null" as origin for local files
-  mainWindow.webContents.session.webRequest.onBeforeSendHeaders(
-    {
-      urls: [
-        "https://realtime-worker-api.innovatorved.workers.dev/*",
-        "https://realtime-worker-api-prod.vedgupta.in/*",
-        "https://*.deepgram.com/*",
-        "https://api.deepgram.com/*",
-      ],
-    },
-    (details, callback) => {
-      details.requestHeaders["Origin"] = "http://localhost:3000"; // Mimic development origin which is likely whitelisted
-      callback({ requestHeaders: details.requestHeaders });
-    },
-  );
+  // Best-effort async refresh once the window is alive — silently no-ops
+  // if the user isn't logged in / BYOK flag isn't enabled.
+  refreshByokCsp().catch((err) => console.warn("[byok] initial refresh failed:", err));
 
   if (process.platform === "darwin") {
     mainWindow.setWindowButtonVisibility(false);
@@ -386,6 +526,19 @@ ipcMain.handle("app-quit", () => {
   app.quit();
 });
 
+// Re-fetch the user's BYOK runtime config and rebuild the renderer CSP.
+// Called by the renderer after the user saves new BYOK credentials so
+// requests against the new endpoint succeed without an app restart.
+ipcMain.handle("byok:refresh-csp", async () => {
+  try {
+    const { hosts } = await refreshByokCsp();
+    return { ok: true, hosts };
+  } catch (err) {
+    console.warn("[byok] refreshCsp failed:", err);
+    return { ok: false };
+  }
+});
+
 // Relaunch the app (needed after macOS Screen Recording permission changes
 // because TCC state is cached per-process until the next launch).
 ipcMain.handle("app-relaunch", () => {
@@ -502,6 +655,13 @@ function handleDeepLink(rawUrl: string | undefined) {
     if (!mainWindow.isVisible()) mainWindow.show();
     mainWindow.focus();
     mainWindow.webContents.send("deep-link", { action: host });
+  }
+  // Auth completed — refresh BYOK hosts so the new session can reach
+  // the user's Deepgram / OpenAI endpoints without an app restart.
+  if (host === "auth-callback") {
+    refreshByokCsp().catch(() => {
+      /* best-effort */
+    });
   }
 }
 

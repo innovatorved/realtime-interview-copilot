@@ -23,6 +23,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("window-set-size", width, height),
   appQuit: () => ipcRenderer.invoke("app-quit"),
   appRelaunch: () => ipcRenderer.invoke("app-relaunch"),
+  // Re-fetch BYOK runtime config and rebuild the renderer CSP. Called
+  // after the user saves new BYOK credentials so the next request to
+  // their endpoint isn't blocked by the previous CSP.
+  refreshCsp: () => ipcRenderer.invoke("byok:refresh-csp"),
   platform: process.platform,
   isElectron: true,
   supportsSystemAudio: true,
@@ -53,6 +57,7 @@ export interface ElectronAPI {
   windowSetSize: (width: number, height: number) => Promise<void>;
   appQuit: () => Promise<void>;
   appRelaunch: () => Promise<void>;
+  refreshCsp: () => Promise<{ ok: boolean; hosts?: string[] }>;
   platform: string;
   isElectron: boolean;
   supportsSystemAudio: boolean;

@@ -203,6 +203,79 @@ export const userModelParams = sqliteTable("user_model_params", {
  *                  they can be dropped later if desired.
  *  - metadata:     JSON stringified bag for extra fields (e.g. imageUsed).
  */
+/**
+ * Generic per-user feature flag table. ONE table serves every flag forever:
+ * adding a new flag is just registering a key in
+ * `src/feature-flags/registry.ts` — no schema change, no new admin endpoint.
+ *
+ *  - `flagKey`   any string from the registry (validated before write).
+ *  - `enabled`   primary on/off switch.
+ *  - `valueJson` optional structured payload (variant, limits, JSON config)
+ *                so we never need a second table for non-boolean flags.
+ *
+ * Rows are absent until an admin (or future system bootstrap) writes one;
+ * the service layer merges registry defaults so callers always get a value.
+ */
+export const featureFlag = sqliteTable(
+  "feature_flag",
+  {
+    id: text("id").primaryKey(),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    flagKey: text("flagKey").notNull(),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
+    valueJson: text("valueJson"),
+    updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+    updatedByEmail: text("updatedByEmail"),
+  },
+  (table) => [
+    uniqueIndex("feature_flag_user_key_idx").on(table.userId, table.flagKey),
+    index("feature_flag_key_idx").on(table.flagKey),
+  ],
+);
+
+/**
+ * BYOK ("bring your own key") credentials for users whose `byok` feature
+ * flag is enabled. Tokens are encrypted at rest with AES-GCM using the
+ * worker secret `BYOK_ENC_KEY`; only `tokenLast4` is ever returned to
+ * admins for display.
+ *
+ *  - `provider`         "deepgram" | "openai" (one row per provider per user).
+ *  - `baseUrl`          user-supplied https:// (or wss:// for Deepgram) URL.
+ *  - `tokenCiphertext`  base64 AES-GCM ciphertext of the user-provided token.
+ *  - `tokenIv`          base64 12-byte IV used for the AES-GCM encryption.
+ *  - `tokenLast4`       last 4 chars of the original token, for masked UI.
+ *  - `modelName`        OpenAI-compatible model id (ignored for Deepgram).
+ *  - `active`           user-side toggle; lets the user temporarily fall
+ *                       back to the worker provider without deleting creds.
+ *  - `disabledByAdmin`  admin kill switch, independent of `active`.
+ */
+export const byokCredential = sqliteTable(
+  "byok_credential",
+  {
+    id: text("id").primaryKey(),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    baseUrl: text("baseUrl").notNull(),
+    tokenCiphertext: text("tokenCiphertext").notNull(),
+    tokenIv: text("tokenIv").notNull(),
+    tokenLast4: text("tokenLast4").notNull(),
+    modelName: text("modelName"),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    disabledByAdmin: integer("disabledByAdmin", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("byok_user_provider_idx").on(table.userId, table.provider),
+  ],
+);
+
 export const usageEvent = sqliteTable(
   "usage_event",
   {

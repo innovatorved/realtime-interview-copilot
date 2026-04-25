@@ -73,7 +73,22 @@ BETTER_AUTH_URL=http://localhost:8787
 POSTHOG_API_KEY=your_posthog_key      # Optional
 POSTHOG_HOST=https://eu.i.posthog.com # Optional
 GEMINI_MODEL=gemini-flash-lite-latest # Optional
+BYOK_ENC_KEY=base64_encoded_32_byte_key # Required for BYOK feature
 ```
+
+> **BYOK encryption key**: `BYOK_ENC_KEY` must be a base64-encoded 32-byte
+> AES-256 key. It is used to encrypt user-supplied Deepgram/OpenAI tokens
+> at rest. Generate with:
+>
+> ```bash
+> openssl rand -base64 32
+> ```
+>
+> In production, store it as a Wrangler secret instead of `.dev.vars`:
+>
+> ```bash
+> npx wrangler secret put BYOK_ENC_KEY
+> ```
 
 ### 3. Setup Database
 

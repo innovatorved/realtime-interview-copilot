@@ -11,6 +11,14 @@ export interface Env {
   CF_ACCOUNT_ID?: string;
   CF_GATEWAY_ID?: string;
   CF_API_TOKEN?: string;
+  /**
+   * Base64-encoded 32-byte (256-bit) AES-GCM key used to encrypt BYOK
+   * tokens at rest. Provision with:
+   *   wrangler secret put BYOK_ENC_KEY
+   * The BYOK feature flag refuses to write or decrypt credentials when
+   * this is missing, so the system fails closed.
+   */
+  BYOK_ENC_KEY?: string;
   DB: D1Database;
 }
 

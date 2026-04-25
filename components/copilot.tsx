@@ -11,6 +11,8 @@ import { Switch } from "@/components/ui/switch";
 import { TranscriptionDisplay } from "@/components/TranscriptionDisplay";
 import { useClientReady } from "@/hooks/useClientReady";
 import { BACKEND_API_URL } from "@/lib/constant";
+import { getByokConfig } from "@/lib/byok-client";
+import { streamByokOpenAI } from "@/lib/openai-stream";
 import { authClient } from "@/lib/auth-client";
 import { sendGTMEvent } from "@next/third-parties/google";
 import posthog from "posthog-js";
@@ -180,6 +182,21 @@ export function Copilot({
     });
 
     try {
+      // BYOK fast path: stream directly from the user's OpenAI-compatible
+      // endpoint when configured + active. Falls through to the worker
+      // when BYOK is off, missing, or admin-disabled.
+      const byok = await getByokConfig().catch(() => null);
+      if (byok?.openai) {
+        await streamByokOpenAI({
+          config: byok.openai,
+          bg,
+          prompt: transcribedText,
+          signal: controller.current.signal,
+          onDelta: (delta) => setCompletion((t) => t + delta),
+        });
+        return;
+      }
+
       const response = await fetch(`${BACKEND_API_URL}/api/completion`, {
         method: "POST",
         headers: {

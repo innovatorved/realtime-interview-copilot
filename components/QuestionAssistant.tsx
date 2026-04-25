@@ -14,6 +14,8 @@ import {
   ArrowDown,
 } from "lucide-react";
 import { BACKEND_API_URL } from "@/lib/constant";
+import { getByokConfig } from "@/lib/byok-client";
+import { streamByokOpenAI } from "@/lib/openai-stream";
 import SafeMarkdown from "@/components/SafeMarkdown";
 import posthog from "posthog-js";
 
@@ -162,6 +164,25 @@ export function QuestionAssistant({
       "Analyze this screenshot and explain what's happening. If it shows an interview question, answer it thoroughly.";
 
     try {
+      // BYOK fast path — direct streaming from user's OpenAI-compatible
+      // endpoint. Falls through to the worker when BYOK isn't active.
+      const byok = await getByokConfig().catch(() => null);
+      if (byok?.openai) {
+        let fullAnswer = "";
+        await streamByokOpenAI({
+          config: byok.openai,
+          bg: "You are a professional interview coach. Provide detailed, comprehensive, interview-ready answers.",
+          prompt: effectivePrompt,
+          image: attachedImage ?? null,
+          signal: controller.current.signal,
+          onDelta: (delta) => {
+            fullAnswer += delta;
+            setAnswer(fullAnswer);
+          },
+        });
+        return;
+      }
+
       const response = await fetch(`${BACKEND_API_URL}/api/completion`, {
         method: "POST",
         headers: {

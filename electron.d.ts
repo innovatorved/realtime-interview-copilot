@@ -30,6 +30,10 @@ export interface ElectronAPI {
   onSyncContext?: (callback: (text: string) => void) => () => void;
   appQuit: () => Promise<void>;
   appRelaunch: () => Promise<void>;
+  // Re-fetch BYOK runtime config from the worker and rebuild the
+  // renderer's Content-Security-Policy. Called after a user saves new
+  // BYOK credentials so the next call to their endpoint isn't blocked.
+  refreshCsp?: () => Promise<{ ok: boolean; hosts?: string[] }>;
   platform: string;
   isElectron: boolean;
   supportsSystemAudio: boolean;

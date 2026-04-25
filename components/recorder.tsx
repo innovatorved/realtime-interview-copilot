@@ -14,6 +14,7 @@ import { Loader2, MicOffIcon } from "lucide-react";
 import { TranscriptionSegment, TranscriptionWord } from "@/lib/types";
 import { useClientReady } from "@/hooks/useClientReady";
 import { BACKEND_API_URL } from "@/lib/constant";
+import { getByokConfig } from "@/lib/byok-client";
 import posthog from "posthog-js";
 
 interface RecorderTranscriberProps {
@@ -112,22 +113,41 @@ export default function RecorderTranscriber({
 
     mediaStreamRef.current = media;
 
-    let apiKeyResponse: CreateProjectKeyResponse;
+    // BYOK fast path: if the user has configured an active Deepgram-compatible
+    // endpoint (and admin hasn't disabled it), connect directly with their
+    // token + URL and skip the worker's short-lived-key flow.
+    let byokDeepgram: Awaited<ReturnType<typeof getByokConfig>>["deepgram"] = null;
     try {
-      const res = await fetch(`${BACKEND_API_URL}/api/deepgram`, {
-        cache: "no-store",
-        credentials: "include",
-      });
-      const object = await res.json();
-      if (typeof object !== "object" || object === null || !("key" in object)) {
-        throw new Error("No api key returned");
+      const byok = await getByokConfig();
+      byokDeepgram = byok.deepgram;
+    } catch {
+      byokDeepgram = null;
+    }
+
+    let dgToken: string;
+    let dgBaseUrl: string | undefined;
+    if (byokDeepgram) {
+      dgToken = byokDeepgram.token;
+      dgBaseUrl = byokDeepgram.baseUrl;
+    } else {
+      let apiKeyResponse: CreateProjectKeyResponse;
+      try {
+        const res = await fetch(`${BACKEND_API_URL}/api/deepgram`, {
+          cache: "no-store",
+          credentials: "include",
+        });
+        const object = await res.json();
+        if (typeof object !== "object" || object === null || !("key" in object)) {
+          throw new Error("No api key returned");
+        }
+        apiKeyResponse = object as CreateProjectKeyResponse;
+      } catch (e) {
+        console.error("Failed to get API key:", e);
+        setErrorMessage("Failed to get API key. Please try again.");
+        teardown();
+        return;
       }
-      apiKeyResponse = object as CreateProjectKeyResponse;
-    } catch (e) {
-      console.error("Failed to get API key:", e);
-      setErrorMessage("Failed to get API key. Please try again.");
-      teardown();
-      return;
+      dgToken = apiKeyResponse.key ?? "";
     }
 
     if (isStale()) {
@@ -137,7 +157,9 @@ export default function RecorderTranscriber({
 
     setSessionState("connecting");
 
-    const deepgram = createClient(apiKeyResponse.key ?? "");
+    const deepgram = dgBaseUrl
+      ? createClient(dgToken, { global: { url: dgBaseUrl } })
+      : createClient(dgToken);
     const conn = deepgram.listen.live({
       model: "nova-2",
       interim_results: true,
