@@ -1,6 +1,6 @@
 import { auth, TRUSTED_ORIGINS as AUTH_TRUSTED_ORIGINS } from "./auth";
 import { getDb } from "./db";
-import { savedNote, interviewPreset, user as userTable } from "./db/schema";
+import { savedNote, interviewPreset, user as userTable, liveSession } from "./db/schema";
 import { eq, desc, like, or, and, sql, count } from "drizzle-orm";
 import { getCachedConfig, getEffectiveModelParams, type ModelParams } from "./config-cache";
 import { KV, KV_TTL_SECONDS } from "./kv-keys";
@@ -146,6 +146,25 @@ function getClientIp(request: Request): string {
   );
 }
 
+/**
+ * CSRF defence: cookies are SameSite=None so a malicious site COULD
+ * issue a cross-origin POST to our worker with the user's session
+ * cookie. We block any state-changing request whose Origin is not in
+ * our trusted list. Same-origin requests from the Electron build send
+ * `null` (file://) — we let those through.
+ */
+const STATE_CHANGING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+function originIsTrusted(request: Request): boolean {
+  if (!STATE_CHANGING_METHODS.has(request.method)) return true;
+  const origin = request.headers.get("Origin");
+  // Browsers always send Origin on cross-site POSTs from script. The
+  // Electron renderer sends "null" (file://) which is fine — that's not
+  // attacker-controllable from the web.
+  if (origin === null || origin === "null") return true;
+  return TRUSTED_ORIGINS.has(origin);
+}
+
 type AuthFailureReason = "unauthorized" | "pending_approval" | "banned";
 
 interface AuthedUser {
@@ -279,6 +298,8 @@ type DeepgramProjectsResponse = {
 
 type DeepgramKeyResponse = Record<string, unknown> & {
   error?: unknown;
+  /** The new key id Deepgram returns; we persist it on live_session so admins can revoke. */
+  api_key_id?: string;
 };
 
 const badFinishReasons = [
@@ -341,6 +362,10 @@ export default {
       return handleOptions(request);
     }
 
+    if (!originIsTrusted(request)) {
+      return withCors(jsonResponse({ error: "Forbidden origin" }, 403), request);
+    }
+
     if (
       (request.method === "POST" || request.method === "GET") &&
       (path === "/api/deepgram" || path === "/deepgram")
@@ -386,6 +411,19 @@ export default {
       return withCors(response, request);
     }
 
+    if (path === "/api/sessions/start" && request.method === "POST") {
+      const response = await handleSessionStart(request, env, ctx);
+      return withCors(response, request);
+    }
+    if (path === "/api/sessions/end" && request.method === "POST") {
+      const response = await handleSessionEnd(request, env, ctx);
+      return withCors(response, request);
+    }
+    if (path === "/api/events/track" && request.method === "POST") {
+      const response = await handleEventTrack(request, env, ctx);
+      return withCors(response, request);
+    }
+
     if (path.startsWith("/api/auth")) {
       try {
         const response = await auth(env).handler(request);
@@ -412,6 +450,25 @@ async function handleDeepgram(
   // for anonymous callers.
   const authResult = await getAuthenticatedUser(request, env, ctx);
   if (!isAuthed(authResult)) return authErrorResponse(authResult.error);
+
+  // Optional `?sessionId=` ties the minted key to a live_session row so an
+  // admin can `terminate` that session and we can DELETE the upstream key,
+  // dropping the candidate's WebSocket on the next audio chunk. The
+  // recorder still works without it (older clients), but admin termination
+  // only works when the binding is present.
+  const reqUrl = new URL(request.url);
+  const sessionIdRaw = reqUrl.searchParams.get("sessionId");
+  const sessionId = sessionIdRaw && SAFE_SESSION_ID_RE.test(sessionIdRaw) ? sessionIdRaw : null;
+  if (sessionId) {
+    const [row] = await getDb(env)
+      .select({ userId: liveSession.userId, endedAt: liveSession.endedAt })
+      .from(liveSession)
+      .where(eq(liveSession.id, sessionId))
+      .limit(1);
+    if (!row) return jsonResponse({ error: "Session not found" }, 404);
+    if (row.userId !== authResult.id) return jsonResponse({ error: "Forbidden" }, 403);
+    if (row.endedAt) return jsonResponse({ error: "Session has already ended" }, 410);
+  }
 
   // Per-user rate limit. Use COMPLETION_LIMITER binding when available; fail
   // closed when the binding throws (except when the binding itself is absent
@@ -503,6 +560,23 @@ async function handleDeepgram(
       errorCode: createResponse.ok ? null : String(createResponse.status),
     });
 
+    if (createResponse.ok && sessionId && typeof createBody.api_key_id === "string") {
+      // Bind the new key to the live_session so admins can revoke it.
+      // Best-effort: a write failure must not break the recorder flow.
+      ctx.waitUntil(
+        getDb(env)
+          .update(liveSession)
+          .set({
+            deepgramKeyId: createBody.api_key_id,
+            deepgramProjectId: project.project_id,
+            lastSeenAt: new Date(),
+          })
+          .where(eq(liveSession.id, sessionId))
+          .execute()
+          .catch((e) => console.warn("[Worker] live_session deepgram bind failed:", e)),
+      );
+    }
+
     return new Response(JSON.stringify(createBody), {
       status: createResponse.ok ? 200 : createResponse.status,
       headers: jsonHeaders,
@@ -519,16 +593,12 @@ async function handleCompletion(
   env: Env,
   ctx: ExecutionContext,
 ): Promise<Response> {
-  // Resolve the caller up-front so we can attribute usage. Completion is
-  // intentionally lenient (anonymous callers are still rate-limited by IP),
-  // so we only record the user when a session is present.
-  let trackedUser: AuthedUser | null = null;
-  try {
-    const maybe = await getAuthenticatedUser(request, env, ctx);
-    if (isAuthed(maybe)) trackedUser = maybe;
-  } catch {
-    trackedUser = null;
-  }
+  // Completion calls cost real money (Gemini quota). Require an approved,
+  // non-banned user — pending_approval / banned must not be able to burn
+  // credits while the admin sorts them out.
+  const authResult = await getAuthenticatedUser(request, env, ctx);
+  if (!isAuthed(authResult)) return authErrorResponse(authResult.error);
+  const trackedUser: AuthedUser = authResult;
 
   let payload: CompletionRequestBody;
   try {
@@ -565,13 +635,12 @@ async function handleCompletion(
     return jsonResponse({ error: "image must be a string data URL" }, 400);
   }
 
-  // Rate limit: keyed by user id when authenticated, else client IP. Binding
-  // may be absent in local dev — fall open only in that case. When the
-  // binding is present but throws, fail closed so we cannot be abused.
+  // Per-user rate limit. Binding may be absent in local dev — fall open
+  // only in that case. When the binding is present but throws, fail
+  // closed so we cannot be abused.
   if (env.COMPLETION_LIMITER) {
-    const key = trackedUser?.id ?? `ip:${getClientIp(request)}`;
     try {
-      const { success } = await env.COMPLETION_LIMITER.limit({ key });
+      const { success } = await env.COMPLETION_LIMITER.limit({ key: trackedUser.id });
       if (!success) {
         recordUsage(env, ctx, request, trackedUser, "completion", {
           status: "rate_limited",
@@ -660,7 +729,7 @@ async function handleCompletion(
 
   const completionFn = cfg.useCustom
     ? streamOpenAICompatibleCompletion(finalPrompt, cfg.customModelName, cfg.customApiKey, cfg.customBaseUrl, trackingWriter, modelParams, image)
-    : streamGeminiCompletion(finalPrompt, cfg.geminiModel, cfg.geminiKey, cfg.cfAccountId, cfg.cfGatewayId, trackingWriter, modelParams, image);
+    : streamGeminiCompletion(finalPrompt, cfg.geminiModel, cfg.geminiKey, cfg.cfAccountId, cfg.cfGatewayId, trackingWriter, modelParams, image, trackedUser);
 
   const pump = completionFn
     .catch(async (error: unknown) => {
@@ -702,6 +771,7 @@ async function streamGeminiCompletion(
   writer: WritableStreamDefaultWriter<Uint8Array>,
   params: ModelParams,
   image?: InlineImage | null,
+  trackedUser?: AuthedUser | null,
 ) {
   if (!apiKey) {
     throw new Error("Missing Gemini API key — set via Admin Dashboard or GOOGLE_GENERATIVE_AI_API_KEY env var");
@@ -759,14 +829,26 @@ async function streamGeminiCompletion(
   });
 
   try {
+    // Tag the call with an opaque user id only, so AI Gateway logs are
+    // attributable on our side without leaking PII (email/name) to a
+    // third party. We resolve email→id locally in the admin filter.
+    const aigHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey,
+    };
+    if (trackedUser?.id) {
+      const meta = { user_id: trackedUser.id.slice(0, 64) };
+      const headerVal = JSON.stringify(meta);
+      if (headerVal.length <= 1024) {
+        aigHeaders["cf-aig-metadata"] = headerVal;
+      }
+    }
+
     const response = await fetchWithRetry(
       url,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": apiKey,
-        },
+        headers: aigHeaders,
         body: requestBody,
       },
       { retries: 2, baseMs: 250, timeoutMs: 10_000 },
@@ -1306,6 +1388,245 @@ async function handleUsageMe(
   });
 }
 
+// ─── Live Sessions (mid-interview admin control) ────────────────────────────
+//
+// The recorder pings these endpoints so admins can see who is mid-interview
+// in real time and intervene (pause / terminate / push a message). We
+// intentionally keep the surface small and never accept arbitrary control
+// signals from the client — only the admin plugin writes `controlSignal`.
+
+const SAFE_SESSION_ID_RE = /^[a-zA-Z0-9_-]{1,128}$/;
+const MAX_CONCURRENT_LIVE_SESSIONS_PER_USER = 3;
+
+const ALLOWED_TRACKED_ACTIONS = new Set<string>([
+  "recording_start",
+  "recording_stop",
+  "screen_capture",
+  "question_asked",
+  "mode_switched",
+  "completion_saved",
+  "preset_loaded",
+  "session_resumed",
+  "session_paused_by_user",
+]);
+
+interface SessionStartBody {
+  presetId?: unknown;
+  presetName?: unknown;
+  surface?: unknown;
+  metadata?: unknown;
+}
+
+async function handleSessionStart(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<Response> {
+  const authResult = await getAuthenticatedUser(request, env, ctx);
+  if (!isAuthed(authResult)) return authErrorResponse(authResult.error);
+
+  // Cheap per-user rate limit so a runaway client cannot spam start.
+  if (env.COMPLETION_LIMITER) {
+    try {
+      const { success } = await env.COMPLETION_LIMITER.limit({
+        key: `session_start:${authResult.id}`,
+      });
+      if (!success) return jsonResponse({ error: "Too many sessions, slow down." }, 429);
+    } catch (err) {
+      console.warn("[Worker] session_start limiter threw, failing closed:", err);
+      return jsonResponse({ error: "Rate limiter unavailable" }, 503);
+    }
+  }
+
+  let body: SessionStartBody = {};
+  try {
+    body = (await request.json()) as SessionStartBody;
+  } catch {
+    body = {};
+  }
+  if (body === null || typeof body !== "object") body = {};
+
+  const presetId = typeof body.presetId === "string" && body.presetId.length <= 128 ? body.presetId : null;
+  const presetName = typeof body.presetName === "string" && body.presetName.length <= 200 ? body.presetName.slice(0, 200) : null;
+  const surface = typeof body.surface === "string" && body.surface.length <= 50 ? body.surface : "web";
+  const metaObj = body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata)
+    ? (body.metadata as Record<string, unknown>)
+    : null;
+
+  const db = getDb(env);
+
+  // Cap concurrent active sessions per user so a misbehaving client can't
+  // fill the live-sessions list for admins.
+  const [{ active }] = await db
+    .select({ active: count() })
+    .from(liveSession)
+    .where(and(eq(liveSession.userId, authResult.id), sql`${liveSession.endedAt} IS NULL`));
+  if (active >= MAX_CONCURRENT_LIVE_SESSIONS_PER_USER) {
+    return jsonResponse(
+      { error: `You already have ${active} active sessions. Stop one before starting another.` },
+      409,
+    );
+  }
+
+  const id = crypto.randomUUID();
+  const now = new Date();
+
+  try {
+    await db.insert(liveSession).values({
+      id,
+      userId: authResult.id,
+      userEmail: authResult.email,
+      presetId,
+      presetName,
+      surface,
+      ipAddress: getClientIp(request),
+      userAgent: request.headers.get("user-agent")?.slice(0, 500) ?? null,
+      startedAt: now,
+      lastSeenAt: now,
+      metadata: metaObj ? JSON.stringify(metaObj).slice(0, 4000) : null,
+    });
+  } catch (e) {
+    console.warn("[Worker] live_session insert failed:", e);
+    return jsonResponse({ error: "Could not start session" }, 500);
+  }
+
+  recordUsage(env, ctx, request, authResult, "session_started", {
+    metadata: { sessionId: id, surface, presetId },
+  });
+
+  return jsonResponse({ sessionId: id, startedAt: now.toISOString() }, 201);
+}
+
+interface SessionMutationBody {
+  sessionId?: unknown;
+  reason?: unknown;
+}
+
+async function handleSessionEnd(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<Response> {
+  const authResult = await getAuthenticatedUser(request, env, ctx);
+  if (!isAuthed(authResult)) return authErrorResponse(authResult.error);
+
+  let body: SessionMutationBody;
+  try {
+    body = (await request.json()) as SessionMutationBody;
+  } catch {
+    return jsonResponse({ error: "Invalid JSON" }, 400);
+  }
+  const sessionId = typeof body?.sessionId === "string" ? body.sessionId : "";
+  if (!SAFE_SESSION_ID_RE.test(sessionId)) {
+    return jsonResponse({ error: "Invalid sessionId" }, 400);
+  }
+  const reason = typeof body?.reason === "string" ? body.reason.slice(0, 100) : "user_stopped";
+
+  const db = getDb(env);
+  const [row] = await db
+    .select({ id: liveSession.id, userId: liveSession.userId, endedAt: liveSession.endedAt })
+    .from(liveSession)
+    .where(eq(liveSession.id, sessionId))
+    .limit(1);
+  if (!row) return jsonResponse({ error: "Session not found" }, 404);
+  if (row.userId !== authResult.id) return jsonResponse({ error: "Forbidden" }, 403);
+  if (row.endedAt) return jsonResponse({ ok: true, alreadyEnded: true });
+
+  const now = new Date();
+  await db
+    .update(liveSession)
+    .set({ endedAt: now, lastSeenAt: now, endedBy: "user", endReason: reason })
+    .where(eq(liveSession.id, sessionId));
+
+  recordUsage(env, ctx, request, authResult, "session_ended", {
+    metadata: { sessionId, reason, endedBy: "user" },
+  });
+
+  return jsonResponse({ ok: true, endedAt: now.toISOString() });
+}
+
+interface EventTrackBody {
+  action?: unknown;
+  sessionId?: unknown;
+  metadata?: unknown;
+}
+
+async function handleEventTrack(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<Response> {
+  const authResult = await getAuthenticatedUser(request, env, ctx);
+  if (!isAuthed(authResult)) return authErrorResponse(authResult.error);
+
+  // Per-user limit so a noisy client can't fill usage_event.
+  if (env.COMPLETION_LIMITER) {
+    try {
+      const { success } = await env.COMPLETION_LIMITER.limit({
+        key: `event_track:${authResult.id}`,
+      });
+      if (!success) return jsonResponse({ error: "Tracking rate limit exceeded" }, 429);
+    } catch (err) {
+      console.warn("[Worker] event_track limiter threw, failing closed:", err);
+      return jsonResponse({ error: "Rate limiter unavailable" }, 503);
+    }
+  }
+
+  let body: EventTrackBody;
+  try {
+    body = (await request.json()) as EventTrackBody;
+  } catch {
+    return jsonResponse({ error: "Invalid JSON" }, 400);
+  }
+  if (body === null || typeof body !== "object") {
+    return jsonResponse({ error: "Invalid body" }, 400);
+  }
+
+  const action = typeof body.action === "string" ? body.action : "";
+  if (!ALLOWED_TRACKED_ACTIONS.has(action)) {
+    return jsonResponse({ error: "action not allowed" }, 400);
+  }
+  const sessionId = typeof body.sessionId === "string" && SAFE_SESSION_ID_RE.test(body.sessionId)
+    ? body.sessionId
+    : null;
+
+  let metaJson: Record<string, unknown> = {};
+  if (body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata)) {
+    metaJson = body.metadata as Record<string, unknown>;
+  }
+  if (sessionId) metaJson.sessionId = sessionId;
+
+  // Cap the metadata payload so a noisy client cannot blow up the row.
+  const metaStr = JSON.stringify(metaJson);
+  if (metaStr.length > 4000) {
+    return jsonResponse({ error: "metadata too large" }, 413);
+  }
+
+  recordUsage(env, ctx, request, authResult, action, { metadata: metaJson });
+
+  if (sessionId) {
+    // Bump the session's eventCount + lastSeenAt so admins can spot
+    // long-lived but quiet sessions.
+    ctx.waitUntil(
+      (async () => {
+        try {
+          await env.DB
+            .prepare(
+              `UPDATE live_session SET eventCount = eventCount + 1, lastSeenAt = ?1
+               WHERE id = ?2 AND userId = ?3 AND endedAt IS NULL`,
+            )
+            .bind(Math.floor(Date.now() / 1000), sessionId, authResult.id)
+            .run();
+        } catch (e) {
+          console.warn("[Worker] session event bump failed:", e);
+        }
+      })(),
+    );
+  }
+
+  return jsonResponse({ ok: true });
+}
+
 function buildExportMarkdown(
   notes: Array<{
     id: string;
@@ -1340,11 +1661,122 @@ function buildExportMarkdown(
   return lines.join("\n");
 }
 
+/**
+ * Tiny, deliberately conservative markdown → HTML renderer for the PDF
+ * export. We do NOT pull in a dependency because:
+ *   - the worker bundle stays small,
+ *   - we control exactly which constructs are emitted, and
+ *   - the only inputs are notes the candidate has written, which we
+ *     already cap at 50K chars.
+ *
+ * Every dynamic value is HTML-escaped first, then a small set of
+ * inline constructs (bold, italic, code, links, headings, lists, hr)
+ * is replaced by escaped HTML tokens. Image syntax is intentionally
+ * dropped — the export CSP forbids img-src so they wouldn't render
+ * anyway and we don't want any URL fetch attempts.
+ */
+function renderMarkdownToHtml(md: string): string {
+  const escaped = escapeHtml(md);
+  const lines = escaped.split(/\r?\n/);
+  const out: string[] = [];
+
+  let inCodeBlock = false;
+  let listType: "ul" | "ol" | null = null;
+
+  const closeList = () => {
+    if (listType) {
+      out.push(`</${listType}>`);
+      listType = null;
+    }
+  };
+
+  const renderInline = (s: string): string => {
+    // Order matters: code spans first (so we don't process markdown
+    // inside them), then links, then bold, then italic.
+    return s
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$1" rel="noopener noreferrer nofollow">$2</a>')
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/__([^_]+)__/g, "<strong>$1</strong>")
+      .replace(/(^|[\s(])\*([^*\n]+)\*/g, "$1<em>$2</em>")
+      .replace(/(^|[\s(])_([^_\n]+)_/g, "$1<em>$2</em>");
+  };
+
+  for (const raw of lines) {
+    const line = raw;
+
+    if (/^\s*```/.test(line)) {
+      closeList();
+      if (inCodeBlock) {
+        out.push("</code></pre>");
+        inCodeBlock = false;
+      } else {
+        out.push('<pre><code>');
+        inCodeBlock = true;
+      }
+      continue;
+    }
+
+    if (inCodeBlock) {
+      out.push(line);
+      continue;
+    }
+
+    if (/^\s*$/.test(line)) {
+      closeList();
+      continue;
+    }
+
+    if (/^---+\s*$/.test(line) || /^___+\s*$/.test(line) || /^\*\*\*+\s*$/.test(line)) {
+      closeList();
+      out.push("<hr />");
+      continue;
+    }
+
+    const heading = /^(#{1,6})\s+(.*)$/.exec(line);
+    if (heading) {
+      closeList();
+      const level = heading[1].length;
+      out.push(`<h${level}>${renderInline(heading[2])}</h${level}>`);
+      continue;
+    }
+
+    const ul = /^\s*[-*+]\s+(.*)$/.exec(line);
+    if (ul) {
+      if (listType !== "ul") { closeList(); out.push("<ul>"); listType = "ul"; }
+      out.push(`<li>${renderInline(ul[1])}</li>`);
+      continue;
+    }
+
+    const ol = /^\s*\d+\.\s+(.*)$/.exec(line);
+    if (ol) {
+      if (listType !== "ol") { closeList(); out.push("<ol>"); listType = "ol"; }
+      out.push(`<li>${renderInline(ol[1])}</li>`);
+      continue;
+    }
+
+    const blockquote = /^&gt;\s+(.*)$/.exec(line); // already escaped
+    if (blockquote) {
+      closeList();
+      out.push(`<blockquote>${renderInline(blockquote[1])}</blockquote>`);
+      continue;
+    }
+
+    closeList();
+    out.push(`<p>${renderInline(line)}</p>`);
+  }
+
+  closeList();
+  if (inCodeBlock) out.push("</code></pre>");
+
+  return out.join("\n");
+}
+
 function buildExportHTML(markdown: string, userName: string): string {
-  // Escape every dynamic value: both the body content and the user-supplied
-  // display name (previously interpolated raw into <title>, allowing a
-  // crafted name to close the tag and inject script in the downloaded HTML).
-  const escapedContent = escapeHtml(markdown);
+  // Render markdown server-side so the PDF prints formatted output
+  // (headings, lists, bold, etc.) instead of raw `## My note`. The
+  // renderer escapes input first, so user content can't inject HTML.
+  const renderedBody = renderMarkdownToHtml(markdown);
   const escapedName = escapeHtml(userName ?? "");
 
   // Tight CSP so the generated file cannot load remote resources. We allow
@@ -1361,13 +1793,21 @@ function buildExportHTML(markdown: string, userName: string): string {
     body { font-family: 'Inter', -apple-system, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; line-height: 1.7; }
     h1 { font-size: 1.8rem; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.5rem; }
     h2 { font-size: 1.3rem; margin-top: 2rem; color: #374151; }
+    h3 { font-size: 1.1rem; margin-top: 1.4rem; color: #374151; }
     hr { border: none; border-top: 1px solid #e5e7eb; margin: 1.5rem 0; }
-    pre { white-space: pre-wrap; font-family: inherit; }
-    @media print { body { margin: 0; } }
+    p { margin: 0.6rem 0; }
+    ul, ol { padding-left: 1.4rem; margin: 0.6rem 0; }
+    li { margin: 0.2rem 0; }
+    blockquote { border-left: 3px solid #d1d5db; margin: 0.6rem 0; padding: 0.2rem 0.8rem; color: #4b5563; }
+    code { background: #f3f4f6; padding: 0.1rem 0.3rem; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.9em; }
+    pre { background: #f3f4f6; padding: 0.8rem 1rem; border-radius: 6px; overflow-x: auto; }
+    pre code { background: transparent; padding: 0; }
+    a { color: #1d4ed8; text-decoration: underline; }
+    @media print { body { margin: 0; } a { color: inherit; text-decoration: none; } }
   </style>
 </head>
 <body>
-  <pre>${escapedContent}</pre>
+  ${renderedBody}
   <script>window.onload = function() { window.print(); }</script>
 </body>
 </html>`;

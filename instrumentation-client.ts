@@ -1,17 +1,5 @@
-import posthog from "posthog-js";
-
-const posthogKey = process.env.NEXT_PUBLIC_POSTHOG_KEY;
-const posthogHost = process.env.NEXT_PUBLIC_POSTHOG_HOST;
-
-if (posthogKey) {
-  posthog.init(posthogKey, {
-    api_host: posthogHost,
-    defaults: "2025-05-24",
-    capture_exceptions: true,
-    debug: process.env.NODE_ENV === "development",
-  });
-} else if (process.env.NODE_ENV === "development") {
-  console.warn(
-    "[posthog] NEXT_PUBLIC_POSTHOG_KEY not set — analytics disabled.",
-  );
-}
+// PostHog initialization moved to <PostHogProvider> (components/PostHogProvider.tsx)
+// so it can also subscribe to App Router pageviews and the auth session for
+// identify(). Keeping this file as a no-op so Next 16 doesn't warn about a
+// missing instrumentation file in the build output.
+export {};

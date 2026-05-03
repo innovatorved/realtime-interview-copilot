@@ -15,6 +15,11 @@ import { TranscriptionSegment, TranscriptionWord } from "@/lib/types";
 import { useClientReady } from "@/hooks/useClientReady";
 import { BACKEND_API_URL } from "@/lib/constant";
 import posthog from "posthog-js";
+import {
+  endLiveSession,
+  startLiveSession,
+  trackEvent,
+} from "@/lib/session-tracking";
 
 interface RecorderTranscriberProps {
   addTextinTranscription: (text: string) => void;
@@ -38,6 +43,7 @@ export default function RecorderTranscriber({
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const segmentCounterRef = useRef<number>(0);
   const sessionIdRef = useRef<number>(0);
+  const liveSessionIdRef = useRef<string | null>(null);
 
   const addTextRef = useRef(addTextinTranscription);
   addTextRef.current = addTextinTranscription;
@@ -112,12 +118,35 @@ export default function RecorderTranscriber({
 
     mediaStreamRef.current = media;
 
+    // Register the live session BEFORE minting the Deepgram key so the
+    // worker can bind the new key to this session. This is what lets an
+    // admin terminate a recording mid-flight: they delete the upstream
+    // key, Deepgram closes the WebSocket, and our LiveTranscriptionEvents.Close
+    // handler tears the recorder down. No client-side polling needed.
+    const live = await startLiveSession({
+      surface: isElectron ? "electron" : "web",
+      metadata: { capture_mode: "system_audio_loopback" },
+    });
+    if (isStale()) {
+      teardown();
+      return;
+    }
+    if (!live) {
+      setErrorMessage("Could not start session. Are you signed in?");
+      teardown();
+      return;
+    }
+    liveSessionIdRef.current = live.sessionId;
+
     let apiKeyResponse: CreateProjectKeyResponse;
     try {
-      const res = await fetch(`${BACKEND_API_URL}/api/deepgram`, {
-        cache: "no-store",
-        credentials: "include",
-      });
+      const res = await fetch(
+        `${BACKEND_API_URL}/api/deepgram?sessionId=${encodeURIComponent(live.sessionId)}`,
+        {
+          cache: "no-store",
+          credentials: "include",
+        },
+      );
       const object = await res.json();
       if (typeof object !== "object" || object === null || !("key" in object)) {
         throw new Error("No api key returned");
@@ -126,6 +155,10 @@ export default function RecorderTranscriber({
     } catch (e) {
       console.error("Failed to get API key:", e);
       setErrorMessage("Failed to get API key. Please try again.");
+      // End the session we just registered so it doesn't sit there as
+      // "active" with no key bound.
+      void endLiveSession(live.sessionId, "deepgram_key_failed");
+      liveSessionIdRef.current = null;
       teardown();
       return;
     }
@@ -170,12 +203,28 @@ export default function RecorderTranscriber({
         platform: isElectron ? "electron" : "browser",
         capture_mode: "system_audio_loopback",
       });
+      trackEvent("recording_start", {
+        sessionId: liveSessionIdRef.current,
+        metadata: { platform: isElectron ? "electron" : "browser" },
+      });
     });
 
     conn.on(LiveTranscriptionEvents.Close, () => {
-      if (connectionRef.current === conn) {
-        teardown();
+      if (connectionRef.current !== conn) return;
+
+      // If we still own a live session id when the WS closes, it means
+      // either (a) Deepgram revoked the key — almost always because an
+      // admin terminated this session — or (b) network blip. Either way,
+      // mark the session ended server-side and surface a hint to the
+      // candidate. The recorder doesn't try to reconnect; the user must
+      // press Start again, which will go through auth again.
+      const sid = liveSessionIdRef.current;
+      if (sid && sessionState === "live") {
+        setErrorMessage("Recording stopped. Your session may have been ended remotely.");
+        void endLiveSession(sid, "websocket_closed");
+        liveSessionIdRef.current = null;
       }
+      teardown();
     });
 
     conn.on(LiveTranscriptionEvents.Error, (error) => {
@@ -234,10 +283,17 @@ export default function RecorderTranscriber({
 
   const stopSession = useCallback(() => {
     sessionIdRef.current++;
+    const sid = liveSessionIdRef.current;
+    liveSessionIdRef.current = null;
     teardown();
     posthog.capture("recording_stopped", {
       platform: isElectron ? "electron" : "browser",
     });
+    trackEvent("recording_stop", {
+      sessionId: sid,
+      metadata: { platform: isElectron ? "electron" : "browser" },
+    });
+    if (sid) void endLiveSession(sid, "user_stopped");
   }, [teardown, isElectron]);
 
   useEffect(() => {
@@ -247,7 +303,10 @@ export default function RecorderTranscriber({
   useEffect(() => {
     return () => {
       sessionIdRef.current++;
+      const sid = liveSessionIdRef.current;
+      liveSessionIdRef.current = null;
       teardown();
+      if (sid) void endLiveSession(sid, "client_unmount");
     };
   }, [teardown]);
 
@@ -344,6 +403,7 @@ export default function RecorderTranscriber({
             </button>
           </div>
         )}
+
       </div>
     </div>
   );

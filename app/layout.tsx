@@ -6,6 +6,7 @@ import { AppBackdropProvider } from "@/components/AppBackdropContext";
 import { GoogleTagManager } from "@next/third-parties/google";
 import { TabProvider } from "@/components/TabContext";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
+import { PostHogProvider } from "@/components/PostHogProvider";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -57,12 +58,14 @@ export default function RootLayout({
       >
         <GoogleTagManager gtmId="GTM-TD6DHJZZ" />
         <AppErrorBoundary>
-          <AppBackdropProvider>
-            <TabProvider>
-              <TitleBar />
-              {children}
-            </TabProvider>
-          </AppBackdropProvider>
+          <PostHogProvider>
+            <AppBackdropProvider>
+              <TabProvider>
+                <TitleBar />
+                {children}
+              </TabProvider>
+            </AppBackdropProvider>
+          </PostHogProvider>
         </AppErrorBoundary>
       </body>
     </html>

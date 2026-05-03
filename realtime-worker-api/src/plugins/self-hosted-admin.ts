@@ -40,6 +40,7 @@ import {
   interviewPreset,
   usageEvent,
   userModelParams,
+  liveSession,
 } from "../db/schema";
 import {
   getSystemUsageSummary,
@@ -48,7 +49,7 @@ import {
   getUsageTimeseries,
 } from "../usage";
 import type * as schemaTypes from "../db/schema";
-import { count, desc, eq, gte, like, or, and, lt, asc } from "drizzle-orm";
+import { count, desc, eq, gte, lte, isNull, isNotNull, like, or, inArray, and, lt, asc, sql } from "drizzle-orm";
 import { z } from "zod";
 import adminCfg from "../config.json";
 import { validateOutboundUrl } from "../url-guard";
@@ -168,6 +169,40 @@ const userModelParamsBodySchema = z.object({
 const userModelParamsDeleteSchema = z.object({
   userId: safeIdSchema,
 });
+
+// ─── Live session schemas ──────────────────────────────────────────
+
+const liveSessionTerminateSchema = z.object({
+  sessionId: safeIdSchema,
+  reason: z.string().max(200).optional(),
+  revokeAuthSessions: z.boolean().optional(),
+});
+
+// ─── Important-event query allow-list ──────────────────────────────
+//
+// Mirrors the server-side ALLOWED_TRACKED_ACTIONS in src/index.ts plus
+// the LLM-level actions we already record automatically. Anything not on
+// this list is rejected so an attacker can't fish through the entire
+// usage_event table via an unsafe filter.
+const IMPORTANT_EVENT_ACTIONS = [
+  "recording_start",
+  "recording_stop",
+  "screen_capture",
+  "question_asked",
+  "mode_switched",
+  "completion_saved",
+  "preset_loaded",
+  "session_started",
+  "session_ended",
+  "session_resumed",
+  "session_paused_by_user",
+  "completion",
+  "deepgram_key",
+  "note_create",
+  "note_delete",
+  "export_markdown",
+  "export_pdf",
+] as const;
 
 // Upstream fetches performed on behalf of an admin should never hang a
 // request. All admin-triggered outbound calls share this timeout.
@@ -372,7 +407,36 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
   const maxLogins = opts.sentinel?.maxLoginAttemptsPerHour ?? adminCfg.sentinel.rateLimits.maxLoginAttemptsPerHour;
   const maxSignups = opts.sentinel?.maxSignupsPerHour ?? adminCfg.sentinel.rateLimits.maxSignupsPerHour;
   const blockDisposable = opts.sentinel?.blockDisposableEmails !== false;
-  const adminSet = new Set(opts.adminEmails.map((e) => e.toLowerCase()));
+  const envAdmins = new Set(opts.adminEmails.map((e) => e.toLowerCase()));
+
+  // Cached merged set (env + admin_config). Cached for 30s so a write
+  // takes effect quickly without hitting D1 on every request.
+  const ADMIN_SET_TTL_MS = 30_000;
+  let adminSetCache: { value: Set<string>; expires: number } | null = null;
+
+  async function getAdminSet(): Promise<Set<string>> {
+    const now = Date.now();
+    if (adminSetCache && adminSetCache.expires > now) return adminSetCache.value;
+    const merged = new Set(envAdmins);
+    try {
+      const [row] = await opts
+        .getDb()
+        .select({ value: adminConfig.value })
+        .from(adminConfig)
+        .where(eq(adminConfig.key, "admin_emails"));
+      if (row?.value) {
+        for (const e of row.value.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)) {
+          merged.add(e);
+        }
+      }
+    } catch (e) {
+      console.warn("[SelfHostedAdmin] admin_emails load failed, using env only:", e);
+    }
+    adminSetCache = { value: merged, expires: now + ADMIN_SET_TTL_MS };
+    return merged;
+  }
+
+  function invalidateAdminSetCache() { adminSetCache = null; }
 
   // ── Internal helpers ─────────────────────────────────────────────
 
@@ -478,8 +542,9 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
     }
   }
 
-  function isAdmin(email: string) {
-    return adminSet.size > 0 && adminSet.has(email.toLowerCase());
+  async function isAdmin(email: string): Promise<boolean> {
+    const set = await getAdminSet();
+    return set.size > 0 && set.has(email.toLowerCase());
   }
 
   // ── AI Gateway helpers ───────────────────────────────────────────
@@ -829,18 +894,18 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
 
     endpoints: {
       adminAppConfig: createAuthEndpoint("/self-hosted-admin/app-config", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
-        if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
         return ctx.json(adminCfg);
       }),
 
       adminMe: createAuthEndpoint("/self-hosted-admin/me", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
         const u = ctx.context.session.user;
-        if (!isAdmin(u.email)) throw new APIError("FORBIDDEN", { message: "Not an admin" });
+        if (!(await isAdmin(u.email))) throw new APIError("FORBIDDEN", { message: "Not an admin" });
         return ctx.json({ admin: true, email: u.email, name: u.name });
       }),
 
       adminOverview: createAuthEndpoint("/self-hosted-admin/overview", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
-        if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const now = new Date();
         const dayAgo = new Date(now.getTime() - 86_400_000);
@@ -896,7 +961,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
       }),
 
       adminChartSignups: createAuthEndpoint("/self-hosted-admin/chart-signups", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
-        if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
         const weeks = 8;
         const now = new Date();
         const weekMs = 7 * 86_400_000;
@@ -922,7 +987,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
       }),
 
       adminListUsers: createAuthEndpoint("/self-hosted-admin/list-users", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
-        if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
         const limit = parseLimit(url.searchParams.get("limit"));
@@ -960,7 +1025,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
 
       adminUpdateUser: createAuthEndpoint("/self-hosted-admin/update-user", { method: "POST", use: [sessionMiddleware], body: updateUserSchema }, async (ctx) => {
         const adminEmail = ctx.context.session.user.email;
-        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const { userId, isApproved, isBanned, banReason } = ctx.body;
 
@@ -986,7 +1051,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
 
       adminDeleteUser: createAuthEndpoint("/self-hosted-admin/delete-user", { method: "POST", use: [sessionMiddleware], body: deleteUserSchema }, async (ctx) => {
         const adminEmail = ctx.context.session.user.email;
-        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const { userId } = ctx.body;
         if (userId === ctx.context.session.user.id) throw new APIError("BAD_REQUEST", { message: "Cannot delete your own account" });
@@ -1004,7 +1069,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
       }),
 
       adminListSessions: createAuthEndpoint("/self-hosted-admin/list-sessions", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
-        if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
         const limit = parseLimit(url.searchParams.get("limit"));
@@ -1036,7 +1101,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
 
       adminRevokeSession: createAuthEndpoint("/self-hosted-admin/revoke-session", { method: "POST", use: [sessionMiddleware], body: revokeSessionSchema }, async (ctx) => {
         const adminEmail = ctx.context.session.user.email;
-        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const { sessionId } = ctx.body;
         await recordAudit({ eventType: "session_revoked", metadata: { sessionId, adminEmail } });
@@ -1046,7 +1111,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
 
       adminRevokeAllSessions: createAuthEndpoint("/self-hosted-admin/revoke-all-sessions", { method: "POST", use: [sessionMiddleware], body: revokeAllSessionsSchema }, async (ctx) => {
         const adminEmail = ctx.context.session.user.email;
-        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const { userId } = ctx.body;
         await recordAudit({ eventType: "sessions_revoked_all", userId, metadata: { adminEmail } });
@@ -1055,7 +1120,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
       }),
 
       adminAuditLogs: createAuthEndpoint("/self-hosted-admin/audit-logs", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
-        if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
         const limit = parseLimit(url.searchParams.get("limit"));
@@ -1079,7 +1144,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
       }),
 
       adminSecurityEvents: createAuthEndpoint("/self-hosted-admin/security-events", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
-        if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
         const limit = parseLimit(url.searchParams.get("limit"));
@@ -1101,7 +1166,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
       }),
 
       adminActivity: createAuthEndpoint("/self-hosted-admin/activity", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
-        if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
         const limit = parseLimit(url.searchParams.get("limit"));
@@ -1110,7 +1175,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
       }),
 
       adminGetConfig: createAuthEndpoint("/self-hosted-admin/config", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
-        if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const rows = await db.select().from(adminConfig);
         // Mask secret-like keys by default so a compromised admin session
@@ -1134,7 +1199,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         { method: "POST", use: [sessionMiddleware], body: revealConfigSchema },
         async (ctx) => {
           const adminEmail = ctx.context.session.user.email;
-          if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+          if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
           const db = opts.getDb();
           const { key } = ctx.body;
           const [row] = await db.select().from(adminConfig).where(eq(adminConfig.key, key));
@@ -1150,7 +1215,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
 
       adminUpdateConfig: createAuthEndpoint("/self-hosted-admin/update-config", { method: "POST", use: [sessionMiddleware], body: updateConfigSchema }, async (ctx) => {
         const adminEmail = ctx.context.session.user.email;
-        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const { key, value } = ctx.body;
 
@@ -1207,7 +1272,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
 
       adminDeleteConfig: createAuthEndpoint("/self-hosted-admin/delete-config", { method: "POST", use: [sessionMiddleware], body: deleteConfigSchema }, async (ctx) => {
         const adminEmail = ctx.context.session.user.email;
-        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const { key } = ctx.body;
         await db.delete(adminConfig).where(eq(adminConfig.key, key));
@@ -1217,7 +1282,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
       }),
 
       adminTestModel: createAuthEndpoint("/self-hosted-admin/test-model", { method: "POST", use: [sessionMiddleware], body: testModelSchema }, async (ctx) => {
-        if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
         const { modelName, baseUrl, apiKey } = ctx.body;
 
         // SSRF guard: never probe internal / private / loopback URLs.
@@ -1249,7 +1314,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
       // ── System Health ────────────────────────────────────────────
 
       adminHealth: createAuthEndpoint("/self-hosted-admin/health", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
-        if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const now = new Date();
 
@@ -1275,46 +1340,127 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         return ctx.json({ status: allOk ? "healthy" : "degraded", timestamp: now.toISOString(), checks });
       }),
 
+      // ── Admin Allow-list Management ──────────────────────────────
+      // The set of admins is the union of:
+      //   1. ADMIN_EMAILS env var (set at deploy time, never empty in
+      //      prod — guarantees there's always a way back in even if the
+      //      DB row is deleted / corrupted).
+      //   2. admin_config.admin_emails (DB row, comma-separated, edited
+      //      at runtime by an existing admin). 30s cache.
+
+      adminListAdmins: createAuthEndpoint(
+        "/self-hosted-admin/admins",
+        { method: "GET", use: [sessionMiddleware] },
+        async (ctx) => {
+          if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const [row] = await db
+            .select({ value: adminConfig.value })
+            .from(adminConfig)
+            .where(eq(adminConfig.key, "admin_emails"));
+          const dbAdmins = (row?.value ?? "")
+            .split(",")
+            .map((s) => s.trim().toLowerCase())
+            .filter(Boolean);
+          return ctx.json({
+            envAdmins: Array.from(envAdmins).sort(),
+            dbAdmins: dbAdmins.sort(),
+            effective: Array.from(new Set([...envAdmins, ...dbAdmins])).sort(),
+          });
+        },
+      ),
+
+      adminSetDbAdmins: createAuthEndpoint(
+        "/self-hosted-admin/admins",
+        {
+          method: "POST",
+          use: [sessionMiddleware],
+          body: z.object({
+            // Cap to 50 so a typo can't blow up the cache. Each email
+            // bounded to 254 (RFC 5321) and validated as an email.
+            emails: z.array(z.string().email().max(254)).max(50),
+          }),
+        },
+        async (ctx) => {
+          const adminEmail = ctx.context.session.user.email;
+          if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const { emails } = ctx.body;
+
+          // Sanity guard: never let the env+db union become empty, otherwise
+          // nobody can re-enter the admin UI. If the env list is empty, the
+          // caller MUST keep themselves in `emails`.
+          const next = new Set(emails.map((e) => e.trim().toLowerCase()).filter(Boolean));
+          if (envAdmins.size === 0 && !next.has(adminEmail.toLowerCase())) {
+            throw new APIError("BAD_REQUEST", {
+              message: "You must keep yourself in the admin list when no env-level admins are configured.",
+            });
+          }
+
+          const value = Array.from(next).sort().join(",");
+          const now = new Date();
+          await db
+            .insert(adminConfig)
+            .values({ key: "admin_emails", value, updatedAt: now })
+            .onConflictDoUpdate({
+              target: adminConfig.key,
+              set: { value, updatedAt: now },
+            });
+
+          invalidateAdminSetCache();
+
+          await recordAudit({
+            eventType: "admin_action",
+            userEmail: adminEmail,
+            metadata: { action: "set_admin_emails", count: next.size, adminEmail },
+          });
+
+          return ctx.json({ ok: true, dbAdmins: Array.from(next).sort() });
+        },
+      ),
+
       // ── Bulk User Operations ─────────────────────────────────────
 
       adminBulkApprove: createAuthEndpoint("/self-hosted-admin/bulk-approve", { method: "POST", use: [sessionMiddleware], body: bulkApproveSchema }, async (ctx) => {
         const adminEmail = ctx.context.session.user.email;
-        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const { userIds, approve } = ctx.body;
 
-        let affected = 0;
-        for (const uid of userIds) {
-          await db.update(user).set({ isApproved: approve, updatedAt: new Date() }).where(eq(user.id, uid));
-          affected++;
-        }
+        // Single statement for the whole batch — previous loop did N
+        // round-trips and could partially fail under D1 errors.
+        await db
+          .update(user)
+          .set({ isApproved: approve, updatedAt: new Date() })
+          .where(inArray(user.id, userIds));
 
         await recordAudit({
           eventType: approve ? "user_approved" : "user_approval_revoked",
           userEmail: adminEmail,
-          metadata: { action: "bulk_approve", userIds, approve, count: affected },
+          metadata: { action: "bulk_approve", userIds, approve, count: userIds.length },
         });
 
-        return ctx.json({ ok: true, affected });
+        return ctx.json({ ok: true, affected: userIds.length });
       }),
 
       adminBulkBan: createAuthEndpoint("/self-hosted-admin/bulk-ban", { method: "POST", use: [sessionMiddleware], body: bulkBanSchema }, async (ctx) => {
         const adminEmail = ctx.context.session.user.email;
-        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const { userIds, ban, banReason } = ctx.body;
 
-        for (const uid of userIds) {
-          const updates: Record<string, unknown> = { isBanned: ban, updatedAt: new Date() };
-          if (ban && banReason) updates.banReason = banReason;
-          if (!ban) updates.banReason = null;
-          await db.update(user).set(updates).where(eq(user.id, uid));
-        }
+        const updates: Record<string, unknown> = {
+          isBanned: ban,
+          updatedAt: new Date(),
+        };
+        if (ban && banReason) updates.banReason = banReason;
+        if (!ban) updates.banReason = null;
+
+        await db.update(user).set(updates).where(inArray(user.id, userIds));
 
         if (ban) {
-          for (const uid of userIds) {
-            await db.delete(session).where(eq(session.userId, uid));
-          }
+          // Forced sign-out for every banned user in one shot.
+          await db.delete(session).where(inArray(session.userId, userIds));
         }
 
         await recordAudit({
@@ -1328,20 +1474,22 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
 
       adminBulkDelete: createAuthEndpoint("/self-hosted-admin/bulk-delete", { method: "POST", use: [sessionMiddleware], body: bulkUserIdsSchema }, async (ctx) => {
         const adminEmail = ctx.context.session.user.email;
-        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const { userIds } = ctx.body;
 
         const selfId = ctx.context.session.user.id;
         if (userIds.includes(selfId)) throw new APIError("BAD_REQUEST", { message: "Cannot delete your own account" });
 
-        for (const uid of userIds) {
-          await db.delete(savedNote).where(eq(savedNote.userId, uid));
-          await db.delete(interviewPreset).where(eq(interviewPreset.userId, uid));
-          await db.delete(session).where(eq(session.userId, uid));
-          await db.delete(account).where(eq(account.userId, uid));
-          await db.delete(user).where(eq(user.id, uid));
-        }
+        // 5 batched deletes instead of 5*N. user delete is last because
+        // ON DELETE CASCADE on the FK columns will already remove most of
+        // the dependent rows — the explicit deletes above are belt-and-
+        // braces in case CASCADE was ever loosened.
+        await db.delete(savedNote).where(inArray(savedNote.userId, userIds));
+        await db.delete(interviewPreset).where(inArray(interviewPreset.userId, userIds));
+        await db.delete(session).where(inArray(session.userId, userIds));
+        await db.delete(account).where(inArray(account.userId, userIds));
+        await db.delete(user).where(inArray(user.id, userIds));
 
         await recordAudit({
           eventType: "user_deleted",
@@ -1355,7 +1503,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
       // ── Admin Notes Management ───────────────────────────────────
 
       adminListNotes: createAuthEndpoint("/self-hosted-admin/list-notes", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
-        if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
         const limit = parseLimit(url.searchParams.get("limit"));
@@ -1396,7 +1544,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
 
       adminDeleteNote: createAuthEndpoint("/self-hosted-admin/delete-note", { method: "POST", use: [sessionMiddleware], body: adminDeleteNoteSchema }, async (ctx) => {
         const adminEmail = ctx.context.session.user.email;
-        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const { noteId } = ctx.body;
 
@@ -1408,7 +1556,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
       // ── Admin Presets Management ─────────────────────────────────
 
       adminListPresets: createAuthEndpoint("/self-hosted-admin/list-presets", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
-        if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
         const limit = parseLimit(url.searchParams.get("limit"));
@@ -1437,7 +1585,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
 
       adminCreatePreset: createAuthEndpoint("/self-hosted-admin/create-preset", { method: "POST", use: [sessionMiddleware], body: adminCreatePresetSchema }, async (ctx) => {
         const adminEmail = ctx.context.session.user.email;
-        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const { name, category, context, description, icon, isBuiltIn } = ctx.body;
 
@@ -1460,7 +1608,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
 
       adminUpdatePreset: createAuthEndpoint("/self-hosted-admin/update-preset", { method: "POST", use: [sessionMiddleware], body: adminUpdatePresetSchema }, async (ctx) => {
         const adminEmail = ctx.context.session.user.email;
-        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const { presetId, ...fields } = ctx.body;
 
@@ -1484,7 +1632,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
 
       adminDeletePreset: createAuthEndpoint("/self-hosted-admin/delete-preset", { method: "POST", use: [sessionMiddleware], body: adminDeletePresetSchema }, async (ctx) => {
         const adminEmail = ctx.context.session.user.email;
-        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const { presetId } = ctx.body;
 
@@ -1496,7 +1644,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
       // ── Stats Export ─────────────────────────────────────────────
 
       adminExportStats: createAuthEndpoint("/self-hosted-admin/export-stats", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
-        if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const now = new Date();
         const dayAgo = new Date(now.getTime() - 86_400_000);
@@ -1563,7 +1711,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
       // ── Export Users CSV ─────────────────────────────────────────
 
       adminExportUsers: createAuthEndpoint("/self-hosted-admin/export-users", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
-        if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
 
         const rows = await db.select({
@@ -1588,7 +1736,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
       // ── User Detail (single user with related data) ─────────────
 
       adminGetUser: createAuthEndpoint("/self-hosted-admin/get-user", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
-        if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
         const userId = url.searchParams.get("userId");
@@ -1648,7 +1796,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         "/self-hosted-admin/usage/summary",
         { method: "GET", use: [sessionMiddleware] },
         async (ctx) => {
-          if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+          if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
           const db = opts.getDb();
           const url = new URL(ctx.request?.url ?? "http://localhost");
           const { since, window: w } = resolveUsageWindow(url.searchParams.get("window"));
@@ -1667,7 +1815,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         "/self-hosted-admin/usage/by-user",
         { method: "GET", use: [sessionMiddleware] },
         async (ctx) => {
-          if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+          if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
           const db = opts.getDb();
           const url = new URL(ctx.request?.url ?? "http://localhost");
           const { since, window: w } = resolveUsageWindow(url.searchParams.get("window"));
@@ -1683,7 +1831,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         "/self-hosted-admin/usage/user",
         { method: "GET", use: [sessionMiddleware] },
         async (ctx) => {
-          if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+          if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
           const db = opts.getDb();
           const url = new URL(ctx.request?.url ?? "http://localhost");
           const userId = url.searchParams.get("userId");
@@ -1719,7 +1867,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         "/self-hosted-admin/usage/events",
         { method: "GET", use: [sessionMiddleware] },
         async (ctx) => {
-          if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+          if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
           const db = opts.getDb();
           const url = new URL(ctx.request?.url ?? "http://localhost");
           const limit = parseLimit(url.searchParams.get("limit"));
@@ -1767,7 +1915,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         "/self-hosted-admin/usage/timeseries",
         { method: "GET", use: [sessionMiddleware] },
         async (ctx) => {
-          if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+          if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
           const url = new URL(ctx.request?.url ?? "http://localhost");
           const { since, window: w } = resolveUsageWindow(url.searchParams.get("window"));
           const userId = url.searchParams.get("userId");
@@ -1791,7 +1939,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         "/self-hosted-admin/usage/export.csv",
         { method: "GET", use: [sessionMiddleware] },
         async (ctx) => {
-          if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+          if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
           const db = opts.getDb();
           const url = new URL(ctx.request?.url ?? "http://localhost");
           const { since } = resolveUsageWindow(url.searchParams.get("window"));
@@ -1838,7 +1986,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
 
       adminAiGatewayLogs: createAuthEndpoint("/self-hosted-admin/ai-gateway/logs", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
         const adminEmail = ctx.context.session.user.email;
-        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
 
         const cf = await resolveCfConfig();
         const url = new URL(ctx.request?.url ?? "http://localhost");
@@ -1870,18 +2018,71 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         if (!forwarded.has("order_by")) forwarded.set("order_by", "created_at");
         if (!forwarded.has("order_by_direction")) forwarded.set("order_by_direction", "desc");
 
+        // Optional `?userId=` / `?userEmail=` filter. The completion path
+        // tags every Gemini call with `cf-aig-metadata: {user_id}` only —
+        // we deliberately do NOT ship emails to a third party. When the
+        // admin filters by email we resolve it to a userId locally, then
+        // ask CF for `meta_info=true` and filter the response by
+        // `metadata.user_id`.
+        const filterUserIdRaw = url.searchParams.get("userId");
+        const filterUserEmailRaw = url.searchParams.get("userEmail");
+
+        let filterUserId: string | null = filterUserIdRaw && SAFE_ID_RE.test(filterUserIdRaw)
+          ? filterUserIdRaw
+          : null;
+
+        if (!filterUserId && filterUserEmailRaw) {
+          const emailQ = sanitizeSearch(filterUserEmailRaw)?.toLowerCase() ?? null;
+          if (emailQ) {
+            const db = opts.getDb();
+            const [row] = await db.select({ id: user.id }).from(user).where(eq(user.email, emailQ));
+            if (!row) {
+              return ctx.json({
+                result: [],
+                filtered: true,
+                preFilterCount: 0,
+                postFilterCount: 0,
+                note: "No user with that email — AI Gateway logs are tagged by user_id only.",
+              });
+            }
+            filterUserId = row.id;
+          }
+        }
+
+        if (filterUserId) {
+          forwarded.set("meta_info", "true");
+          forwardedFilters["userId"] = filterUserId;
+        }
+
         const { ok, status, body } = await fetchAiGateway(cf, "/logs", forwarded);
         if (!ok) {
           return ctx.json({ ok: false, status, error: body }, { status: 502 });
         }
 
+        let payload = (body ?? {}) as Record<string, unknown>;
+        if (filterUserId) {
+          const result = Array.isArray(payload.result) ? payload.result as Array<Record<string, unknown>> : [];
+          const filtered = result.filter((row) => {
+            const meta = row.metadata;
+            if (!meta || typeof meta !== "object") return false;
+            return String((meta as Record<string, unknown>).user_id ?? "") === filterUserId;
+          });
+          payload = {
+            ...payload,
+            result: filtered,
+            filtered: true,
+            preFilterCount: result.length,
+            postFilterCount: filtered.length,
+          };
+        }
+
         await recordAudit({ eventType: "admin_action", userEmail: adminEmail, metadata: { action: "fetch_ai_gateway_logs", filters: forwardedFilters } });
-        return ctx.json((body ?? {}) as Record<string, unknown>);
+        return ctx.json(payload);
       }),
 
       adminAiGatewayLogDetail: createAuthEndpoint("/self-hosted-admin/ai-gateway/log", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
         const adminEmail = ctx.context.session.user.email;
-        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
 
         const url = new URL(ctx.request?.url ?? "http://localhost");
         const id = url.searchParams.get("id") ?? "";
@@ -1897,7 +2098,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
 
       adminAiGatewaySummary: createAuthEndpoint("/self-hosted-admin/ai-gateway/summary", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
         const adminEmail = ctx.context.session.user.email;
-        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
 
         const url = new URL(ctx.request?.url ?? "http://localhost");
         const windowKey = url.searchParams.get("window") ?? "24h";
@@ -1993,7 +2194,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
       // ── Provider health ──────────────────────────────────────────
 
       adminProvidersHealth: createAuthEndpoint("/self-hosted-admin/providers/health", { method: "GET", use: [sessionMiddleware] }, async (ctx) => {
-        if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
 
         const url = new URL(ctx.request?.url ?? "http://localhost");
         const deep = url.searchParams.get("deep") === "1" || url.searchParams.get("deep") === "true";
@@ -2069,7 +2270,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         "/self-hosted-admin/model-params",
         { method: "GET", use: [sessionMiddleware] },
         async (ctx) => {
-          if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+          if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
           const db = opts.getDb();
           const rows = await db.select().from(adminConfig);
           const map = new Map(rows.map((r) => [r.key, r.value]));
@@ -2116,7 +2317,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         { method: "POST", use: [sessionMiddleware], body: modelParamsBodySchema },
         async (ctx) => {
           const adminEmail = ctx.context.session.user.email;
-          if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+          if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
           const db = opts.getDb();
           const now = new Date();
           const body = ctx.body;
@@ -2150,7 +2351,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         "/self-hosted-admin/user-model-params",
         { method: "GET", use: [sessionMiddleware] },
         async (ctx) => {
-          if (!isAdmin(ctx.context.session.user.email)) throw new APIError("FORBIDDEN");
+          if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
           const db = opts.getDb();
           const url = new URL(ctx.request?.url ?? "http://localhost");
           const userId = url.searchParams.get("userId");
@@ -2179,7 +2380,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         { method: "POST", use: [sessionMiddleware], body: userModelParamsBodySchema },
         async (ctx) => {
           const adminEmail = ctx.context.session.user.email;
-          if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+          if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
           const db = opts.getDb();
           const { userId, ...fields } = ctx.body;
 
@@ -2231,7 +2432,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         { method: "POST", use: [sessionMiddleware], body: userModelParamsDeleteSchema },
         async (ctx) => {
           const adminEmail = ctx.context.session.user.email;
-          if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+          if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
           const db = opts.getDb();
           const { userId } = ctx.body;
 
@@ -2245,11 +2446,362 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         },
       ),
 
+      // ── Live Sessions (mid-interview observability + control) ────
+      //
+      // /live-sessions       — list with rich filters
+      // /live-session        — single session detail (events + control)
+      // /live-session-control — write a control signal the recorder polls
+
+      adminListLiveSessions: createAuthEndpoint(
+        "/self-hosted-admin/live-sessions",
+        { method: "GET", use: [sessionMiddleware] },
+        async (ctx) => {
+          if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const url = new URL(ctx.request?.url ?? "http://localhost");
+          const limit = parseLimit(url.searchParams.get("limit"));
+          const offset = parseOffset(url.searchParams.get("offset"));
+          const status = url.searchParams.get("status"); // "active" | "stale" | "ended" | null
+          const userId = url.searchParams.get("userId");
+          const q = sanitizeSearch(url.searchParams.get("q"));
+
+          // Sessions are "stale" if there's been no recorder activity
+          // (Deepgram key mint, tracked event, etc.) in 5 minutes —
+          // likely a browser tab crash. Polling was removed so this is
+          // the only signal we have.
+          const STALE_AFTER_MS = 5 * 60_000;
+          const staleCutoff = new Date(Date.now() - STALE_AFTER_MS);
+
+          const conditions: ReturnType<typeof eq>[] = [];
+          if (userId && SAFE_ID_RE.test(userId)) conditions.push(eq(liveSession.userId, userId));
+          if (status === "active") {
+            conditions.push(isNull(liveSession.endedAt));
+            conditions.push(gte(liveSession.lastSeenAt, staleCutoff));
+          } else if (status === "stale") {
+            conditions.push(isNull(liveSession.endedAt));
+            conditions.push(lt(liveSession.lastSeenAt, staleCutoff));
+          } else if (status === "ended") {
+            conditions.push(isNotNull(liveSession.endedAt));
+          }
+          if (q) {
+            const safeQ = q.replace(/%/g, "\\%").replace(/_/g, "\\_");
+            conditions.push(or(
+              like(liveSession.userEmail, `%${safeQ}%`),
+              like(liveSession.presetName, `%${safeQ}%`),
+              like(liveSession.ipAddress, `%${safeQ}%`),
+            )!);
+          }
+          const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+          const baseSelect = {
+            id: liveSession.id,
+            userId: liveSession.userId,
+            userEmail: liveSession.userEmail,
+            presetId: liveSession.presetId,
+            presetName: liveSession.presetName,
+            surface: liveSession.surface,
+            ipAddress: liveSession.ipAddress,
+            startedAt: liveSession.startedAt,
+            lastSeenAt: liveSession.lastSeenAt,
+            endedAt: liveSession.endedAt,
+            endedBy: liveSession.endedBy,
+            endReason: liveSession.endReason,
+            deepgramKeyId: liveSession.deepgramKeyId,
+            eventCount: liveSession.eventCount,
+            userName: user.name,
+          };
+
+          const [rows, totalRows] = await Promise.all([
+            where
+              ? db.select(baseSelect).from(liveSession).leftJoin(user, eq(liveSession.userId, user.id)).where(where).orderBy(desc(liveSession.startedAt)).limit(limit).offset(offset)
+              : db.select(baseSelect).from(liveSession).leftJoin(user, eq(liveSession.userId, user.id)).orderBy(desc(liveSession.startedAt)).limit(limit).offset(offset),
+            where
+              ? db.select({ total: count() }).from(liveSession).where(where)
+              : db.select({ total: count() }).from(liveSession),
+          ]);
+
+          const now = Date.now();
+          const sessions = rows.map((r) => ({
+            ...r,
+            status: r.endedAt
+              ? "ended"
+              : r.lastSeenAt && now - r.lastSeenAt.getTime() > STALE_AFTER_MS
+                ? "stale"
+                : "active",
+            durationMs: (r.endedAt ?? r.lastSeenAt ?? new Date()).getTime() - r.startedAt.getTime(),
+          }));
+
+          return ctx.json({
+            sessions,
+            total: totalRows[0]?.total ?? 0,
+            staleAfterMs: STALE_AFTER_MS,
+          });
+        },
+      ),
+
+      adminGetLiveSession: createAuthEndpoint(
+        "/self-hosted-admin/live-session",
+        { method: "GET", use: [sessionMiddleware] },
+        async (ctx) => {
+          if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const url = new URL(ctx.request?.url ?? "http://localhost");
+          const id = url.searchParams.get("id") ?? "";
+          if (!SAFE_ID_RE.test(id)) throw new APIError("BAD_REQUEST", { message: "Invalid id" });
+
+          const [row] = await db.select().from(liveSession).where(eq(liveSession.id, id));
+          if (!row) throw new APIError("NOT_FOUND", { message: "Session not found" });
+
+          // Pull the latest tracked events tagged with this session id so
+          // admins can see what the candidate is doing right now (which
+          // recordings are running, which screenshots were taken, etc.).
+          // We can't filter by JSON column directly, so we LIKE over
+          // metadata. The leading `"sessionId":"` is enough to disambiguate.
+          const sessionMetaPattern = `%"sessionId":"${id}"%`;
+          const events = await db
+            .select({
+              id: usageEvent.id,
+              action: usageEvent.action,
+              status: usageEvent.status,
+              errorCode: usageEvent.errorCode,
+              promptChars: usageEvent.promptChars,
+              responseChars: usageEvent.responseChars,
+              durationMs: usageEvent.durationMs,
+              metadata: usageEvent.metadata,
+              createdAt: usageEvent.createdAt,
+            })
+            .from(usageEvent)
+            .where(and(
+              eq(usageEvent.userId, row.userId),
+              like(usageEvent.metadata, sessionMetaPattern),
+            ))
+            .orderBy(desc(usageEvent.createdAt))
+            .limit(200);
+
+          return ctx.json({
+            session: row,
+            events,
+            staleAfterMs: 5 * 60_000,
+          });
+        },
+      ),
+
+      adminTerminateLiveSession: createAuthEndpoint(
+        "/self-hosted-admin/live-session-terminate",
+        { method: "POST", use: [sessionMiddleware], body: liveSessionTerminateSchema },
+        async (ctx) => {
+          const adminEmail = ctx.context.session.user.email;
+          if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const { sessionId, reason, revokeAuthSessions } = ctx.body;
+
+          const [row] = await db.select({
+            id: liveSession.id,
+            userId: liveSession.userId,
+            userEmail: liveSession.userEmail,
+            endedAt: liveSession.endedAt,
+            deepgramKeyId: liveSession.deepgramKeyId,
+            deepgramProjectId: liveSession.deepgramProjectId,
+          }).from(liveSession).where(eq(liveSession.id, sessionId));
+          if (!row) throw new APIError("NOT_FOUND", { message: "Session not found" });
+          if (row.endedAt) throw new APIError("BAD_REQUEST", { message: "Session already ended" });
+
+          const now = new Date();
+
+          // Step 1 — revoke the upstream Deepgram key so the recorder's
+          // WebSocket dies on the next audio chunk. This is the actual
+          // kill switch; all the local DB updates below are bookkeeping.
+          let deepgramRevoked = false;
+          let deepgramError: string | null = null;
+          if (row.deepgramKeyId && row.deepgramProjectId) {
+            try {
+              const cfg = await resolveActiveAiConfig();
+              if (!cfg.deepgramKey) {
+                deepgramError = "deepgram_master_key_missing";
+              } else {
+                const resp = await fetch(
+                  `https://api.deepgram.com/v1/projects/${encodeURIComponent(row.deepgramProjectId)}/keys/${encodeURIComponent(row.deepgramKeyId)}`,
+                  {
+                    method: "DELETE",
+                    headers: { Authorization: `Token ${cfg.deepgramKey}`, accept: "application/json" },
+                    signal: AbortSignal.timeout(ADMIN_FETCH_TIMEOUT_MS),
+                  },
+                );
+                // 200/204 = revoked, 404 = already gone (TTL elapsed)
+                deepgramRevoked = resp.ok || resp.status === 404;
+                if (!deepgramRevoked) {
+                  deepgramError = `HTTP ${resp.status}`;
+                }
+              }
+            } catch (e) {
+              deepgramError = e instanceof Error ? e.message : String(e);
+              console.warn("[SelfHostedAdmin] deepgram revoke failed:", deepgramError);
+            }
+          }
+
+          // Step 2 — mark the session ended in our DB so the dashboard
+          // updates and the candidate can't reuse the same sessionId to
+          // mint a fresh key.
+          await db.update(liveSession).set({
+            endedAt: now,
+            lastSeenAt: now,
+            endedBy: `admin:${adminEmail}`,
+            endReason: reason || "terminated_by_admin",
+          }).where(eq(liveSession.id, sessionId));
+
+          // Step 3 — optionally revoke the user's auth sessions so a
+          // suspect candidate can't simply press Start again. Default true
+          // because that's the intent 99% of the time.
+          const shouldRevoke = revokeAuthSessions !== false;
+          if (shouldRevoke) {
+            try {
+              await db.delete(session).where(eq(session.userId, row.userId));
+            } catch (e) {
+              console.warn("[SelfHostedAdmin] terminate: revoke auth sessions failed:", e);
+            }
+          }
+
+          await recordAudit({
+            eventType: "admin_action",
+            userId: row.userId,
+            userEmail: row.userEmail,
+            metadata: {
+              action: "live_session_terminate",
+              sessionId,
+              reason: reason ?? null,
+              deepgramKeyId: row.deepgramKeyId,
+              deepgramRevoked,
+              deepgramError,
+              authSessionsRevoked: shouldRevoke,
+              adminEmail,
+            },
+          });
+
+          return ctx.json({
+            ok: true,
+            sessionId,
+            endedAt: now.toISOString(),
+            deepgramRevoked,
+            deepgramError,
+            authSessionsRevoked: shouldRevoke,
+          });
+        },
+      ),
+
+      // ── Important Events (filterable admin query) ────────────────
+      //
+      // Wraps usage_event with an allow-listed action set, optional
+      // multi-value action filter, user filter, status filter, full-text
+      // search across metadata, date range and a sortable column. This is
+      // how the dashboard surfaces recording starts / stops, screen
+      // captures, mode switches and other "things admins care about".
+
+      adminImportantEvents: createAuthEndpoint(
+        "/self-hosted-admin/important-events",
+        { method: "GET", use: [sessionMiddleware] },
+        async (ctx) => {
+          if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const url = new URL(ctx.request?.url ?? "http://localhost");
+          const limit = parseLimit(url.searchParams.get("limit"));
+          const offset = parseOffset(url.searchParams.get("offset"));
+
+          const userId = url.searchParams.get("userId");
+          const status = url.searchParams.get("status");
+          const sessionId = url.searchParams.get("sessionId");
+          const q = sanitizeSearch(url.searchParams.get("q"));
+          const startRaw = url.searchParams.get("start");
+          const endRaw = url.searchParams.get("end");
+          const sort = url.searchParams.get("sort") === "asc" ? "asc" : "desc";
+
+          // `actions` may be comma-separated. Falling back to the whole
+          // allow-list keeps admin URLs short for the common "show me
+          // everything" case.
+          const actionsRaw = (url.searchParams.get("actions") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+          const actions = actionsRaw.length > 0
+            ? actionsRaw.filter((a) => (IMPORTANT_EVENT_ACTIONS as readonly string[]).includes(a))
+            : (IMPORTANT_EVENT_ACTIONS as readonly string[]);
+
+          if (actions.length === 0) {
+            throw new APIError("BAD_REQUEST", { message: "No valid actions in filter" });
+          }
+
+          const conditions: ReturnType<typeof eq>[] = [];
+          conditions.push(inArray(usageEvent.action, actions as string[]));
+          if (userId && SAFE_ID_RE.test(userId)) conditions.push(eq(usageEvent.userId, userId));
+          if (status && /^[a-z_]{1,20}$/.test(status)) conditions.push(eq(usageEvent.status, status));
+          if (sessionId && SAFE_ID_RE.test(sessionId)) {
+            conditions.push(like(usageEvent.metadata, `%"sessionId":"${sessionId}"%`));
+          }
+          if (q) {
+            const safeQ = q.replace(/%/g, "\\%").replace(/_/g, "\\_");
+            conditions.push(or(
+              like(usageEvent.userEmail, `%${safeQ}%`),
+              like(usageEvent.metadata, `%${safeQ}%`),
+              like(usageEvent.errorCode, `%${safeQ}%`),
+              like(usageEvent.model, `%${safeQ}%`),
+            )!);
+          }
+          if (startRaw) {
+            const t = Date.parse(startRaw);
+            if (!Number.isFinite(t)) throw new APIError("BAD_REQUEST", { message: "Invalid start date" });
+            conditions.push(gte(usageEvent.createdAt, new Date(t)));
+          }
+          if (endRaw) {
+            const t = Date.parse(endRaw);
+            if (!Number.isFinite(t)) throw new APIError("BAD_REQUEST", { message: "Invalid end date" });
+            conditions.push(lte(usageEvent.createdAt, new Date(t)));
+          }
+
+          const where = and(...conditions);
+          const orderClause = sort === "asc" ? asc(usageEvent.createdAt) : desc(usageEvent.createdAt);
+
+          const baseSelect = {
+            id: usageEvent.id,
+            userId: usageEvent.userId,
+            userEmail: usageEvent.userEmail,
+            action: usageEvent.action,
+            flag: usageEvent.flag,
+            model: usageEvent.model,
+            promptChars: usageEvent.promptChars,
+            responseChars: usageEvent.responseChars,
+            durationMs: usageEvent.durationMs,
+            status: usageEvent.status,
+            errorCode: usageEvent.errorCode,
+            ipAddress: usageEvent.ipAddress,
+            metadata: usageEvent.metadata,
+            createdAt: usageEvent.createdAt,
+          };
+
+          const [rows, totalRows, perActionRows] = await Promise.all([
+            db.select(baseSelect).from(usageEvent).where(where).orderBy(orderClause).limit(limit).offset(offset),
+            db.select({ total: count() }).from(usageEvent).where(where),
+            db.select({
+              action: usageEvent.action,
+              events: count(),
+              errors: sql<number>`COALESCE(SUM(CASE WHEN ${usageEvent.status} != 'ok' THEN 1 ELSE 0 END), 0)`,
+            }).from(usageEvent).where(where).groupBy(usageEvent.action),
+          ]);
+
+          return ctx.json({
+            events: rows,
+            total: totalRows[0]?.total ?? 0,
+            perAction: perActionRows,
+            allowedActions: IMPORTANT_EVENT_ACTIONS,
+            filters: {
+              actions, userId: userId ?? null, status: status ?? null,
+              sessionId: sessionId ?? null, q: q ?? null,
+              start: startRaw ?? null, end: endRaw ?? null, sort,
+            },
+          });
+        },
+      ),
+
       // ── Cleanup expired rate limits / sessions ───────────────────
 
       adminCleanup: createAuthEndpoint("/self-hosted-admin/cleanup", { method: "POST", use: [sessionMiddleware] }, async (ctx) => {
         const adminEmail = ctx.context.session.user.email;
-        if (!isAdmin(adminEmail)) throw new APIError("FORBIDDEN");
+        if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const now = new Date();
 

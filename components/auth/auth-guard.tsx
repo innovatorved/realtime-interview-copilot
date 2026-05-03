@@ -16,21 +16,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   void router;
 
   useEffect(() => {
-    if (!isPending) {
-      if (session) {
-        // Identify user in PostHog when session is available (app load or login)
-        // Use email as distinct_id for consistency with backend
-        if (session.user) {
-          posthog.identify(session.user.email, {
-            email: session.user.email,
-            name: session.user.name,
-          });
-        }
-        setAuthenticated(true);
-      } else {
-        setAuthenticated(false);
-      }
-    }
+    if (isPending) return;
+    setAuthenticated(Boolean(session));
   }, [session, isPending]);
 
   useEffect(() => {

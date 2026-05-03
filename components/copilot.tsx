@@ -16,6 +16,7 @@ import { sendGTMEvent } from "@next/third-parties/google";
 import posthog from "posthog-js";
 import SafeMarkdown from "@/components/SafeMarkdown";
 import { BookmarkPlus, Sparkles, Zap } from "lucide-react";
+import { trackEvent } from "@/lib/session-tracking";
 
 const RecorderTranscriber = dynamic(() => import("@/components/recorder"), {
   ssr: false,
@@ -72,6 +73,7 @@ export function Copilot({
         mode: "summarizer",
         previous_mode: "copilot",
       });
+      trackEvent("mode_switched", { metadata: { mode: "summarizer", previous_mode: "copilot" } });
     } else {
       setFlag(FLAGS.COPILOT);
       sendGTMEvent({ event: "switch_mode", mode: "copilot" });
@@ -79,6 +81,7 @@ export function Copilot({
         mode: "copilot",
         previous_mode: "summarizer",
       });
+      trackEvent("mode_switched", { metadata: { mode: "copilot", previous_mode: "summarizer" } });
     }
   }, []);
 
@@ -301,6 +304,12 @@ export function Copilot({
     posthog.capture("completion_saved", {
       mode: flag === FLAGS.COPILOT ? "copilot" : "summarizer",
       completion_length: completion.length,
+    });
+    trackEvent("completion_saved", {
+      metadata: {
+        mode: flag === FLAGS.COPILOT ? "copilot" : "summarizer",
+        completion_length: completion.length,
+      },
     });
   };
 

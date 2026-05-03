@@ -229,3 +229,48 @@ export const usageEvent = sqliteTable(
     index("usage_event_status_idx").on(table.status),
   ],
 );
+
+/**
+ * Live interview session. One row per "Start Listening" press from the
+ * recorder. Marked `endedAt` when the recorder stops, the user navigates
+ * away, or an admin terminates it. Admin termination works by deleting
+ * the upstream Deepgram key (`deepgramKeyId`) so the candidate's
+ * WebSocket disconnects on the next audio chunk — no client-side polling.
+ *
+ *  - lastSeenAt: refreshed when the recorder mints a Deepgram key or
+ *    posts a tracked event. Sessions with `endedAt IS NULL AND
+ *    lastSeenAt < now-5min` are surfaced as "stale" in the admin
+ *    dashboard (likely client crash).
+ *  - deepgramKeyId / deepgramProjectId: the Deepgram-side handles for
+ *    the most recent minted key. The admin terminate endpoint calls
+ *    DELETE /v1/projects/{projectId}/keys/{keyId} to revoke it.
+ */
+export const liveSession = sqliteTable(
+  "live_session",
+  {
+    id: text("id").primaryKey(),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    userEmail: text("userEmail"),
+    presetId: text("presetId"),
+    presetName: text("presetName"),
+    surface: text("surface"),
+    ipAddress: text("ipAddress"),
+    userAgent: text("userAgent"),
+    startedAt: integer("startedAt", { mode: "timestamp" }).notNull(),
+    lastSeenAt: integer("lastSeenAt", { mode: "timestamp" }).notNull(),
+    endedAt: integer("endedAt", { mode: "timestamp" }),
+    endedBy: text("endedBy"),
+    endReason: text("endReason"),
+    deepgramKeyId: text("deepgramKeyId"),
+    deepgramProjectId: text("deepgramProjectId"),
+    eventCount: integer("eventCount").notNull().default(0),
+    metadata: text("metadata"),
+  },
+  (table) => [
+    index("live_session_user_idx").on(table.userId),
+    index("live_session_started_idx").on(table.startedAt),
+    index("live_session_active_idx").on(table.endedAt, table.lastSeenAt),
+  ],
+);

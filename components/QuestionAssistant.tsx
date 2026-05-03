@@ -16,6 +16,7 @@ import {
 import { BACKEND_API_URL } from "@/lib/constant";
 import SafeMarkdown from "@/components/SafeMarkdown";
 import posthog from "posthog-js";
+import { trackEvent } from "@/lib/session-tracking";
 
 interface QuestionAssistantProps {
   isActive?: boolean;
@@ -91,6 +92,7 @@ export function QuestionAssistant({
       if (result.success) {
         setAttachedImage(result.dataUrl);
         posthog.capture("screen_attached_to_question");
+        trackEvent("screen_capture", { metadata: { source: "ask-ai" } });
       } else {
         setError(`Could not capture screen: ${result.error}`);
       }
@@ -155,6 +157,12 @@ export function QuestionAssistant({
     posthog.capture("question_asked", {
       question_length: question.length,
       has_image: !!attachedImage,
+    });
+    trackEvent("question_asked", {
+      metadata: {
+        question_length: question.length,
+        has_image: Boolean(attachedImage),
+      },
     });
 
     const effectivePrompt =
