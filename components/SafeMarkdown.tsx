@@ -30,7 +30,10 @@ function safeUrlTransform(url: string): string {
   return trimmed;
 }
 
-type SafeMarkdownProps = Omit<Options, "remarkPlugins" | "rehypePlugins" | "urlTransform"> & {
+type SafeMarkdownProps = Omit<
+  Options,
+  "remarkPlugins" | "rehypePlugins" | "urlTransform"
+> & {
   children: string;
 };
 

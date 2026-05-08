@@ -39,7 +39,7 @@ async function buildElectron() {
   try {
     await runTsc("electron/main.ts");
     await runTsc("electron/preload.ts");
-    console.log("✅ Electron build completed successfully!");
+    console.log("Electron build completed successfully!");
   } catch (error) {
     console.error("❌ Error building Electron:", error.message || error);
     process.exit(1);

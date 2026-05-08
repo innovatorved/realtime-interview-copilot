@@ -96,14 +96,36 @@ export function AppBackdropProvider({
 
   return (
     <AppBackdropContext.Provider value={value}>
-      <div
-        aria-hidden
-        className="fixed inset-0 -z-10 pointer-events-none transition-[background-color] duration-200 ease-out"
-        style={{
-          backgroundColor: `rgba(9, 9, 11, ${backdropOpacity})`,
-        }}
-      />
       {children}
     </AppBackdropContext.Provider>
+  );
+}
+
+/**
+ * Renders the actual full-window dark fill behind the UI.
+ *
+ * Lives as a sibling of the routed content (not inside the provider) so
+ * that a parent can pass in a `clipToNavbar` flag for compact mode. In
+ * compact mode we limit the backdrop to a thin strip behind the toolbar
+ * — everything below that becomes truly transparent so the answer text
+ * floats over the desktop with no dark sheet visible at all.
+ */
+export function AppBackdrop({
+  clipToNavbar = false,
+  navbarHeightPx = 64,
+}: {
+  clipToNavbar?: boolean;
+  navbarHeightPx?: number;
+}) {
+  const { backdropOpacity } = useAppBackdrop();
+  return (
+    <div
+      aria-hidden
+      className="fixed left-0 right-0 top-0 -z-10 pointer-events-none transition-[background-color,height] duration-200 ease-out"
+      style={{
+        height: clipToNavbar ? `${navbarHeightPx}px` : "100%",
+        backgroundColor: `rgba(9, 9, 11, ${backdropOpacity})`,
+      }}
+    />
   );
 }

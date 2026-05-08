@@ -1,326 +1,102 @@
 "use client";
 
-import {
-  CreateProjectKeyResponse,
-  LiveClient,
-  LiveTranscriptionEvents,
-  createClient,
-} from "@deepgram/sdk";
-import { useState, useEffect, useCallback, useRef } from "react";
-import { MicIcon } from "@/components/ui/icon";
+/**
+ * Presentational recorder controls.
+ *
+ * The Deepgram session, media stream and transcribed text live in
+ * `TranscriptionProvider`. This component just renders the buttons /
+ * status UI and dispatches start/stop into the provider, so the compact
+ * toolbar and the full Copilot are two skins for the same single live
+ * session — toggling between them no longer interrupts an active
+ * recording.
+ */
+
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { MicIcon } from "@/components/ui/icon";
 import { Loader2, MicOffIcon } from "lucide-react";
-import { TranscriptionSegment, TranscriptionWord } from "@/lib/types";
-import { useClientReady } from "@/hooks/useClientReady";
-import { BACKEND_API_URL } from "@/lib/constant";
-import posthog from "posthog-js";
-import {
-  endLiveSession,
-  startLiveSession,
-  trackEvent,
-} from "@/lib/session-tracking";
+import { cn } from "@/lib/utils";
+import { useTranscription } from "@/components/TranscriptionContext";
 
 interface RecorderTranscriberProps {
-  addTextinTranscription: (text: string) => void;
-  addTranscriptionSegment?: (segment: TranscriptionSegment) => void;
+  /**
+   * Slim icon-sized variant suitable for the compact toolbar.
+   */
+  compact?: boolean;
 }
 
-type SessionState = "idle" | "fetching-key" | "connecting" | "live";
-
 export default function RecorderTranscriber({
-  addTextinTranscription,
-  addTranscriptionSegment,
+  compact = false,
 }: RecorderTranscriberProps) {
-  const isClientReady = useClientReady();
+  const {
+    sessionState,
+    errorMessage,
+    isElectron,
+    isClientReady,
+    isActive,
+    isBusy,
+    startSession,
+    stopSession,
+  } = useTranscription();
 
-  const [isElectron, setIsElectron] = useState<boolean | null>(null);
-  const [sessionState, setSessionState] = useState<SessionState>("idle");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  if (compact) {
+    // One unified "Starting" state covers both fetching-key and connecting
+    // — they're indistinguishable to the user. State machine the user
+    // sees: Start → Starting → Stop.
+    const label =
+      sessionState === "live" ? "Stop" : isBusy ? "Starting" : "Start";
+    const tooltip = errorMessage
+      ? errorMessage
+      : sessionState === "live"
+        ? "Recording — click to stop"
+        : isBusy
+          ? "Starting transcription…"
+          : "Start transcription";
 
-  const connectionRef = useRef<LiveClient | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const segmentCounterRef = useRef<number>(0);
-  const sessionIdRef = useRef<number>(0);
-  const liveSessionIdRef = useRef<string | null>(null);
-
-  const addTextRef = useRef(addTextinTranscription);
-  addTextRef.current = addTextinTranscription;
-  const addSegmentRef = useRef(addTranscriptionSegment);
-  addSegmentRef.current = addTranscriptionSegment;
-
-  const teardown = useCallback(() => {
-    if (mediaRecorderRef.current) {
-      try { mediaRecorderRef.current.stop(); } catch { /* already stopped */ }
-      mediaRecorderRef.current = null;
-    }
-
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-      mediaStreamRef.current = null;
-    }
-
-    if (connectionRef.current) {
-      try { connectionRef.current.finish(); } catch { /* already closed */ }
-      connectionRef.current = null;
-    }
-
-    setSessionState("idle");
-  }, []);
-
-  const startSession = useCallback(async () => {
-    teardown();
-
-    const thisSession = ++sessionIdRef.current;
-    const isStale = () => sessionIdRef.current !== thisSession;
-
-    setSessionState("fetching-key");
-    setErrorMessage(null);
-
-    let media: MediaStream;
-    try {
-      // getDisplayMedia requires a video track; in Electron our main-process
-      // handler (setDisplayMediaRequestHandler) auto-selects the primary
-      // screen and pairs it with system-audio loopback, so no picker appears.
-      // In the browser build, the user picks a tab/window and enables
-      // "Share audio" to grant system/tab audio.
-      // NOTE: Electron 41 / Chromium rejects advanced audio constraints
-      // (echoCancellation, sampleRate, channelCount, etc.) on
-      // getDisplayMedia with "Invalid capture constraints". For display
-      // capture we must pass `audio: true` (or an empty object) and let
-      // the loopback source decide the format.
-      media = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: true,
-      });
-
-      media.getVideoTracks().forEach((track) => track.stop());
-
-      if (media.getAudioTracks().length === 0) {
-        media.getTracks().forEach((t) => t.stop());
-        throw new Error("No system audio track available");
-      }
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      const hint = isElectron
-        ? "Grant Screen Recording permission in System Settings, then try again."
-        : "Pick the tab or window playing audio and enable \"Share audio\".";
-      setErrorMessage(`Could not capture system audio. ${hint} (${msg})`);
-      setSessionState("idle");
-      return;
-    }
-
-    if (isStale()) {
-      media.getTracks().forEach((t) => t.stop());
-      return;
-    }
-
-    mediaStreamRef.current = media;
-
-    // Register the live session BEFORE minting the Deepgram key so the
-    // worker can bind the new key to this session. This is what lets an
-    // admin terminate a recording mid-flight: they delete the upstream
-    // key, Deepgram closes the WebSocket, and our LiveTranscriptionEvents.Close
-    // handler tears the recorder down. No client-side polling needed.
-    const live = await startLiveSession({
-      surface: isElectron ? "electron" : "web",
-      metadata: { capture_mode: "system_audio_loopback" },
-    });
-    if (isStale()) {
-      teardown();
-      return;
-    }
-    if (!live) {
-      setErrorMessage("Could not start session. Are you signed in?");
-      teardown();
-      return;
-    }
-    liveSessionIdRef.current = live.sessionId;
-
-    let apiKeyResponse: CreateProjectKeyResponse;
-    try {
-      const res = await fetch(
-        `${BACKEND_API_URL}/api/deepgram?sessionId=${encodeURIComponent(live.sessionId)}`,
-        {
-          cache: "no-store",
-          credentials: "include",
-        },
-      );
-      const object = await res.json();
-      if (typeof object !== "object" || object === null || !("key" in object)) {
-        throw new Error("No api key returned");
-      }
-      apiKeyResponse = object as CreateProjectKeyResponse;
-    } catch (e) {
-      console.error("Failed to get API key:", e);
-      setErrorMessage("Failed to get API key. Please try again.");
-      // End the session we just registered so it doesn't sit there as
-      // "active" with no key bound.
-      void endLiveSession(live.sessionId, "deepgram_key_failed");
-      liveSessionIdRef.current = null;
-      teardown();
-      return;
-    }
-
-    if (isStale()) {
-      teardown();
-      return;
-    }
-
-    setSessionState("connecting");
-
-    const deepgram = createClient(apiKeyResponse.key ?? "");
-    const conn = deepgram.listen.live({
-      model: "nova-2",
-      interim_results: true,
-      smart_format: true,
-    });
-
-    connectionRef.current = conn;
-
-    conn.on(LiveTranscriptionEvents.Open, () => {
-      if (isStale()) {
-        try { conn.finish(); } catch { /* ignore */ }
-        return;
-      }
-
-      setSessionState("live");
-
-      const mic = new MediaRecorder(media);
-      mediaRecorderRef.current = mic;
-
-      mic.ondataavailable = (e) => {
-        if (isStale() || !connectionRef.current) return;
-        if (e.data.size > 0) {
-          try { connectionRef.current.send(e.data); } catch { /* connection gone */ }
-        }
-      };
-
-      mic.start(500);
-
-      posthog.capture("recording_started", {
-        platform: isElectron ? "electron" : "browser",
-        capture_mode: "system_audio_loopback",
-      });
-      trackEvent("recording_start", {
-        sessionId: liveSessionIdRef.current,
-        metadata: { platform: isElectron ? "electron" : "browser" },
-      });
-    });
-
-    conn.on(LiveTranscriptionEvents.Close, () => {
-      if (connectionRef.current !== conn) return;
-
-      // If we still own a live session id when the WS closes, it means
-      // either (a) Deepgram revoked the key — almost always because an
-      // admin terminated this session — or (b) network blip. Either way,
-      // mark the session ended server-side and surface a hint to the
-      // candidate. The recorder doesn't try to reconnect; the user must
-      // press Start again, which will go through auth again.
-      const sid = liveSessionIdRef.current;
-      if (sid && sessionState === "live") {
-        setErrorMessage("Recording stopped. Your session may have been ended remotely.");
-        void endLiveSession(sid, "websocket_closed");
-        liveSessionIdRef.current = null;
-      }
-      teardown();
-    });
-
-    conn.on(LiveTranscriptionEvents.Error, (error) => {
-      console.error("Deepgram connection error:", error);
-      if (connectionRef.current === conn) {
-        teardown();
-      }
-    });
-
-    conn.on(LiveTranscriptionEvents.Transcript, (data) => {
-      if (isStale()) return;
-
-      const words = data.channel.alternatives[0].words;
-      const caption = words
-        .map((word: any) => word.punctuated_word ?? word.word)
-        .join(" ");
-
-      if (caption === "") return;
-
-      addTextRef.current(caption);
-
-      if (addSegmentRef.current) {
-        const startTime = words.length > 0 ? (words[0].start ?? 0) : 0;
-        const endTime =
-          words.length > 0 ? (words[words.length - 1].end ?? 0) : 0;
-
-        const wordsData: TranscriptionWord[] = words.map((word: any) => ({
-          word: word.word,
-          punctuated_word: word.punctuated_word,
-          start: word.start,
-          end: word.end,
-          confidence: word.confidence,
-          speaker: data.channel.speaker,
-        }));
-
-        const segment: TranscriptionSegment = {
-          id: `segment-${segmentCounterRef.current++}`,
-          text: caption,
-          words: wordsData,
-          startTime,
-          endTime,
-          confidence:
-            words.reduce(
-              (acc: number, w: any) => acc + (w.confidence ?? 0),
-              0,
-            ) / words.length,
-          speaker: data.channel.speaker,
-          isFinal: data.is_final ?? false,
-          timestamp: new Date().toISOString(),
-        };
-
-        addSegmentRef.current(segment);
-      }
-    });
-  }, [isElectron, teardown]);
-
-  const stopSession = useCallback(() => {
-    sessionIdRef.current++;
-    const sid = liveSessionIdRef.current;
-    liveSessionIdRef.current = null;
-    teardown();
-    posthog.capture("recording_stopped", {
-      platform: isElectron ? "electron" : "browser",
-    });
-    trackEvent("recording_stop", {
-      sessionId: sid,
-      metadata: { platform: isElectron ? "electron" : "browser" },
-    });
-    if (sid) void endLiveSession(sid, "user_stopped");
-  }, [teardown, isElectron]);
-
-  useEffect(() => {
-    setIsElectron(typeof window !== "undefined" && !!window.electronAPI);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      sessionIdRef.current++;
-      const sid = liveSessionIdRef.current;
-      liveSessionIdRef.current = null;
-      teardown();
-      if (sid) void endLiveSession(sid, "client_unmount");
-    };
-  }, [teardown]);
-
-  const isActive = sessionState !== "idle";
-  const isBusy = sessionState === "fetching-key" || sessionState === "connecting";
+    return (
+      <Button
+        type="button"
+        size="sm"
+        title={tooltip}
+        aria-label={tooltip}
+        onClick={isActive ? stopSession : startSession}
+        disabled={isBusy || !isClientReady}
+        className={cn(
+          "h-7 gap-1.5 px-2.5 text-[11px] font-medium rounded-lg border transition-all",
+          sessionState === "live"
+            ? "bg-red-500/15 text-red-300 border-red-500/25 hover:bg-red-500/25 animate-pulse"
+            : isBusy
+              ? "bg-amber-500/10 text-amber-300 border-amber-500/20"
+              : "bg-emerald-500/15 text-emerald-300 border-emerald-500/25 hover:bg-emerald-500/25",
+        )}
+      >
+        {isBusy ? (
+          <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+        ) : sessionState === "live" ? (
+          <MicOffIcon className="h-3 w-3" aria-hidden />
+        ) : (
+          <MicIcon className="h-3 w-3" aria-hidden />
+        )}
+        <span className="hidden sm:inline">{label}</span>
+      </Button>
+    );
+  }
 
   return (
     <div className="w-full relative">
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2 p-1 bg-zinc-950/50 rounded-lg border border-white/5 h-10">
           {isBusy ? (
-            <div className="flex-1 flex items-center justify-center gap-2 text-zinc-400 text-xs" role="status" aria-live="polite">
+            <div
+              className="flex-1 flex items-center justify-center gap-2 text-zinc-400 text-xs"
+              role="status"
+              aria-live="polite"
+            >
               <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-emerald-500/80" />
-              <span>{sessionState === "fetching-key" ? "Fetching API key…" : "Connecting…"}</span>
+              <span>
+                {sessionState === "fetching-key"
+                  ? "Fetching API key…"
+                  : "Connecting…"}
+              </span>
             </div>
           ) : (
             <div className="flex-1 flex items-center gap-2 px-2 min-w-0">
@@ -393,17 +169,8 @@ export default function RecorderTranscriber({
             className="flex items-start gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/25 text-red-200 text-[11px] leading-snug"
           >
             <span className="flex-1">{errorMessage}</span>
-            <button
-              type="button"
-              onClick={() => setErrorMessage(null)}
-              className="shrink-0 text-red-300/70 hover:text-red-200 transition-colors"
-              aria-label="Dismiss"
-            >
-              ×
-            </button>
           </div>
         )}
-
       </div>
     </div>
   );

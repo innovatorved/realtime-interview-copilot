@@ -19,6 +19,18 @@ export interface ElectronAPI {
   windowIsAlwaysOnTop: () => Promise<boolean>;
   windowIsMaximized: () => Promise<boolean>;
   windowSetSize: (width: number, height: number) => Promise<void>;
+  windowSetResizable: (resizable: boolean) => Promise<boolean>;
+  /**
+   * Toggle Electron's `setIgnoreMouseEvents` so the (mostly transparent)
+   * compact overlay can pass clicks through to the app behind. Pass
+   * `{ forward: true }` so mousemove events still reach the renderer,
+   * which is what lets it detect the cursor entering an interactive
+   * region and flip back to non-ignored.
+   */
+  windowSetIgnoreMouseEvents?: (
+    ignore: boolean,
+    options?: { forward?: boolean },
+  ) => Promise<void>;
   // Optional because the main process does not currently register these
   // IPC channels. Renderers must feature-detect before calling.
   windowOpenAssistant?: () => Promise<void>;

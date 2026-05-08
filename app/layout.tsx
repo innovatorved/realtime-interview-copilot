@@ -5,6 +5,7 @@ import TitleBar from "@/components/TitleBar";
 import { AppBackdropProvider } from "@/components/AppBackdropContext";
 import { GoogleTagManager } from "@next/third-parties/google";
 import { TabProvider } from "@/components/TabContext";
+import { TranscriptionProvider } from "@/components/TranscriptionContext";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
 import { PostHogProvider } from "@/components/PostHogProvider";
 
@@ -61,8 +62,10 @@ export default function RootLayout({
           <PostHogProvider>
             <AppBackdropProvider>
               <TabProvider>
-                <TitleBar />
-                {children}
+                <TranscriptionProvider>
+                  <TitleBar />
+                  {children}
+                </TranscriptionProvider>
               </TabProvider>
             </AppBackdropProvider>
           </PostHogProvider>

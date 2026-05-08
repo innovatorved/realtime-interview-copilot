@@ -362,16 +362,48 @@ ipcMain.handle("window-set-size", (_, width: number, height: number) => {
   const maxH = display.workAreaSize.height;
   const clamp = (v: number, min: number, max: number) =>
     Math.max(min, Math.min(max, Math.round(v)));
-  const w = Number.isFinite(width) && width > 0
-    ? clamp(width, 200, maxW)
-    : currentWidth;
-  const h = Number.isFinite(height) && height > 0
-    ? clamp(height, 100, maxH)
-    : currentHeight;
+  const w =
+    Number.isFinite(width) && width > 0
+      ? clamp(width, 200, maxW)
+      : currentWidth;
+  const h =
+    Number.isFinite(height) && height > 0
+      ? clamp(height, 100, maxH)
+      : currentHeight;
   if (w !== currentWidth || h !== currentHeight) {
     mainWindow.setSize(w, h, false);
   }
 });
+
+ipcMain.handle("window-set-resizable", (_, resizable: boolean) => {
+  if (!mainWindow) return false;
+  // setResizable on macOS also disables the green "zoom" button which is
+  // exactly what we want in compact mode — no drag-edge resize, no zoom.
+  mainWindow.setResizable(!!resizable);
+  return mainWindow.isResizable();
+});
+
+// Used by the compact overlay to make most of its (transparent) surface
+// click-through so the user can click the app behind. The renderer
+// tracks mouse position over interactive regions (toolbar/drawers) and
+// flips this back to false when the cursor enters them. `forward: true`
+// keeps mousemove events flowing into the renderer even while ignored,
+// which is what lets that tracking work.
+ipcMain.handle(
+  "window-set-ignore-mouse-events",
+  (
+    _,
+    ignore: boolean,
+    options?: { forward?: boolean },
+  ) => {
+    if (!mainWindow) return;
+    try {
+      mainWindow.setIgnoreMouseEvents(!!ignore, options ?? undefined);
+    } catch {
+      /* destroyed mid-call — ignore */
+    }
+  },
+);
 
 ipcMain.handle("window-is-always-on-top", () => {
   return mainWindow?.isAlwaysOnTop() || false;
@@ -467,9 +499,18 @@ ipcMain.handle("screen:capture", async () => {
   }
 });
 
-// Clean up global shortcuts on quit
+// Clean up global shortcuts on quit. We must guard with `app.isReady()`
+// because `app.quit()` is called synchronously in the second-instance
+// branch below, BEFORE the ready event fires. Touching globalShortcut
+// before ready throws "globalShortcut cannot be used until the app is
+// ready", which then bubbles up as an uncaughtException at startup.
 app.on("will-quit", () => {
-  globalShortcut.unregisterAll();
+  if (!app.isReady()) return;
+  try {
+    globalShortcut.unregisterAll();
+  } catch (err) {
+    console.error("Failed to unregister global shortcuts:", err);
+  }
 });
 
 // Deep link handling (realtime-copilot://...). We only enable the protocol
@@ -507,7 +548,13 @@ function handleDeepLink(rawUrl: string | undefined) {
 
 // Enforce single-instance so deep links from a second launch route back
 // into the running window instead of spawning another process.
-const gotSingleInstanceLock = app.requestSingleInstanceLock();
+//
+// In dev mode (DEV_PORT set by `electron:dev`) we deliberately SKIP this
+// check so a developer can run the dev build alongside the installed
+// production app without it silently exiting on launch — the prod app and
+// dev app share the same `appId`, so they fight for the same lock.
+const isDev = !!process.env.DEV_PORT;
+const gotSingleInstanceLock = isDev ? true : app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
   app.quit();
 } else {

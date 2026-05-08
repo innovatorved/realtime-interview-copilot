@@ -145,7 +145,10 @@ export default function History({
             )}
           >
             <BookOpen
-              className={cn("text-emerald-400", isSidebar ? "w-4 h-4" : "w-5 h-5")}
+              className={cn(
+                "text-emerald-400",
+                isSidebar ? "w-4 h-4" : "w-5 h-5",
+              )}
             />
           </div>
           <div className="min-w-0">
@@ -202,12 +205,7 @@ export default function History({
       </div>
 
       {/* Search + Filter */}
-      <div
-        className={cn(
-          "flex gap-2 shrink-0",
-          isSidebar && "flex-col",
-        )}
-      >
+      <div className={cn("flex gap-2 shrink-0", isSidebar && "flex-col")}>
         <div className="relative flex-1 min-w-0">
           <Search
             className={cn(
@@ -237,9 +235,12 @@ export default function History({
               }}
               className={cn(
                 "rounded-lg font-medium transition-all border",
-                isSidebar ? "px-2 py-1 text-[9px]" : "px-2.5 py-1.5 text-[10px]",
+                isSidebar
+                  ? "px-2 py-1 text-[9px]"
+                  : "px-2.5 py-1.5 text-[10px]",
                 activeTag === tag
-                  ? tagColors[tag] ?? "bg-zinc-500/10 text-zinc-400 border-zinc-500/20"
+                  ? (tagColors[tag] ??
+                      "bg-zinc-500/10 text-zinc-400 border-zinc-500/20")
                   : "text-zinc-500 border-transparent hover:bg-white/[0.03]",
               )}
             >
@@ -253,7 +254,8 @@ export default function History({
       <div
         className={cn(
           "space-y-3",
-          isSidebar && "flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-0.5 space-y-2",
+          isSidebar &&
+            "flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-0.5 space-y-2",
         )}
       >
         {isLoading && notes.length === 0 ? (
@@ -280,10 +282,7 @@ export default function History({
           </div>
         ) : notes.length === 0 ? (
           <div
-            className={cn(
-              "glass-card text-center",
-              isSidebar ? "p-4" : "p-12",
-            )}
+            className={cn("glass-card text-center", isSidebar ? "p-4" : "p-12")}
           >
             <div
               className={cn(
@@ -292,7 +291,10 @@ export default function History({
               )}
             >
               <FileText
-                className={cn("text-zinc-600", isSidebar ? "w-5 h-5" : "w-7 h-7")}
+                className={cn(
+                  "text-zinc-600",
+                  isSidebar ? "w-5 h-5" : "w-7 h-7",
+                )}
               />
             </div>
             <p
@@ -320,12 +322,12 @@ export default function History({
                 className={cn(
                   "glass-card-hover cursor-pointer group transition-all",
                   isSidebar ? "p-2.5" : "p-4",
-                  isSelected ? "border-emerald-500/20 bg-emerald-500/[0.03]" : "",
+                  isSelected
+                    ? "border-emerald-500/20 bg-emerald-500/[0.03]"
+                    : "",
                 )}
                 style={{ animationDelay: `${idx * 40}ms` }}
-                onClick={() =>
-                  setExpandedNote(isExpanded ? null : note.id)
-                }
+                onClick={() => setExpandedNote(isExpanded ? null : note.id)}
               >
                 {/* Note Header */}
                 <div
@@ -398,7 +400,11 @@ export default function History({
                   className={cn(
                     "text-zinc-300 leading-relaxed transition-all",
                     isSidebar ? "text-[11px]" : "text-sm",
-                    isExpanded ? "" : isSidebar ? "line-clamp-2" : "line-clamp-3",
+                    isExpanded
+                      ? ""
+                      : isSidebar
+                        ? "line-clamp-2"
+                        : "line-clamp-3",
                   )}
                 >
                   {isExpanded ? (
@@ -450,31 +456,34 @@ export default function History({
             <ChevronLeft className="w-4 h-4" />
           </Button>
           <div className="flex items-center gap-1">
-            {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-              let page: number;
-              if (pagination.totalPages <= 5) {
-                page = i + 1;
-              } else if (pagination.page <= 3) {
-                page = i + 1;
-              } else if (pagination.page >= pagination.totalPages - 2) {
-                page = pagination.totalPages - 4 + i;
-              } else {
-                page = pagination.page - 2 + i;
-              }
-              return (
-                <button
-                  key={page}
-                  onClick={() => onPageChange(page)}
-                  className={`w-8 h-8 rounded-lg text-xs font-medium transition-all ${
-                    page === pagination.page
-                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                      : "text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300"
-                  }`}
-                >
-                  {page}
-                </button>
-              );
-            })}
+            {Array.from(
+              { length: Math.min(5, pagination.totalPages) },
+              (_, i) => {
+                let page: number;
+                if (pagination.totalPages <= 5) {
+                  page = i + 1;
+                } else if (pagination.page <= 3) {
+                  page = i + 1;
+                } else if (pagination.page >= pagination.totalPages - 2) {
+                  page = pagination.totalPages - 4 + i;
+                } else {
+                  page = pagination.page - 2 + i;
+                }
+                return (
+                  <button
+                    key={page}
+                    onClick={() => onPageChange(page)}
+                    className={`w-8 h-8 rounded-lg text-xs font-medium transition-all ${
+                      page === pagination.page
+                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                        : "text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                );
+              },
+            )}
           </div>
           <Button
             variant="ghost"

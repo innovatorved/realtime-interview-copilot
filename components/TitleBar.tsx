@@ -14,6 +14,7 @@ import {
   Mic,
   MessageSquare,
   Sparkles,
+  Rows3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { authClient } from "@/lib/auth-client";
@@ -30,7 +31,7 @@ export default function TitleBar() {
   const { backdropOpacity, adjustBackdropOpacity } = useAppBackdrop();
   const { data: session } = authClient.useSession();
   const router = useRouter();
-  const { activeTab, setActiveTab } = useTab();
+  const { activeTab, setActiveTab, compactMode, setCompactMode } = useTab();
 
   useEffect(() => {
     // Check if running in Electron
@@ -101,6 +102,7 @@ export default function TitleBar() {
 
   return (
     <div
+      data-clickable
       className="fixed top-0 left-0 right-0 h-8 glass z-50 flex items-center justify-between px-3
                     select-none shadow-sm"
       style={
@@ -117,34 +119,36 @@ export default function TitleBar() {
         </span>
       </div>
 
-      {/* Center - Tab Switcher */}
-      <div
-        className="absolute left-1/2 transform -translate-x-1/2 flex items-center space-x-0.5 bg-zinc-900/60 rounded-lg p-0.5 border border-white/[0.04]"
-        style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
-      >
-        {([
-          { id: "copilot" as const, label: "Copilot", icon: Mic },
-          { id: "ask-ai" as const, label: "Ask AI", icon: MessageSquare },
-          { id: "presets" as const, label: "Presets", icon: Sparkles },
-        ]).map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                "flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-medium transition-all duration-200",
-                activeTab === tab.id
-                  ? "bg-emerald-600 text-white shadow-sm"
-                  : "text-gray-400 hover:text-white",
-              )}
-            >
-              <Icon className="w-3 h-3" />
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      {/* Center - Tab Switcher (hidden in compact mode to keep titlebar minimal) */}
+      {!compactMode && (
+        <div
+          className="absolute left-1/2 transform -translate-x-1/2 flex items-center space-x-0.5 bg-zinc-900/60 rounded-lg p-0.5 border border-white/[0.04]"
+          style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+        >
+          {[
+            { id: "copilot" as const, label: "Copilot", icon: Mic },
+            { id: "ask-ai" as const, label: "Ask AI", icon: MessageSquare },
+            { id: "presets" as const, label: "Presets", icon: Sparkles },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={cn(
+                  "flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-medium transition-all duration-200",
+                  activeTab === tab.id
+                    ? "bg-emerald-600 text-white shadow-sm"
+                    : "text-gray-400 hover:text-white",
+                )}
+              >
+                <Icon className="w-3 h-3" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Right side - Controls */}
       <div
@@ -197,6 +201,22 @@ export default function TitleBar() {
             <Plus className="h-3 w-3" />
           </Button>
         </div>
+
+        {/* Compact-mode toggle */}
+        <Button
+          size="sm"
+          variant="ghost"
+          className={cn(
+            "h-7 w-7 p-0 hover:bg-gray-700/50",
+            compactMode
+              ? "text-emerald-400 hover:text-emerald-300"
+              : "text-gray-300 hover:text-gray-200",
+          )}
+          onClick={() => setCompactMode(!compactMode)}
+          title={compactMode ? "Exit compact mode" : "Enter compact mode"}
+        >
+          <Rows3 className="h-3.5 w-3.5" />
+        </Button>
 
         {/* Always on top toggle */}
         <Button

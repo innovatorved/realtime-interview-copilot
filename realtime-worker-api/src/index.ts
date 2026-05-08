@@ -1,8 +1,17 @@
 import { auth, TRUSTED_ORIGINS as AUTH_TRUSTED_ORIGINS } from "./auth";
 import { getDb } from "./db";
-import { savedNote, interviewPreset, user as userTable, liveSession } from "./db/schema";
+import {
+  savedNote,
+  interviewPreset,
+  user as userTable,
+  liveSession,
+} from "./db/schema";
 import { eq, desc, like, or, and, sql, count } from "drizzle-orm";
-import { getCachedConfig, getEffectiveModelParams, type ModelParams } from "./config-cache";
+import {
+  getCachedConfig,
+  getEffectiveModelParams,
+  type ModelParams,
+} from "./config-cache";
 import { KV, KV_TTL_SECONDS } from "./kv-keys";
 import { validateOutboundUrl } from "./url-guard";
 import {
@@ -31,13 +40,12 @@ function escapeHtml(input: string): string {
     .replace(/'/g, "&#39;");
 }
 
-
 enum FLAGS {
   COPILOT = "copilot",
   SUMMARIZER = "summarizer",
 }
 
-interface Env {
+interface Env extends PostHogEnv {
   DEEPGRAM_API_KEY: string;
   GOOGLE_GENERATIVE_AI_API_KEY: string;
   GEMINI_MODEL?: string;
@@ -97,7 +105,9 @@ const CORS_MAX_AGE = "86400";
 // Single source of truth for allowed origins, re-exported to Better Auth so
 // CORS and the auth trusted-origin check never drift (previously the prod
 // copilot domain was missing from Better Auth's allowlist).
-const TRUSTED_ORIGINS: ReadonlySet<string> = new Set<string>(AUTH_TRUSTED_ORIGINS);
+const TRUSTED_ORIGINS: ReadonlySet<string> = new Set<string>(
+  AUTH_TRUSTED_ORIGINS,
+);
 
 function buildCorsHeaders(request: Request) {
   const origin = request.headers.get("Origin");
@@ -193,10 +203,14 @@ async function getAuthenticatedUser(
 
   // Load approval / ban flags every request so revocations take effect
   // immediately (sessions are not invalidated when an admin bans a user).
-  let flags: { isApproved: boolean | null; isBanned: boolean | null } | null = null;
+  let flags: { isApproved: boolean | null; isBanned: boolean | null } | null =
+    null;
   try {
     const rows = await getDb(env)
-      .select({ isApproved: userTable.isApproved, isBanned: userTable.isBanned })
+      .select({
+        isApproved: userTable.isApproved,
+        isBanned: userTable.isBanned,
+      })
       .from(userTable)
       .where(eq(userTable.id, userId))
       .limit(1);
@@ -253,7 +267,9 @@ function authErrorResponse(reason: AuthFailureReason): Response {
   }
 }
 
-function isAuthed(result: AuthedUser | { error: AuthFailureReason }): result is AuthedUser {
+function isAuthed(
+  result: AuthedUser | { error: AuthFailureReason },
+): result is AuthedUser {
   return !("error" in result);
 }
 
@@ -331,17 +347,26 @@ async function fetchWithRetry(
     const signal = AbortSignal.timeout(opts.timeoutMs);
     try {
       const resp = await fetch(url, { ...init, signal });
-      if (resp.ok || !RETRYABLE_STATUS.has(resp.status) || attempt === opts.retries) {
+      if (
+        resp.ok ||
+        !RETRYABLE_STATUS.has(resp.status) ||
+        attempt === opts.retries
+      ) {
         return resp;
       }
       // Drain body so the connection can be reused, then back off.
-      try { await resp.body?.cancel(); } catch { /* ignore */ }
+      try {
+        await resp.body?.cancel();
+      } catch {
+        /* ignore */
+      }
       lastErr = new Error(`upstream ${resp.status}`);
     } catch (err) {
       lastErr = err;
       if (attempt === opts.retries) throw err;
     }
-    const delay = opts.baseMs * Math.pow(2, attempt) + Math.floor(Math.random() * 100);
+    const delay =
+      opts.baseMs * Math.pow(2, attempt) + Math.floor(Math.random() * 100);
     await new Promise((r) => setTimeout(r, delay));
   }
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
@@ -363,7 +388,10 @@ export default {
     }
 
     if (!originIsTrusted(request)) {
-      return withCors(jsonResponse({ error: "Forbidden origin" }, 403), request);
+      return withCors(
+        jsonResponse({ error: "Forbidden origin" }, 403),
+        request,
+      );
     }
 
     if (
@@ -429,7 +457,10 @@ export default {
         const response = await auth(env).handler(request);
         return withCors(response, request);
       } catch (e) {
-        console.error("[Worker] Auth error:", e instanceof Error ? e.message : "unknown");
+        console.error(
+          "[Worker] Auth error:",
+          e instanceof Error ? e.message : "unknown",
+        );
         return withCors(
           jsonResponse({ error: "Authentication error" }, 500),
           request,
@@ -458,7 +489,8 @@ async function handleDeepgram(
   // only works when the binding is present.
   const reqUrl = new URL(request.url);
   const sessionIdRaw = reqUrl.searchParams.get("sessionId");
-  const sessionId = sessionIdRaw && SAFE_SESSION_ID_RE.test(sessionIdRaw) ? sessionIdRaw : null;
+  const sessionId =
+    sessionIdRaw && SAFE_SESSION_ID_RE.test(sessionIdRaw) ? sessionIdRaw : null;
   if (sessionId) {
     const [row] = await getDb(env)
       .select({ userId: liveSession.userId, endedAt: liveSession.endedAt })
@@ -466,8 +498,10 @@ async function handleDeepgram(
       .where(eq(liveSession.id, sessionId))
       .limit(1);
     if (!row) return jsonResponse({ error: "Session not found" }, 404);
-    if (row.userId !== authResult.id) return jsonResponse({ error: "Forbidden" }, 403);
-    if (row.endedAt) return jsonResponse({ error: "Session has already ended" }, 410);
+    if (row.userId !== authResult.id)
+      return jsonResponse({ error: "Forbidden" }, 403);
+    if (row.endedAt)
+      return jsonResponse({ error: "Session has already ended" }, 410);
   }
 
   // Per-user rate limit. Use COMPLETION_LIMITER binding when available; fail
@@ -482,10 +516,16 @@ async function handleDeepgram(
           status: "rate_limited",
           errorCode: "429",
         });
-        return jsonResponse({ error: "Rate limit exceeded. Try again in a minute." }, 429);
+        return jsonResponse(
+          { error: "Rate limit exceeded. Try again in a minute." },
+          429,
+        );
       }
     } catch (err) {
-      console.warn("[Worker] deepgram rate limiter threw, failing closed:", err);
+      console.warn(
+        "[Worker] deepgram rate limiter threw, failing closed:",
+        err,
+      );
       return jsonResponse({ error: "Rate limiter unavailable" }, 503);
     }
   }
@@ -498,7 +538,10 @@ async function handleDeepgram(
   if (!apiKey) {
     tracker.finish({ status: "error", errorCode: "missing_key" });
     return jsonResponse(
-      { error: "Missing Deepgram API key — set via Admin Dashboard or DEEPGRAM_API_KEY env var" },
+      {
+        error:
+          "Missing Deepgram API key — set via Admin Dashboard or DEEPGRAM_API_KEY env var",
+      },
       500,
     );
   }
@@ -509,16 +552,23 @@ async function handleDeepgram(
   };
 
   try {
-    const projectsResponse = await fetch("https://api.deepgram.com/v1/projects", {
-      method: "GET",
-      headers: authHeaders,
-      signal: AbortSignal.timeout(DEEPGRAM_TIMEOUT_MS),
-    });
+    const projectsResponse = await fetch(
+      "https://api.deepgram.com/v1/projects",
+      {
+        method: "GET",
+        headers: authHeaders,
+        signal: AbortSignal.timeout(DEEPGRAM_TIMEOUT_MS),
+      },
+    );
 
-    const projectsBody = (await projectsResponse.json()) as DeepgramProjectsResponse;
+    const projectsBody =
+      (await projectsResponse.json()) as DeepgramProjectsResponse;
 
     if (!projectsResponse.ok) {
-      tracker.finish({ status: "error", errorCode: String(projectsResponse.status) });
+      tracker.finish({
+        status: "error",
+        errorCode: String(projectsResponse.status),
+      });
       return new Response(JSON.stringify(projectsBody), {
         status: projectsResponse.status,
         headers: jsonHeaders,
@@ -530,7 +580,10 @@ async function handleDeepgram(
     if (!project) {
       tracker.finish({ status: "error", errorCode: "no_project" });
       return jsonResponse(
-        { error: "Cannot find a Deepgram project. Please create a project first." },
+        {
+          error:
+            "Cannot find a Deepgram project. Please create a project first.",
+        },
         404,
       );
     }
@@ -560,7 +613,11 @@ async function handleDeepgram(
       errorCode: createResponse.ok ? null : String(createResponse.status),
     });
 
-    if (createResponse.ok && sessionId && typeof createBody.api_key_id === "string") {
+    if (
+      createResponse.ok &&
+      sessionId &&
+      typeof createBody.api_key_id === "string"
+    ) {
       // Bind the new key to the live_session so admins can revoke it.
       // Best-effort: a write failure must not break the recorder flow.
       ctx.waitUntil(
@@ -573,7 +630,9 @@ async function handleDeepgram(
           })
           .where(eq(liveSession.id, sessionId))
           .execute()
-          .catch((e) => console.warn("[Worker] live_session deepgram bind failed:", e)),
+          .catch((e) =>
+            console.warn("[Worker] live_session deepgram bind failed:", e),
+          ),
       );
     }
 
@@ -584,7 +643,10 @@ async function handleDeepgram(
   } catch (err) {
     console.warn("[Worker] deepgram upstream failed:", err);
     tracker.finish({ status: "error", errorCode: "upstream_timeout" });
-    return jsonResponse({ error: "Upstream timeout or error talking to Deepgram" }, 504);
+    return jsonResponse(
+      { error: "Upstream timeout or error talking to Deepgram" },
+      504,
+    );
   }
 }
 
@@ -611,12 +673,16 @@ async function handleCompletion(
     return jsonResponse({ error: "Invalid payload" }, 400);
   }
 
-  const basePrompt = typeof payload.prompt === "string" ? payload.prompt.trim() : "";
+  const basePrompt =
+    typeof payload.prompt === "string" ? payload.prompt.trim() : "";
   if (!basePrompt) {
     return jsonResponse({ error: "prompt is required" }, 400);
   }
   if (basePrompt.length > MAX_PROMPT_CHARS) {
-    return jsonResponse({ error: `prompt exceeds ${MAX_PROMPT_CHARS} characters` }, 413);
+    return jsonResponse(
+      { error: `prompt exceeds ${MAX_PROMPT_CHARS} characters` },
+      413,
+    );
   }
 
   if (payload.bg !== undefined) {
@@ -624,7 +690,10 @@ async function handleCompletion(
       return jsonResponse({ error: "bg must be a string" }, 400);
     }
     if (payload.bg.length > MAX_BG_CHARS) {
-      return jsonResponse({ error: `bg exceeds ${MAX_BG_CHARS} characters` }, 413);
+      return jsonResponse(
+        { error: `bg exceeds ${MAX_BG_CHARS} characters` },
+        413,
+      );
     }
   }
 
@@ -640,7 +709,9 @@ async function handleCompletion(
   // closed so we cannot be abused.
   if (env.COMPLETION_LIMITER) {
     try {
-      const { success } = await env.COMPLETION_LIMITER.limit({ key: trackedUser.id });
+      const { success } = await env.COMPLETION_LIMITER.limit({
+        key: trackedUser.id,
+      });
       if (!success) {
         recordUsage(env, ctx, request, trackedUser, "completion", {
           status: "rate_limited",
@@ -648,7 +719,10 @@ async function handleCompletion(
           flag: typeof payload.flag === "string" ? payload.flag : null,
           promptChars: basePrompt.length,
         });
-        return jsonResponse({ error: "Rate limit exceeded. Try again in a minute." }, 429);
+        return jsonResponse(
+          { error: "Rate limit exceeded. Try again in a minute." },
+          429,
+        );
       }
     } catch (err) {
       console.warn("[Worker] rate limiter threw, failing closed:", err);
@@ -674,7 +748,10 @@ async function handleCompletion(
     const check = validateOutboundUrl(cfg.customBaseUrl);
     if (!check.ok) {
       console.warn("[Worker] refused custom base URL:", check.reason);
-      return jsonResponse({ error: "Custom model base URL is not permitted" }, 400);
+      return jsonResponse(
+        { error: "Custom model base URL is not permitted" },
+        400,
+      );
     }
   }
 
@@ -710,34 +787,73 @@ async function handleCompletion(
         while ((m = re.exec(s)) !== null) {
           try {
             const parsed = JSON.parse(m[1]);
-            if (typeof parsed.text === "string") responseChars += parsed.text.length;
-            if (typeof parsed.error === "string") streamError = parsed.error.slice(0, 200);
-          } catch { /* ignore */ }
+            if (typeof parsed.text === "string")
+              responseChars += parsed.text.length;
+            if (typeof parsed.error === "string")
+              streamError = parsed.error.slice(0, 200);
+          } catch {
+            /* ignore */
+          }
         }
-      } catch { /* never block on analytics */ }
+      } catch {
+        /* never block on analytics */
+      }
       return writer.write(chunk);
     },
     close: () => writer.close(),
     abort: (reason?: unknown) => writer.abort(reason),
     releaseLock: () => writer.releaseLock(),
-    get closed() { return writer.closed; },
-    get desiredSize() { return writer.desiredSize; },
-    get ready() { return writer.ready; },
+    get closed() {
+      return writer.closed;
+    },
+    get desiredSize() {
+      return writer.desiredSize;
+    },
+    get ready() {
+      return writer.ready;
+    },
   } as WritableStreamDefaultWriter<Uint8Array>;
 
-  const modelParams = await getEffectiveModelParams(env, trackedUser?.id ?? null);
+  const modelParams = await getEffectiveModelParams(
+    env,
+    trackedUser?.id ?? null,
+  );
 
   const completionFn = cfg.useCustom
-    ? streamOpenAICompatibleCompletion(finalPrompt, cfg.customModelName, cfg.customApiKey, cfg.customBaseUrl, trackingWriter, modelParams, image)
-    : streamGeminiCompletion(finalPrompt, cfg.geminiModel, cfg.geminiKey, cfg.cfAccountId, cfg.cfGatewayId, trackingWriter, modelParams, image, trackedUser);
+    ? streamOpenAICompatibleCompletion(
+        finalPrompt,
+        cfg.customModelName,
+        cfg.customApiKey,
+        cfg.customBaseUrl,
+        trackingWriter,
+        modelParams,
+        image,
+      )
+    : streamGeminiCompletion(
+        finalPrompt,
+        cfg.geminiModel,
+        cfg.geminiKey,
+        cfg.cfAccountId,
+        cfg.cfGatewayId,
+        trackingWriter,
+        modelParams,
+        image,
+        trackedUser,
+      );
 
   const pump = completionFn
     .catch(async (error: unknown) => {
-      const message = error instanceof Error
-        ? { error: error.message }
-        : { error: String(error) };
-      streamError = typeof message.error === "string" ? message.error.slice(0, 200) : "error";
-      await writer.write(encoder.encode(`data: ${JSON.stringify(message)}\n\n`));
+      const message =
+        error instanceof Error
+          ? { error: error.message }
+          : { error: String(error) };
+      streamError =
+        typeof message.error === "string"
+          ? message.error.slice(0, 200)
+          : "error";
+      await writer.write(
+        encoder.encode(`data: ${JSON.stringify(message)}\n\n`),
+      );
     })
     .finally(async () => {
       try {
@@ -747,7 +863,9 @@ async function handleCompletion(
           responseChars,
           model: activeModel,
         });
-      } catch { /* never throw from tracker */ }
+      } catch {
+        /* never throw from tracker */
+      }
       await writer.close();
     });
 
@@ -774,7 +892,9 @@ async function streamGeminiCompletion(
   trackedUser?: AuthedUser | null,
 ) {
   if (!apiKey) {
-    throw new Error("Missing Gemini API key — set via Admin Dashboard or GOOGLE_GENERATIVE_AI_API_KEY env var");
+    throw new Error(
+      "Missing Gemini API key — set via Admin Dashboard or GOOGLE_GENERATIVE_AI_API_KEY env var",
+    );
   }
 
   // Use header-based auth (x-goog-api-key) rather than ?key= so the API key
@@ -808,13 +928,28 @@ async function streamGeminiCompletion(
   const budget = params.thinkingBudget;
   if (/^gemini-2\.5-/i.test(modelName)) {
     // Map enum → integer budget. "off" disables thinking entirely.
-    const map25: Record<typeof budget, number> = { off: 0, low: 1024, medium: 4096, high: 16384 };
+    const map25: Record<typeof budget, number> = {
+      off: 0,
+      low: 1024,
+      medium: 4096,
+      high: 16384,
+    };
     generationConfig.thinkingConfig = { thinkingBudget: map25[budget] };
   } else if (/^gemini-3/i.test(modelName)) {
-    const map3: Record<typeof budget, string> = { off: "low", low: "low", medium: "medium", high: "high" };
+    const map3: Record<typeof budget, string> = {
+      off: "low",
+      low: "low",
+      medium: "medium",
+      high: "high",
+    };
     generationConfig.thinkingConfig = { thinkingLevel: map3[budget] };
   } else if (/^gemma-4-/i.test(modelName)) {
-    const mapG4: Record<typeof budget, string> = { off: "MINIMAL", low: "MINIMAL", medium: "HIGH", high: "HIGH" };
+    const mapG4: Record<typeof budget, string> = {
+      off: "MINIMAL",
+      low: "MINIMAL",
+      medium: "HIGH",
+      high: "HIGH",
+    };
     generationConfig.thinkingConfig = { thinkingLevel: mapG4[budget] };
   }
 
@@ -901,7 +1036,9 @@ async function streamGeminiCompletion(
             }
           } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e);
-            const errorMessage = JSON.stringify({ error: `JSON Parse Error: ${msg}` });
+            const errorMessage = JSON.stringify({
+              error: `JSON Parse Error: ${msg}`,
+            });
             await writer.write(encoder.encode(`data: ${errorMessage}\n\n`));
           }
         }
@@ -916,9 +1053,14 @@ async function streamGeminiCompletion(
       "Error streaming from Gemini API:",
       error instanceof Error ? error.message : "unknown",
     );
-    const errPayload = error instanceof Error ? { error: error.message } : { error: String(error) };
+    const errPayload =
+      error instanceof Error
+        ? { error: error.message }
+        : { error: String(error) };
     try {
-      await writer.write(encoder.encode(`data: ${JSON.stringify(errPayload)}\n\n`));
+      await writer.write(
+        encoder.encode(`data: ${JSON.stringify(errPayload)}\n\n`),
+      );
     } catch {
       // Stream already closed
     }
@@ -935,7 +1077,9 @@ async function streamOpenAICompatibleCompletion(
   image?: InlineImage | null,
 ) {
   if (!apiKey || !baseUrl) {
-    throw new Error("Missing custom model API key or base URL — configure in Admin Dashboard Settings");
+    throw new Error(
+      "Missing custom model API key or base URL — configure in Admin Dashboard Settings",
+    );
   }
 
   const endpoint = baseUrl.replace(/\/+$/, "") + "/chat/completions";
@@ -977,13 +1121,21 @@ async function streamOpenAICompatibleCompletion(
 
     if (!response.ok) {
       let errorBody = "Could not read error body";
-      try { errorBody = await response.text(); } catch { /* ignore */ }
-      throw new Error(`Custom model API error: ${response.status} ${response.statusText}. Body: ${errorBody}`);
+      try {
+        errorBody = await response.text();
+      } catch {
+        /* ignore */
+      }
+      throw new Error(
+        `Custom model API error: ${response.status} ${response.statusText}. Body: ${errorBody}`,
+      );
     }
 
     if (!response.body) throw new Error("Response body is null");
 
-    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+    const reader = response.body
+      .pipeThrough(new TextDecoderStream())
+      .getReader();
     let buffer = "";
 
     while (true) {
@@ -1007,17 +1159,26 @@ async function streamOpenAICompatibleCompletion(
           const parsed = JSON.parse(payload);
           const delta = parsed.choices?.[0]?.delta?.content;
           if (delta) {
-            await writer.write(encoder.encode(`data: ${JSON.stringify({ text: delta })}\n\n`));
+            await writer.write(
+              encoder.encode(`data: ${JSON.stringify({ text: delta })}\n\n`),
+            );
           }
-        } catch { /* skip malformed chunks */ }
+        } catch {
+          /* skip malformed chunks */
+        }
       }
     }
 
     await writer.write(encoder.encode("data: [DONE]\n\n"));
   } catch (error: unknown) {
-    const errPayload = error instanceof Error ? { error: error.message } : { error: String(error) };
+    const errPayload =
+      error instanceof Error
+        ? { error: error.message }
+        : { error: String(error) };
     try {
-      await writer.write(encoder.encode(`data: ${JSON.stringify(errPayload)}\n\n`));
+      await writer.write(
+        encoder.encode(`data: ${JSON.stringify(errPayload)}\n\n`),
+      );
     } catch {
       // Stream already closed
     }
@@ -1094,7 +1255,8 @@ async function handleGetNotes(
     conditions.push(eq(savedNote.tag, tag));
   }
 
-  const whereClause = conditions.length === 1 ? conditions[0] : and(...conditions);
+  const whereClause =
+    conditions.length === 1 ? conditions[0] : and(...conditions);
 
   const [notes, totalResult] = await Promise.all([
     db
@@ -1104,10 +1266,7 @@ async function handleGetNotes(
       .orderBy(desc(savedNote.createdAt))
       .limit(limit)
       .offset(offset),
-    db
-      .select({ total: count() })
-      .from(savedNote)
-      .where(whereClause),
+    db.select({ total: count() }).from(savedNote).where(whereClause),
   ]);
 
   const total = totalResult[0]?.total ?? 0;
@@ -1151,7 +1310,10 @@ async function handleCreateNote(
   const content = rawContent.trim();
   if (!content) return jsonResponse({ error: "content is required" }, 400);
   if (content.length > MAX_NOTE_CONTENT_CHARS) {
-    return jsonResponse({ error: `content exceeds ${MAX_NOTE_CONTENT_CHARS} characters` }, 413);
+    return jsonResponse(
+      { error: `content exceeds ${MAX_NOTE_CONTENT_CHARS} characters` },
+      413,
+    );
   }
 
   let tag = "Copilot";
@@ -1161,7 +1323,10 @@ async function handleCreateNote(
     }
     const trimmed = body.tag.trim();
     if (trimmed.length === 0 || trimmed.length > MAX_NOTE_TAG_CHARS) {
-      return jsonResponse({ error: `tag must be 1..${MAX_NOTE_TAG_CHARS} characters` }, 400);
+      return jsonResponse(
+        { error: `tag must be 1..${MAX_NOTE_TAG_CHARS} characters` },
+        400,
+      );
     }
     tag = trimmed;
   }
@@ -1277,7 +1442,10 @@ async function handleExport(
       return jsonResponse({ error: "noteIds must be an array" }, 400);
     }
     if (body.noteIds.length > MAX_NOTE_IDS_PER_EXPORT) {
-      return jsonResponse({ error: `noteIds must be <= ${MAX_NOTE_IDS_PER_EXPORT}` }, 400);
+      return jsonResponse(
+        { error: `noteIds must be <= ${MAX_NOTE_IDS_PER_EXPORT}` },
+        400,
+      );
     }
     for (const id of body.noteIds) {
       if (typeof id !== "string" || !/^[a-zA-Z0-9_-]{1,128}$/.test(id)) {
@@ -1365,7 +1533,10 @@ async function handleUsageMe(
   const windowKey = (url.searchParams.get("window") ?? "30d").trim();
   const windowMs = USAGE_WINDOWS[windowKey];
   if (!windowMs) {
-    return jsonResponse({ error: "window must be one of 24h, 7d, 30d, 90d" }, 400);
+    return jsonResponse(
+      { error: "window must be one of 24h, 7d, 30d, 90d" },
+      400,
+    );
   }
 
   const since = new Date(Date.now() - windowMs);
@@ -1376,7 +1547,12 @@ async function handleUsageMe(
   // Choose a sensible bucket width so the chart has ~30 points regardless
   // of window size.
   const bucketSeconds = Math.max(60, Math.floor(windowMs / 1000 / 30));
-  const series = await getUsageTimeseries(env.DB, since, bucketSeconds, authResult.id);
+  const series = await getUsageTimeseries(
+    env.DB,
+    since,
+    bucketSeconds,
+    authResult.id,
+  );
 
   return jsonResponse({
     window: windowKey,
@@ -1431,9 +1607,13 @@ async function handleSessionStart(
       const { success } = await env.COMPLETION_LIMITER.limit({
         key: `session_start:${authResult.id}`,
       });
-      if (!success) return jsonResponse({ error: "Too many sessions, slow down." }, 429);
+      if (!success)
+        return jsonResponse({ error: "Too many sessions, slow down." }, 429);
     } catch (err) {
-      console.warn("[Worker] session_start limiter threw, failing closed:", err);
+      console.warn(
+        "[Worker] session_start limiter threw, failing closed:",
+        err,
+      );
       return jsonResponse({ error: "Rate limiter unavailable" }, 503);
     }
   }
@@ -1446,12 +1626,24 @@ async function handleSessionStart(
   }
   if (body === null || typeof body !== "object") body = {};
 
-  const presetId = typeof body.presetId === "string" && body.presetId.length <= 128 ? body.presetId : null;
-  const presetName = typeof body.presetName === "string" && body.presetName.length <= 200 ? body.presetName.slice(0, 200) : null;
-  const surface = typeof body.surface === "string" && body.surface.length <= 50 ? body.surface : "web";
-  const metaObj = body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata)
-    ? (body.metadata as Record<string, unknown>)
-    : null;
+  const presetId =
+    typeof body.presetId === "string" && body.presetId.length <= 128
+      ? body.presetId
+      : null;
+  const presetName =
+    typeof body.presetName === "string" && body.presetName.length <= 200
+      ? body.presetName.slice(0, 200)
+      : null;
+  const surface =
+    typeof body.surface === "string" && body.surface.length <= 50
+      ? body.surface
+      : "web";
+  const metaObj =
+    body.metadata &&
+    typeof body.metadata === "object" &&
+    !Array.isArray(body.metadata)
+      ? (body.metadata as Record<string, unknown>)
+      : null;
 
   const db = getDb(env);
 
@@ -1460,10 +1652,17 @@ async function handleSessionStart(
   const [{ active }] = await db
     .select({ active: count() })
     .from(liveSession)
-    .where(and(eq(liveSession.userId, authResult.id), sql`${liveSession.endedAt} IS NULL`));
+    .where(
+      and(
+        eq(liveSession.userId, authResult.id),
+        sql`${liveSession.endedAt} IS NULL`,
+      ),
+    );
   if (active >= MAX_CONCURRENT_LIVE_SESSIONS_PER_USER) {
     return jsonResponse(
-      { error: `You already have ${active} active sessions. Stop one before starting another.` },
+      {
+        error: `You already have ${active} active sessions. Stop one before starting another.`,
+      },
       409,
     );
   }
@@ -1520,16 +1719,24 @@ async function handleSessionEnd(
   if (!SAFE_SESSION_ID_RE.test(sessionId)) {
     return jsonResponse({ error: "Invalid sessionId" }, 400);
   }
-  const reason = typeof body?.reason === "string" ? body.reason.slice(0, 100) : "user_stopped";
+  const reason =
+    typeof body?.reason === "string"
+      ? body.reason.slice(0, 100)
+      : "user_stopped";
 
   const db = getDb(env);
   const [row] = await db
-    .select({ id: liveSession.id, userId: liveSession.userId, endedAt: liveSession.endedAt })
+    .select({
+      id: liveSession.id,
+      userId: liveSession.userId,
+      endedAt: liveSession.endedAt,
+    })
     .from(liveSession)
     .where(eq(liveSession.id, sessionId))
     .limit(1);
   if (!row) return jsonResponse({ error: "Session not found" }, 404);
-  if (row.userId !== authResult.id) return jsonResponse({ error: "Forbidden" }, 403);
+  if (row.userId !== authResult.id)
+    return jsonResponse({ error: "Forbidden" }, 403);
   if (row.endedAt) return jsonResponse({ ok: true, alreadyEnded: true });
 
   const now = new Date();
@@ -1565,7 +1772,8 @@ async function handleEventTrack(
       const { success } = await env.COMPLETION_LIMITER.limit({
         key: `event_track:${authResult.id}`,
       });
-      if (!success) return jsonResponse({ error: "Tracking rate limit exceeded" }, 429);
+      if (!success)
+        return jsonResponse({ error: "Tracking rate limit exceeded" }, 429);
     } catch (err) {
       console.warn("[Worker] event_track limiter threw, failing closed:", err);
       return jsonResponse({ error: "Rate limiter unavailable" }, 503);
@@ -1586,12 +1794,18 @@ async function handleEventTrack(
   if (!ALLOWED_TRACKED_ACTIONS.has(action)) {
     return jsonResponse({ error: "action not allowed" }, 400);
   }
-  const sessionId = typeof body.sessionId === "string" && SAFE_SESSION_ID_RE.test(body.sessionId)
-    ? body.sessionId
-    : null;
+  const sessionId =
+    typeof body.sessionId === "string" &&
+    SAFE_SESSION_ID_RE.test(body.sessionId)
+      ? body.sessionId
+      : null;
 
   let metaJson: Record<string, unknown> = {};
-  if (body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata)) {
+  if (
+    body.metadata &&
+    typeof body.metadata === "object" &&
+    !Array.isArray(body.metadata)
+  ) {
     metaJson = body.metadata as Record<string, unknown>;
   }
   if (sessionId) metaJson.sessionId = sessionId;
@@ -1610,11 +1824,10 @@ async function handleEventTrack(
     ctx.waitUntil(
       (async () => {
         try {
-          await env.DB
-            .prepare(
-              `UPDATE live_session SET eventCount = eventCount + 1, lastSeenAt = ?1
+          await env.DB.prepare(
+            `UPDATE live_session SET eventCount = eventCount + 1, lastSeenAt = ?1
                WHERE id = ?2 AND userId = ?3 AND endedAt IS NULL`,
-            )
+          )
             .bind(Math.floor(Date.now() / 1000), sessionId, authResult.id)
             .run();
         } catch (e) {
@@ -1695,7 +1908,10 @@ function renderMarkdownToHtml(md: string): string {
     // inside them), then links, then bold, then italic.
     return s
       .replace(/`([^`]+)`/g, "<code>$1</code>")
-      .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$1" rel="noopener noreferrer nofollow">$2</a>')
+      .replace(
+        /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+        '<a href="$1" rel="noopener noreferrer nofollow">$2</a>',
+      )
       .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
       .replace(/__([^_]+)__/g, "<strong>$1</strong>")
       .replace(/(^|[\s(])\*([^*\n]+)\*/g, "$1<em>$2</em>")
@@ -1711,7 +1927,7 @@ function renderMarkdownToHtml(md: string): string {
         out.push("</code></pre>");
         inCodeBlock = false;
       } else {
-        out.push('<pre><code>');
+        out.push("<pre><code>");
         inCodeBlock = true;
       }
       continue;
@@ -1727,7 +1943,11 @@ function renderMarkdownToHtml(md: string): string {
       continue;
     }
 
-    if (/^---+\s*$/.test(line) || /^___+\s*$/.test(line) || /^\*\*\*+\s*$/.test(line)) {
+    if (
+      /^---+\s*$/.test(line) ||
+      /^___+\s*$/.test(line) ||
+      /^\*\*\*+\s*$/.test(line)
+    ) {
       closeList();
       out.push("<hr />");
       continue;
@@ -1743,14 +1963,22 @@ function renderMarkdownToHtml(md: string): string {
 
     const ul = /^\s*[-*+]\s+(.*)$/.exec(line);
     if (ul) {
-      if (listType !== "ul") { closeList(); out.push("<ul>"); listType = "ul"; }
+      if (listType !== "ul") {
+        closeList();
+        out.push("<ul>");
+        listType = "ul";
+      }
       out.push(`<li>${renderInline(ul[1])}</li>`);
       continue;
     }
 
     const ol = /^\s*\d+\.\s+(.*)$/.exec(line);
     if (ol) {
-      if (listType !== "ol") { closeList(); out.push("<ol>"); listType = "ol"; }
+      if (listType !== "ol") {
+        closeList();
+        out.push("<ol>");
+        listType = "ol";
+      }
       out.push(`<li>${renderInline(ol[1])}</li>`);
       continue;
     }

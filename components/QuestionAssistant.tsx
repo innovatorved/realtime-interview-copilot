@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { BACKEND_API_URL } from "@/lib/constant";
 import SafeMarkdown from "@/components/SafeMarkdown";
+import { humanizeError, humanizeHttpStatus } from "@/lib/api-errors";
 import posthog from "posthog-js";
 import { trackEvent } from "@/lib/session-tracking";
 
@@ -185,8 +186,7 @@ export function QuestionAssistant({
         credentials: "include",
       });
 
-      if (!response.ok)
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok) throw new Error(humanizeHttpStatus(response.status));
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error("Response body is null");
@@ -222,10 +222,8 @@ export function QuestionAssistant({
     } catch (err: unknown) {
       if (err instanceof Error && err.name !== "AbortError") {
         console.error("Error:", err);
-        setError("Failed to get answer. Please try again.");
-        posthog.captureException(
-          err instanceof Error ? err : new Error(String(err)),
-        );
+        setError(humanizeError(err));
+        posthog.captureException(err);
       }
     } finally {
       setIsLoading(false);
@@ -247,6 +245,18 @@ export function QuestionAssistant({
       controller.current = null;
     }
     setIsLoading(false);
+  }, []);
+
+  // Abort any in-flight completion stream on unmount so the SSE reader
+  // doesn't try to setAnswer on an unmounted tree (e.g. user switches
+  // tabs / closes the app mid-stream).
+  useEffect(() => {
+    return () => {
+      if (controller.current) {
+        controller.current.abort();
+        controller.current = null;
+      }
+    };
   }, []);
 
   const hasContent = !!answer || isLoading || !!error;
@@ -392,8 +402,12 @@ export function QuestionAssistant({
                   <span className="text-sm text-zinc-300">
                     Thinking
                     <span className="inline-flex ml-1">
-                      <span className="animate-bounce [animation-delay:-0.3s]">.</span>
-                      <span className="animate-bounce [animation-delay:-0.15s]">.</span>
+                      <span className="animate-bounce [animation-delay:-0.3s]">
+                        .
+                      </span>
+                      <span className="animate-bounce [animation-delay:-0.15s]">
+                        .
+                      </span>
                       <span className="animate-bounce">.</span>
                     </span>
                   </span>
@@ -410,7 +424,8 @@ export function QuestionAssistant({
             {/* Answer body */}
             {answer && (
               <div className="glass-card p-6 rounded-2xl animate-fade-in-up">
-                <div className="prose prose-invert prose-sm max-w-none text-[13px] leading-relaxed text-zinc-200 break-words
+                <div
+                  className="prose prose-invert prose-sm max-w-none text-[13px] leading-relaxed text-zinc-200 break-words
                   [&_p]:text-[13px] [&_p]:leading-relaxed [&_p]:my-2
                   [&_ul]:text-[13px] [&_ul]:my-2 [&_ol]:text-[13px] [&_ol]:my-2 [&_li]:my-0.5
                   [&_h1]:text-base [&_h1]:font-semibold [&_h1]:mt-4 [&_h1]:mb-2
@@ -421,7 +436,8 @@ export function QuestionAssistant({
                   [&_pre]:text-[12px] [&_pre]:overflow-x-auto [&_pre]:whitespace-pre [&_pre]:my-2
                   [&_table]:block [&_table]:overflow-x-auto [&_table]:text-[12px]
                   [&_strong]:font-semibold [&_strong]:text-white
-                  [&_blockquote]:text-[13px] [&_blockquote]:my-2">
+                  [&_blockquote]:text-[13px] [&_blockquote]:my-2"
+                >
                   <SafeMarkdown>{answer}</SafeMarkdown>
                 </div>
                 {isLoading && (

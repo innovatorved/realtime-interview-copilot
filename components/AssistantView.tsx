@@ -53,7 +53,11 @@ export function AssistantView() {
   }, []);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && window.electronAPI && containerRef.current) {
+    if (
+      typeof window !== "undefined" &&
+      window.electronAPI &&
+      containerRef.current
+    ) {
       const height = containerRef.current.scrollHeight;
       window.electronAPI.windowSetSize(0, height + 40);
     }

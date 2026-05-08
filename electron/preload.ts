@@ -21,6 +21,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   windowIsMaximized: () => ipcRenderer.invoke("window-is-maximized"),
   windowSetSize: (width: number, height: number) =>
     ipcRenderer.invoke("window-set-size", width, height),
+  windowSetResizable: (resizable: boolean) =>
+    ipcRenderer.invoke("window-set-resizable", resizable),
+  windowSetIgnoreMouseEvents: (
+    ignore: boolean,
+    options?: { forward?: boolean },
+  ) =>
+    ipcRenderer.invoke("window-set-ignore-mouse-events", ignore, options),
   appQuit: () => ipcRenderer.invoke("app-quit"),
   appRelaunch: () => ipcRenderer.invoke("app-relaunch"),
   platform: process.platform,
@@ -38,7 +45,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     onCaptureAndAsk: (callback: () => void) => {
       const handler = () => callback();
       ipcRenderer.on("screen:capture-and-ask", handler);
-      return () => ipcRenderer.removeListener("screen:capture-and-ask", handler);
+      return () =>
+        ipcRenderer.removeListener("screen:capture-and-ask", handler);
     },
   },
 });
@@ -51,6 +59,11 @@ export interface ElectronAPI {
   windowIsAlwaysOnTop: () => Promise<boolean>;
   windowIsMaximized: () => Promise<boolean>;
   windowSetSize: (width: number, height: number) => Promise<void>;
+  windowSetResizable: (resizable: boolean) => Promise<boolean>;
+  windowSetIgnoreMouseEvents: (
+    ignore: boolean,
+    options?: { forward?: boolean },
+  ) => Promise<void>;
   appQuit: () => Promise<void>;
   appRelaunch: () => Promise<void>;
   platform: string;

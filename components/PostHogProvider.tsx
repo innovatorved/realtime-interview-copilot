@@ -44,7 +44,8 @@ function PostHogPageviewTracker() {
     const qs = searchParams?.toString() ?? "";
     const url = qs.length > 0 ? `${pathname}?${qs}` : pathname;
     posthog.capture("$pageview", {
-      $current_url: typeof window !== "undefined" ? window.location.origin + url : url,
+      $current_url:
+        typeof window !== "undefined" ? window.location.origin + url : url,
       pathname,
     });
   }, [pathname, searchParams]);

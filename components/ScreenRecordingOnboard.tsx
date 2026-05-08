@@ -180,9 +180,10 @@ export function ScreenRecordingOnboard() {
 
             <p className="text-sm text-zinc-300 leading-relaxed mb-5">
               To hear the interviewer&apos;s voice from your speakers, macOS
-              needs you to grant <span className="text-white font-medium">Screen Recording</span>
-              {" "}permission. We only use it to tap system audio — we never
-              upload or view your screen.
+              needs you to grant{" "}
+              <span className="text-white font-medium">Screen Recording</span>{" "}
+              permission. We only use it to tap system audio — we never upload
+              or view your screen.
             </p>
 
             <ol className="space-y-2.5 mb-6">
@@ -247,8 +248,7 @@ export function ScreenRecordingOnboard() {
               <div className="mt-4 p-3 rounded-xl bg-amber-500/[0.06] border border-amber-400/25 animate-fade-in-scale">
                 <p className="text-xs text-amber-200 leading-relaxed">
                   <span className="font-medium">Already toggled it on?</span>{" "}
-                  macOS needs the app to relaunch to pick up the new
-                  permission.
+                  macOS needs the app to relaunch to pick up the new permission.
                 </p>
                 <Button
                   onClick={handleRelaunch}

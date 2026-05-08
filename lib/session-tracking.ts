@@ -83,7 +83,10 @@ export async function endLiveSession(
  */
 export function trackEvent(
   action: TrackedAction,
-  options: { sessionId?: string | null; metadata?: Record<string, unknown> } = {},
+  options: {
+    sessionId?: string | null;
+    metadata?: Record<string, unknown>;
+  } = {},
 ): void {
   if (typeof window === "undefined") return;
   const body = JSON.stringify({

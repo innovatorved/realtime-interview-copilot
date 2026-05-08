@@ -6,11 +6,13 @@ import { Button } from "@/components/ui/button";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { FLAGS, HistoryData, TranscriptionSegment } from "@/lib/types";
+import { FLAGS, HistoryData } from "@/lib/types";
 import { Switch } from "@/components/ui/switch";
 import { TranscriptionDisplay } from "@/components/TranscriptionDisplay";
 import { useClientReady } from "@/hooks/useClientReady";
+import { useTranscription } from "@/components/TranscriptionContext";
 import { BACKEND_API_URL } from "@/lib/constant";
+import { humanizeError, humanizeHttpStatus } from "@/lib/api-errors";
 import { authClient } from "@/lib/auth-client";
 import { sendGTMEvent } from "@next/third-parties/google";
 import posthog from "posthog-js";
@@ -36,10 +38,11 @@ export function Copilot({
 }: CopilotProps) {
   const isClientReady = useClientReady();
   const { data: session } = authClient.useSession();
-  const [transcribedText, setTranscribedText] = useState<string>("");
-  const [transcriptionSegments, setTranscriptionSegments] = useState<
-    TranscriptionSegment[]
-  >([]);
+  // Transcription state lives in TranscriptionProvider so it survives
+  // toggling between full Copilot and the compact toolbar without
+  // tearing down the live recording session.
+  const { transcribedText, transcriptionSegments, clearTranscription } =
+    useTranscription();
   const [flag, setFlag] = useState<FLAGS>(FLAGS.COPILOT);
   const [bg, setBg] = useState<string>("");
   const [completion, setCompletion] = useState<string>("");
@@ -73,7 +76,9 @@ export function Copilot({
         mode: "summarizer",
         previous_mode: "copilot",
       });
-      trackEvent("mode_switched", { metadata: { mode: "summarizer", previous_mode: "copilot" } });
+      trackEvent("mode_switched", {
+        metadata: { mode: "summarizer", previous_mode: "copilot" },
+      });
     } else {
       setFlag(FLAGS.COPILOT);
       sendGTMEvent({ event: "switch_mode", mode: "copilot" });
@@ -81,7 +86,9 @@ export function Copilot({
         mode: "copilot",
         previous_mode: "summarizer",
       });
-      trackEvent("mode_switched", { metadata: { mode: "copilot", previous_mode: "summarizer" } });
+      trackEvent("mode_switched", {
+        metadata: { mode: "copilot", previous_mode: "summarizer" },
+      });
     }
   }, []);
 
@@ -129,27 +136,6 @@ export function Copilot({
     };
   }, [handleKeyDown, isActive]);
 
-  const addTextinTranscription = (text: string) => {
-    setTranscribedText((prev) => prev + " " + text);
-  };
-
-  const addTranscriptionSegment = (segment: TranscriptionSegment) => {
-    setTranscriptionSegments((prev) => {
-      const existingIndex = prev.findIndex((s) => s.id === segment.id);
-      if (existingIndex !== -1) {
-        const updated = [...prev];
-        updated[existingIndex] = segment;
-        return updated;
-      }
-      return [...prev, segment];
-    });
-  };
-
-  const clearTranscriptionChange = () => {
-    setTranscribedText("");
-    setTranscriptionSegments([]);
-  };
-
   const stop = (e?: React.MouseEvent<HTMLButtonElement>) => {
     if (e) {
       e.preventDefault();
@@ -163,11 +149,31 @@ export function Copilot({
     }
   };
 
+  // Abort any in-flight completion stream on unmount. Without this the SSE
+  // reader keeps running and attempts setCompletion on an unmounted tree
+  // when the user toggles compact mode mid-generation.
+  useEffect(() => {
+    return () => {
+      if (controller.current) {
+        controller.current.abort();
+        controller.current = null;
+      }
+    };
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     e.stopPropagation();
     if (isLoading) return;
     if (controller.current) return;
+
+    // Empty prompt → friendly message instead of letting the worker
+    // 404/422 us. This is the path the user reported: pressing Generate
+    // with nothing transcribed used to surface "HTTP error! status: 404".
+    if (!transcribedText.trim()) {
+      setError(new Error(humanizeHttpStatus(0, { kind: "no-input" })));
+      return;
+    }
 
     setError(null);
     setCompletion("");
@@ -198,7 +204,7 @@ export function Copilot({
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(humanizeHttpStatus(response.status));
       }
 
       const reader = response.body?.getReader();
@@ -256,10 +262,8 @@ export function Copilot({
     } catch (err: unknown) {
       if (err instanceof Error && err.name !== "AbortError") {
         console.error("Stream error:", err);
-        setError(err instanceof Error ? err : new Error(String(err)));
-        posthog.captureException(
-          err instanceof Error ? err : new Error(String(err)),
-        );
+        setError(new Error(humanizeError(err)));
+        posthog.captureException(err);
       }
     } finally {
       setIsLoading(false);
@@ -360,10 +364,7 @@ export function Copilot({
           />
 
           <div className="pt-3 border-t border-white/[0.04] space-y-3 shrink-0">
-            <RecorderTranscriber
-              addTextinTranscription={addTextinTranscription}
-              addTranscriptionSegment={addTranscriptionSegment}
-            />
+            <RecorderTranscriber />
 
             <form
               ref={formRef}
@@ -433,7 +434,7 @@ export function Copilot({
             <button
               type="button"
               className="text-[10px] text-zinc-600 hover:text-red-400 transition-colors font-medium tracking-wide px-2 py-1 rounded-lg hover:bg-red-500/[0.06]"
-              onClick={clearTranscriptionChange}
+              onClick={clearTranscription}
             >
               Clear
             </button>

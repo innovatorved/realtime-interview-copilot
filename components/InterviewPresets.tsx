@@ -28,7 +28,10 @@ const iconMap: Record<string, React.ElementType> = {
   server: Server,
 };
 
-const categoryColors: Record<string, { bg: string; border: string; text: string; glow: string }> = {
+const categoryColors: Record<
+  string,
+  { bg: string; border: string; text: string; glow: string }
+> = {
   SWE: {
     bg: "bg-blue-500/[0.06]",
     border: "border-blue-500/10",
@@ -56,7 +59,8 @@ const defaultPresets: InterviewPreset[] = [
     category: "SWE",
     context:
       "You are interviewing for a Software Engineer role. Focus on data structures, algorithms, system design, coding patterns, and technical problem-solving. When answering, demonstrate strong CS fundamentals, clean code practices, and scalable thinking. Use STAR method for behavioral sub-questions. Reference technologies like distributed systems, databases, API design, and cloud infrastructure where relevant.",
-    description: "Technical SWE interview with DSA, system design, and coding focus",
+    description:
+      "Technical SWE interview with DSA, system design, and coding focus",
     icon: "code",
     isBuiltIn: true,
     userId: null,
@@ -80,7 +84,8 @@ const defaultPresets: InterviewPreset[] = [
     category: "Behavioral",
     context:
       "You are in a behavioral interview. Use the STAR method (Situation, Task, Action, Result) for every answer. Focus on leadership, teamwork, conflict resolution, ownership, and delivering results. Provide specific examples with quantifiable outcomes. Show self-awareness, growth mindset, and alignment with company values.",
-    description: "Behavioral interview using STAR method with leadership examples",
+    description:
+      "Behavioral interview using STAR method with leadership examples",
     icon: "users",
     isBuiltIn: true,
     userId: null,
@@ -201,9 +206,7 @@ export function InterviewPresets({
                     key={preset.id}
                     onClick={() => onApply(preset.context)}
                     className={`glass-card-hover p-4 text-left group transition-all ${colors.glow} hover:shadow-xl ${
-                      isActive
-                        ? `${colors.border} ${colors.bg}`
-                        : ""
+                      isActive ? `${colors.border} ${colors.bg}` : ""
                     }`}
                   >
                     <div className="flex items-start gap-3">
@@ -239,7 +242,11 @@ export function InterviewPresets({
       {/* Keyboard hint */}
       <div className="flex items-center justify-center pt-4">
         <p className="text-[10px] text-zinc-600">
-          Press <kbd className="px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/[0.06] text-zinc-400 font-mono text-[9px]">Alt+P</kbd> to switch to presets
+          Press{" "}
+          <kbd className="px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/[0.06] text-zinc-400 font-mono text-[9px]">
+            Alt+P
+          </kbd>{" "}
+          to switch to presets
         </p>
       </div>
     </div>

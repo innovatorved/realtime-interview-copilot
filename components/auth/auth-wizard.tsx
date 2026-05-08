@@ -100,7 +100,8 @@ export function AuthWizard({
         },
       );
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "An unexpected error occurred";
+      const msg =
+        e instanceof Error ? e.message : "An unexpected error occurred";
       showModal("Error", msg);
       setLoading(false);
     }
@@ -143,7 +144,8 @@ export function AuthWizard({
         },
       );
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "An unexpected error occurred";
+      const msg =
+        e instanceof Error ? e.message : "An unexpected error occurred";
       showModal("Error", msg);
       setLoading(false);
     }
