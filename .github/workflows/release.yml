@@ -155,6 +155,9 @@ jobs:
           node-version: "20"
 
       - name: Regenerate cask with new version + sha256
+        env:
+          # workflow_dispatch uses the branch ref for GITHUB_REF_NAME; this is the real release tag.
+          RELEASE_TAG: ${{ needs.release.outputs.tag }}
         run: node scripts/update-homebrew-cask.js
 
       - name: Check for tap token

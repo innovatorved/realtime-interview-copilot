@@ -7,10 +7,12 @@ import { Textarea } from "@/components/ui/textarea";
 import SafeMarkdown from "@/components/SafeMarkdown";
 import {
   BookmarkPlus,
+  Camera,
   ChevronDown,
   ChevronUp,
   Eraser,
   FileText,
+  Image as ImageIcon,
   Maximize2,
   MessageSquare,
   Send,
@@ -24,6 +26,10 @@ import { BACKEND_API_URL } from "@/lib/constant";
 import { useTranscription } from "@/components/TranscriptionContext";
 import { humanizeError, humanizeHttpStatus } from "@/lib/api-errors";
 import posthog from "posthog-js";
+import {
+  VISION_FALLBACK_PROMPT,
+  isVisionScreenshotDataUrl,
+} from "@/lib/vision-screenshot";
 
 const RecorderTranscriber = dynamic(() => import("@/components/recorder"), {
   ssr: false,
@@ -98,9 +104,36 @@ export function CompactCopilot({
   const [error, setError] = useState<string | null>(null);
   const [showContext, setShowContext] = useState<boolean>(false);
   const [outputCollapsed, setOutputCollapsed] = useState<boolean>(false);
+  const [attachedImage, setAttachedImage] = useState<string | null>(null);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [isElectron, setIsElectron] = useState(false);
+  const askInputRef = useRef<HTMLInputElement | null>(null);
 
   const controller = useRef<AbortController | null>(null);
   const bgHydratedRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.electronAPI) {
+      setIsElectron(true);
+    }
+  }, []);
+
+  // Match full Ask AI panel: ⌘⇧1 / Ctrl+Shift+1 dispatches globally; compact
+  // mode has no QuestionAssistant mounted, so we attach here.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<string>).detail;
+      if (!isVisionScreenshotDataUrl(detail)) {
+        return;
+      }
+      setAttachedImage(detail.trim());
+      setAskMode(true);
+      setTimeout(() => askInputRef.current?.focus(), 50);
+    };
+    window.addEventListener("ask-ai:attach-screenshot", handler);
+    return () =>
+      window.removeEventListener("ask-ai:attach-screenshot", handler);
+  }, []);
 
   useEffect(() => {
     writeSession(STORAGE_KEYS.completion, completion);
@@ -143,6 +176,36 @@ export function CompactCopilot({
     }
   }, []);
 
+  const handleCaptureScreen = useCallback(async () => {
+    if (!window.electronAPI?.screen) return;
+    setIsCapturing(true);
+    setError(null);
+    try {
+      const result = await window.electronAPI.screen.capture();
+      if (result.success) {
+        const dataUrl = result.dataUrl.trim();
+        if (!isVisionScreenshotDataUrl(dataUrl)) {
+          setError(
+            "Screenshot could not be attached (invalid image data). Try again.",
+          );
+          return;
+        }
+        setAttachedImage(dataUrl);
+        setAskMode(true);
+        posthog.capture("screen_attached_to_question", { surface: "compact" });
+        setTimeout(() => askInputRef.current?.focus(), 50);
+      } else {
+        setError(`Could not capture screen: ${result.error}`);
+      }
+    } catch (err) {
+      setError(
+        `Could not capture screen: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      setIsCapturing(false);
+    }
+  }, []);
+
   // Abort any in-flight completion stream when the surface unmounts (user
   // toggles compact off / closes the app). Without this, the SSE reader
   // would keep running and try to setCompletion on an unmounted tree.
@@ -158,11 +221,20 @@ export function CompactCopilot({
   const generate = useCallback(
     async (flag: FLAGS, customPrompt?: string) => {
       if (isLoading || controller.current) return;
-      // Use the typed question when provided, otherwise the live transcription.
-      const prompt = (customPrompt ?? transcribedText).trim();
+      const isTypedAsk = customPrompt !== undefined;
+      let prompt = (customPrompt ?? transcribedText).trim();
+
+      let imagePayload: string | undefined;
+      if (isTypedAsk && attachedImage && isVisionScreenshotDataUrl(attachedImage)) {
+        imagePayload = attachedImage.trim();
+        if (!prompt) {
+          prompt = VISION_FALLBACK_PROMPT;
+        }
+      }
+
       if (!prompt) {
         setError(
-          customPrompt !== undefined
+          isTypedAsk && !attachedImage
             ? "Type a question first."
             : humanizeHttpStatus(0, { kind: "no-input" }),
         );
@@ -180,7 +252,8 @@ export function CompactCopilot({
         mode: flag === FLAGS.COPILOT ? "copilot" : "summarizer",
         has_context: bg.length > 0,
         prompt_length: prompt.length,
-        source: customPrompt !== undefined ? "typed" : "transcription",
+        has_image: !!imagePayload,
+        source: isTypedAsk ? "typed" : "transcription",
         surface: "compact",
       });
 
@@ -192,6 +265,7 @@ export function CompactCopilot({
             bg,
             flag,
             prompt,
+            ...(imagePayload ? { image: imagePayload } : {}),
           }),
           signal: controller.current.signal,
           credentials: "include",
@@ -253,7 +327,7 @@ export function CompactCopilot({
         controller.current = null;
       }
     },
-    [bg, isLoading, transcribedText],
+    [attachedImage, bg, isLoading, transcribedText],
   );
 
   const lastFlagRef = useRef<FLAGS>(
@@ -387,7 +461,14 @@ export function CompactCopilot({
           type="button"
           variant="ghost"
           size="sm"
-          onClick={() => setAskMode((m) => !m)}
+          onClick={() => {
+            if (askMode) {
+              setAttachedImage(null);
+              setAskMode(false);
+              return;
+            }
+            setAskMode(true);
+          }}
           title={askMode ? "Hide Ask AI input" : "Ask AI a typed question"}
           className={cn(
             "h-7 px-2 gap-1 text-[11px] font-medium rounded-lg transition-colors",
@@ -399,6 +480,28 @@ export function CompactCopilot({
           <MessageSquare className="w-3 h-3" />
           <span className="hidden sm:inline">Ask AI</span>
         </Button>
+
+        {isElectron && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => void handleCaptureScreen()}
+            disabled={isLoading || isCapturing}
+            aria-label="Attach screenshot for Ask AI"
+            title="Screenshot for Ask AI (⌘⇧1)"
+            className={cn(
+              "h-7 w-7 p-0 rounded-lg transition-colors shrink-0",
+              isCapturing
+                ? "text-emerald-400 animate-pulse"
+                : attachedImage
+                  ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20"
+                  : "text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.05] border border-transparent",
+            )}
+          >
+            <Camera className="w-3.5 h-3.5" />
+          </Button>
+        )}
 
         <Button
           type="button"
@@ -517,39 +620,97 @@ export function CompactCopilot({
         </div>
       )}
 
-      {/* Ask AI input drawer — typed freeform question, distinct from
-          Copilot/Summarize which both operate on the live transcription. */}
+      {/* Ask AI input drawer — typed freeform question (+ optional screenshot
+          in Electron), mirroring QuestionAssistant behaviour. */}
       {askMode && (
-        <form
+        <div
           data-clickable
-          className="px-3 py-2 border-b border-white/[0.04] bg-zinc-900/95 backdrop-blur-md flex items-center gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const q = askInput.trim();
-            if (!q || isLoading) return;
-            void generate(FLAGS.COPILOT, q);
-            setAskInput("");
-          }}
+          className="border-b border-white/[0.04] bg-zinc-900/95 backdrop-blur-md px-3 py-2 flex flex-col gap-2"
         >
-          <input
-            type="text"
-            value={askInput}
-            onChange={(e) => setAskInput(e.target.value)}
-            placeholder="Type a question for the AI…"
-            autoFocus
-            className="flex-1 bg-zinc-900/50 border border-white/[0.06] focus:outline-none focus:ring-1 focus:ring-emerald-500/30 text-zinc-200 placeholder:text-zinc-600 text-xs rounded-lg px-2.5 py-1.5"
-          />
-          <Button
-            type="submit"
-            size="sm"
-            disabled={!askInput.trim() || isLoading}
-            title="Send to AI"
-            className="h-7 px-2.5 gap-1 text-[11px] font-medium rounded-lg accent-gradient text-white shadow-sm hover:shadow-violet-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+          {attachedImage && (
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-500/[0.06] border border-emerald-500/15">
+              <div className="relative shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={attachedImage}
+                  alt="Attached screenshot"
+                  className="w-14 h-10 object-cover rounded-md border border-white/10"
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-medium text-emerald-300 flex items-center gap-1">
+                  <ImageIcon className="w-3 h-3 shrink-0" />
+                  Screenshot attached
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAttachedImage(null)}
+                aria-label="Remove screenshot"
+                className="shrink-0 p-1 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-white/5 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (isLoading) return;
+              if (!askInput.trim() && !attachedImage) return;
+              void generate(FLAGS.COPILOT, askInput);
+              setAskInput("");
+            }}
           >
-            <Send className="w-3 h-3" />
-            <span className="hidden sm:inline">Send</span>
-          </Button>
-        </form>
+            <input
+              ref={askInputRef}
+              type="text"
+              value={askInput}
+              onChange={(e) => setAskInput(e.target.value)}
+              placeholder={
+                attachedImage
+                  ? "Add a question (optional) or press Enter…"
+                  : "Type a question for the AI…"
+              }
+              autoFocus
+              className="flex-1 min-w-0 bg-zinc-900/50 border border-white/[0.06] focus:outline-none focus:ring-1 focus:ring-emerald-500/30 text-zinc-200 placeholder:text-zinc-600 text-xs rounded-lg px-2.5 py-1.5"
+            />
+            {isElectron && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => void handleCaptureScreen()}
+                disabled={isLoading || isCapturing}
+                aria-label="Attach screenshot"
+                title="Attach screenshot (⌘⇧1)"
+                className={cn(
+                  "h-7 w-7 p-0 rounded-lg shrink-0",
+                  isCapturing
+                    ? "text-emerald-400 animate-pulse"
+                    : attachedImage
+                      ? "text-emerald-400 bg-emerald-500/10"
+                      : "text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.05]",
+                )}
+              >
+                <Camera className="w-3.5 h-3.5" />
+              </Button>
+            )}
+            <Button
+              type="submit"
+              size="sm"
+              disabled={
+                (!askInput.trim() && !attachedImage) || isLoading
+              }
+              title="Send to AI"
+              className="h-7 px-2.5 gap-1 text-[11px] font-medium rounded-lg accent-gradient text-white shadow-sm hover:shadow-violet-500/20 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+            >
+              <Send className="w-3 h-3" />
+              <span className="hidden sm:inline">Send</span>
+            </Button>
+          </form>
+        </div>
       )}
 
       {/* Answer area — rendered OUTSIDE the navbar strip, fully transparent.

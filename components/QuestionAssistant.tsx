@@ -18,6 +18,10 @@ import SafeMarkdown from "@/components/SafeMarkdown";
 import { humanizeError, humanizeHttpStatus } from "@/lib/api-errors";
 import posthog from "posthog-js";
 import { trackEvent } from "@/lib/session-tracking";
+import {
+  VISION_FALLBACK_PROMPT,
+  isVisionScreenshotDataUrl,
+} from "@/lib/vision-screenshot";
 
 interface QuestionAssistantProps {
   isActive?: boolean;
@@ -49,10 +53,11 @@ export function QuestionAssistant({
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<string>).detail;
-      if (typeof detail === "string" && detail.startsWith("data:image")) {
-        setAttachedImage(detail);
-        setTimeout(() => inputRef.current?.focus(), 50);
+      if (!isVisionScreenshotDataUrl(detail)) {
+        return;
       }
+      setAttachedImage(detail.trim());
+      setTimeout(() => inputRef.current?.focus(), 50);
     };
     window.addEventListener("ask-ai:attach-screenshot", handler);
     return () =>
@@ -91,7 +96,14 @@ export function QuestionAssistant({
     try {
       const result = await window.electronAPI.screen.capture();
       if (result.success) {
-        setAttachedImage(result.dataUrl);
+        const dataUrl = result.dataUrl.trim();
+        if (!isVisionScreenshotDataUrl(dataUrl)) {
+          setError(
+            "Screenshot could not be attached (invalid image data). Try again.",
+          );
+          return;
+        }
+        setAttachedImage(dataUrl);
         posthog.capture("screen_attached_to_question");
         trackEvent("screen_capture", { metadata: { source: "ask-ai" } });
       } else {
@@ -166,9 +178,7 @@ export function QuestionAssistant({
       },
     });
 
-    const effectivePrompt =
-      question.trim() ||
-      "Analyze this screenshot and explain what's happening. If it shows an interview question, answer it thoroughly.";
+    const effectivePrompt = question.trim() || VISION_FALLBACK_PROMPT;
 
     try {
       const response = await fetch(`${BACKEND_API_URL}/api/completion`, {

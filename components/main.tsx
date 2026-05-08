@@ -11,6 +11,7 @@ import { useNotes } from "@/hooks/useNotes";
 import { usePresets } from "@/hooks/usePresets";
 import { useExport } from "@/hooks/useExport";
 import { cn } from "@/lib/utils";
+import { isVisionScreenshotDataUrl } from "@/lib/vision-screenshot";
 import { useEffect, useState, useCallback, useLayoutEffect } from "react";
 import { useTab } from "@/components/TabContext";
 import {
@@ -74,6 +75,8 @@ export default function MainPage() {
     const api = window.electronAPI;
     if (!api?.screen?.onCaptureAndAsk) return;
 
+    let attachTimer: number | null = null;
+
     const off = api.screen.onCaptureAndAsk(async () => {
       try {
         const result = await api.screen.capture();
@@ -81,20 +84,43 @@ export default function MainPage() {
           console.error("Screen capture failed:", result.error);
           return;
         }
-        setActiveTab("ask-ai");
-        // Broadcast to the Ask AI panel
-        window.dispatchEvent(
-          new CustomEvent<string>("ask-ai:attach-screenshot", {
-            detail: result.dataUrl,
-          }),
-        );
+        if (!isVisionScreenshotDataUrl(result.dataUrl)) {
+          console.error(
+            "[CaptureAndAsk] Unexpected image payload (worker would reject)",
+          );
+          return;
+        }
+        // In compact mode QuestionAssistant isn't mounted; CompactCopilot
+        // listens for the same event. Only swap tabs in full UI.
+        if (!compactMode) {
+          setActiveTab("ask-ai");
+        }
+        // React may not have mounted Ask AI yet — sync dispatch can drop the event.
+        const detail = result.dataUrl.trim();
+        if (attachTimer !== null) {
+          window.clearTimeout(attachTimer);
+        }
+        attachTimer = window.setTimeout(() => {
+          attachTimer = null;
+          window.dispatchEvent(
+            new CustomEvent<string>("ask-ai:attach-screenshot", {
+              detail,
+            }),
+          );
+        }, 0);
       } catch (err) {
         console.error("Failed to handle screen capture hotkey:", err);
       }
     });
 
-    return () => off();
-  }, [setActiveTab]);
+    return () => {
+      off();
+      if (attachTimer !== null) {
+        window.clearTimeout(attachTimer);
+        attachTimer = null;
+      }
+    };
+  }, [compactMode, setActiveTab]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
