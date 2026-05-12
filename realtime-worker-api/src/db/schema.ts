@@ -1,4 +1,11 @@
-import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import {
+  sqliteTable,
+  text,
+  integer,
+  real,
+  index,
+  primaryKey,
+} from "drizzle-orm/sqlite-core";
 
 export const user = sqliteTable(
   "user",
@@ -245,6 +252,119 @@ export const usageEvent = sqliteTable(
  *    the most recent minted key. The admin terminate endpoint calls
  *    DELETE /v1/projects/{projectId}/keys/{keyId} to revoke it.
  */
+/**
+ * Support messages: lets users (especially those waiting for approval)
+ * write to admins, and admins reply back. Threaded via `parentId` — a
+ * thread root has parentId = NULL, replies point at the root id.
+ *
+ *  - authorType: 'user' for end-user messages, 'admin' for admin replies.
+ *  - status: only meaningful on the thread root.
+ *      'open'      → awaiting admin response
+ *      'pending'   → admin has replied, waiting on user
+ *      'resolved'  → admin marked the conversation done
+ *      'reply'     → applied to admin reply rows so dashboard filters
+ *                    can hide them when listing thread roots
+ *  - unreadByAdmin / unreadByUser: drive the small unread badges on
+ *    both sides. Cleared by reading endpoints, set by the appropriate
+ *    create endpoints.
+ */
+export const supportMessage = sqliteTable(
+  "support_message",
+  {
+    id: text("id").primaryKey(),
+    userId: text("userId").references(() => user.id, { onDelete: "cascade" }),
+    userEmail: text("userEmail"),
+    userName: text("userName"),
+    parentId: text("parentId"),
+    authorType: text("authorType").notNull(),
+    authorEmail: text("authorEmail"),
+    subject: text("subject"),
+    body: text("body").notNull(),
+    status: text("status").notNull().default("open"),
+    unreadByAdmin: integer("unreadByAdmin").notNull().default(1),
+    unreadByUser: integer("unreadByUser").notNull().default(0),
+    ipAddress: text("ipAddress"),
+    userAgent: text("userAgent"),
+    metadata: text("metadata"),
+    createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("support_message_user_idx").on(table.userId),
+    index("support_message_parent_idx").on(table.parentId),
+    index("support_message_status_idx").on(table.status),
+    index("support_message_unread_idx").on(table.unreadByAdmin),
+    index("support_message_created_idx").on(table.createdAt),
+  ],
+);
+
+/**
+ * App announcements: admin-controlled banners and popups shown inside
+ * the desktop app. Targeted to either everyone (`audience='all'`) or a
+ * fixed list of user ids stored as JSON in `targetUserIds`.
+ *
+ *  - kind: 'banner' (top strip), 'popup' (modal), 'toast' (ephemeral).
+ *  - severity: 'info' | 'success' | 'warning' | 'error' | 'announcement'.
+ *  - status: only `'active'` rows are returned to the client. Admin can
+ *    flip to 'paused' to hide without deleting and 'archived' to retire.
+ *  - dismissable: when 0 the popup/banner has no close button. Use this
+ *    sparingly — typically reserved for "service degraded" notices.
+ *  - startsAt / expiresAt: the row is shown only when
+ *    startsAt <= now <= expiresAt. NULL = unbounded on that side.
+ */
+export const appAnnouncement = sqliteTable(
+  "app_announcement",
+  {
+    id: text("id").primaryKey(),
+    kind: text("kind").notNull().default("banner"),
+    severity: text("severity").notNull().default("info"),
+    title: text("title"),
+    body: text("body").notNull(),
+    ctaLabel: text("ctaLabel"),
+    ctaUrl: text("ctaUrl"),
+    audience: text("audience").notNull().default("all"),
+    targetUserIds: text("targetUserIds"),
+    status: text("status").notNull().default("active"),
+    dismissable: integer("dismissable").notNull().default(1),
+    startsAt: integer("startsAt", { mode: "timestamp" }),
+    expiresAt: integer("expiresAt", { mode: "timestamp" }),
+    createdBy: text("createdBy"),
+    createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("app_announcement_status_idx").on(table.status),
+    index("app_announcement_kind_idx").on(table.kind),
+    index("app_announcement_audience_idx").on(table.audience),
+    index("app_announcement_window_idx").on(table.startsAt, table.expiresAt),
+  ],
+);
+
+/**
+ * Per-user dismissal record. Used by the desktop app to remember that a
+ * 'popup' announcement has already been seen so it isn't shown again on
+ * the next session. Banners use ephemeral localStorage instead.
+ */
+export const appAnnouncementDismissal = sqliteTable(
+  "app_announcement_dismissal",
+  {
+    announcementId: text("announcementId")
+      .notNull()
+      .references(() => appAnnouncement.id, { onDelete: "cascade" }),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    dismissedAt: integer("dismissedAt", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    primaryKey({
+      name: "app_announcement_dismissal_pk",
+      columns: [table.announcementId, table.userId],
+    }),
+    index("app_announcement_dismissal_user_idx").on(table.userId),
+  ],
+);
+
 export const liveSession = sqliteTable(
   "live_session",
   {

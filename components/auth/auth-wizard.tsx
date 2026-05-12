@@ -2,26 +2,193 @@
 
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
-import { Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Mic, MoveRight } from "lucide-react";
 import { sendGTMEvent } from "@next/third-parties/google";
 import posthog from "posthog-js";
 
 interface AuthWizardProps {
   initialStep?: "welcome" | "signup" | "signin";
   onSuccess?: () => void;
+}
+
+// ── App design tokens (dark / glass theme matching the rest of the app) ──
+// Notion's geometry (8px buttons, 12px cards, Inter type, generous spacing)
+// applied to the existing zinc-950 + emerald accent palette so this screen
+// feels native to the Electron shell.
+const TOKEN = {
+  // Surfaces
+  pageBg: "rgba(9, 9, 11, 0.55)", // page wrapper (lets the OS backdrop bleed)
+  cardBg: "rgba(24, 24, 27, 0.72)", // glass card
+  cardBorder: "rgba(255, 255, 255, 0.06)",
+  hairline: "rgba(255, 255, 255, 0.06)",
+  hairlineStrong: "rgba(255, 255, 255, 0.10)",
+  inputBg: "rgba(9, 9, 11, 0.6)",
+  surfaceSoft: "rgba(255, 255, 255, 0.03)",
+  // Text
+  ink: "#fafafa",
+  charcoal: "#e4e4e7",
+  slate: "#a1a1aa",
+  steel: "#71717a",
+  stone: "#52525b",
+  muted: "#3f3f46",
+  // Accent — matches the "Ask AI" tab in the title bar (emerald-600) and
+  // the app's accent gradient (#22c55e → #10b981 → #059669). Using
+  // green-500 / emerald-400 so the buttons read brighter than before.
+  accent: "#22c55e", // green-500 (matches accent-gradient start)
+  accentHover: "#16a34a", // green-600
+  accentSoft: "rgba(34, 197, 94, 0.12)",
+  accentRing: "rgba(34, 197, 94, 0.35)",
+  accentBorder: "rgba(34, 197, 94, 0.30)",
+  accentText: "#86efac", // green-300 — bright on dark glass
+  // Semantic
+  semanticError: "#f87171",
+  semanticErrorSoft: "rgba(248, 113, 113, 0.10)",
+  semanticSuccess: "#34d399",
+} as const;
+
+const inputStyle: React.CSSProperties = {
+  backgroundColor: TOKEN.inputBg,
+  color: TOKEN.ink,
+  border: `1px solid ${TOKEN.hairlineStrong}`,
+  borderRadius: 7,
+  height: 36,
+  padding: "8px 12px",
+  fontSize: 13,
+  lineHeight: 1.4,
+  width: "100%",
+  outline: "none",
+  transition: "border-color 150ms ease, box-shadow 150ms ease",
+  backdropFilter: "blur(8px)",
+};
+
+function NotionInput(
+  props: React.InputHTMLAttributes<HTMLInputElement> & { "aria-label"?: string },
+) {
+  return (
+    <input
+      {...props}
+      style={{ ...inputStyle, ...(props.style ?? {}) }}
+      onFocus={(e) => {
+        e.currentTarget.style.border = `1px solid ${TOKEN.accentBorder}`;
+        e.currentTarget.style.boxShadow = `0 0 0 3px ${TOKEN.accentRing}`;
+        props.onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        e.currentTarget.style.border = `1px solid ${TOKEN.hairlineStrong}`;
+        e.currentTarget.style.boxShadow = "none";
+        props.onBlur?.(e);
+      }}
+    />
+  );
+}
+
+function NotionLabel({
+  htmlFor,
+  children,
+}: {
+  htmlFor: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label
+      htmlFor={htmlFor}
+      style={{
+        color: TOKEN.charcoal,
+        fontSize: 12,
+        fontWeight: 500,
+        letterSpacing: 0,
+      }}
+    >
+      {children}
+    </label>
+  );
+}
+
+function NotionPrimaryButton({
+  children,
+  loading,
+  disabled,
+  ...rest
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { loading?: boolean }) {
+  const isOff = disabled || loading;
+  return (
+    <button
+      {...rest}
+      disabled={isOff}
+      style={{
+        backgroundColor: isOff ? "rgba(255,255,255,0.06)" : TOKEN.accent,
+        color: isOff ? TOKEN.stone : "#ffffff",
+        border: "none",
+        height: 34,
+        padding: "0 14px",
+        borderRadius: 7,
+        fontSize: 12.5,
+        fontWeight: 600,
+        lineHeight: 1.3,
+        width: "100%",
+        cursor: isOff ? "not-allowed" : "pointer",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        transition: "background-color 150ms ease, box-shadow 150ms ease",
+        boxShadow: isOff
+          ? "none"
+          : "0 1px 2px rgba(0,0,0,0.4), 0 0 0 1px rgba(34, 197, 94, 0.30), 0 0 24px rgba(34, 197, 94, 0.18)",
+        ...(rest.style ?? {}),
+      }}
+      onMouseEnter={(e) => {
+        if (!isOff) e.currentTarget.style.backgroundColor = TOKEN.accentHover;
+        rest.onMouseEnter?.(e);
+      }}
+      onMouseLeave={(e) => {
+        if (!isOff) e.currentTarget.style.backgroundColor = TOKEN.accent;
+        rest.onMouseLeave?.(e);
+      }}
+    >
+      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+      {children}
+    </button>
+  );
+}
+
+function NotionSecondaryButton({
+  children,
+  ...rest
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      {...rest}
+      style={{
+        backgroundColor: "rgba(255,255,255,0.04)",
+        color: TOKEN.ink,
+        border: `1px solid ${TOKEN.hairlineStrong}`,
+        height: 34,
+        padding: "0 14px",
+        borderRadius: 7,
+        fontSize: 12.5,
+        fontWeight: 500,
+        lineHeight: 1.3,
+        width: "100%",
+        cursor: "pointer",
+        transition: "background-color 150ms ease, border-color 150ms ease",
+        backdropFilter: "blur(8px)",
+        ...(rest.style ?? {}),
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)";
+        rest.onMouseEnter?.(e);
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)";
+        rest.onMouseLeave?.(e);
+      }}
+    >
+      {children}
+    </button>
+  );
 }
 
 export function AuthWizard({
@@ -36,16 +203,23 @@ export function AuthWizard({
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Modal State
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState("");
   const [modalMessage, setModalMessage] = useState("");
+  const [modalTone, setModalTone] = useState<"info" | "error" | "success">(
+    "info",
+  );
 
   const router = useRouter();
 
-  const showModal = (title: string, message: string) => {
+  const showModal = (
+    title: string,
+    message: string,
+    tone: "info" | "error" | "success" = "info",
+  ) => {
     setModalTitle(title);
     setModalMessage(message);
+    setModalTone(tone);
     setModalOpen(true);
   };
 
@@ -59,42 +233,33 @@ export function AuthWizard({
 
   const handleSignup = async () => {
     if (!email || !password || !name) {
-      showModal("Error", "Please fill in all fields.");
+      showModal("Missing fields", "Please fill in every field to continue.", "error");
       return;
     }
     setLoading(true);
     try {
       await authClient.signUp.email(
-        {
-          email,
-          password,
-          name,
-        },
+        { email, password, name },
         {
           onSuccess: () => {
             sendGTMEvent({ event: "signup", value: "email" });
-            posthog.identify(email, {
-              email: email,
-              name: name,
-            });
-            posthog.capture("user_signed_up", {
-              method: "email",
-              email: email,
-            });
+            posthog.identify(email, { email, name });
+            posthog.capture("user_signed_up", { method: "email", email });
             showModal(
-              "Success",
-              "Account created successfully! Redirecting...",
+              "Account created",
+              "We're taking you to your workspace.",
+              "success",
             );
-            setTimeout(() => handleSuccess(), 1500);
+            setTimeout(() => handleSuccess(), 1200);
           },
           onError: (ctx) => {
             sendGTMEvent({ event: "signup_error", error: ctx.error.message });
             posthog.capture("signup_error", {
               error_message: ctx.error.message,
-              email: email,
+              email,
             });
             posthog.captureException(new Error(ctx.error.message));
-            showModal("Sign Up Failed", ctx.error.message);
+            showModal("Sign up failed", ctx.error.message, "error");
             setLoading(false);
           },
         },
@@ -102,43 +267,39 @@ export function AuthWizard({
     } catch (e: unknown) {
       const msg =
         e instanceof Error ? e.message : "An unexpected error occurred";
-      showModal("Error", msg);
+      showModal("Something went wrong", msg, "error");
       setLoading(false);
     }
   };
 
   const handleSignin = async () => {
     if (!email || !password) {
-      showModal("Error", "Please enter your email and password.");
+      showModal(
+        "Missing fields",
+        "Enter your email and password to sign in.",
+        "error",
+      );
       return;
     }
     setLoading(true);
     try {
       await authClient.signIn.email(
-        {
-          email,
-          password,
-        },
+        { email, password },
         {
           onSuccess: () => {
             sendGTMEvent({ event: "login", value: "email" });
-            posthog.identify(email, {
-              email: email,
-            });
-            posthog.capture("user_signed_in", {
-              method: "email",
-              email: email,
-            });
+            posthog.identify(email, { email });
+            posthog.capture("user_signed_in", { method: "email", email });
             handleSuccess();
           },
           onError: (ctx) => {
             sendGTMEvent({ event: "login_error", error: ctx.error.message });
             posthog.capture("signin_error", {
               error_message: ctx.error.message,
-              email: email,
+              email,
             });
             posthog.captureException(new Error(ctx.error.message));
-            showModal("Sign In Failed", ctx.error.message);
+            showModal("Sign in failed", ctx.error.message, "error");
             setLoading(false);
           },
         },
@@ -146,189 +307,350 @@ export function AuthWizard({
     } catch (e: unknown) {
       const msg =
         e instanceof Error ? e.message : "An unexpected error occurred";
-      showModal("Error", msg);
+      showModal("Something went wrong", msg, "error");
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-black/90">
+    <div
+      className="min-h-screen w-full flex items-center justify-center px-4 py-10"
+      style={{ backgroundColor: TOKEN.pageBg }}
+    >
       <Modal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         title={modalTitle}
       >
-        <p className="text-gray-300">{modalMessage}</p>
-        <div className="mt-4 flex justify-end">
-          <Button
+        <p
+          style={{
+            color:
+              modalTone === "error"
+                ? TOKEN.semanticError
+                : modalTone === "success"
+                  ? TOKEN.semanticSuccess
+                  : TOKEN.charcoal,
+            margin: 0,
+            fontSize: 14,
+            lineHeight: 1.55,
+          }}
+        >
+          {modalMessage}
+        </p>
+        <div className="mt-5 flex justify-end">
+          <button
+            type="button"
             onClick={() => setModalOpen(false)}
-            className="bg-gray-700 hover:bg-gray-600 text-white"
+            style={{
+              backgroundColor: TOKEN.accent,
+              color: "#ffffff",
+              border: "none",
+              padding: "8px 16px",
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              boxShadow:
+                "0 0 0 1px rgba(34, 197, 94, 0.30), 0 0 16px rgba(34, 197, 94, 0.20)",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = TOKEN.accentHover;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = TOKEN.accent;
+            }}
           >
-            Close
-          </Button>
+            OK
+          </button>
         </div>
       </Modal>
 
-      <Card className="w-[400px] border-gray-600/50 bg-gray-900/60 backdrop-blur-md shadow-2xl animate-in fade-in zoom-in-95 duration-500">
-        <CardHeader className="space-y-1 text-center">
-          <CardTitle className="text-2xl font-bold tracking-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-            {step === "welcome" && "Welcome Back"}
-            {step === "signup" && "Create Account"}
-            {step === "signin" && "Sign In"}
-          </CardTitle>
-          <CardDescription className="text-gray-400 text-xs">
-            {step === "welcome" && "Choose how you want to continue"}
-            {step === "signup" &&
-              "Enter your details below to create your account"}
-            {step === "signin" &&
-              "Enter your email below to login to your account"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4">
+      <div
+        className="w-full max-w-sm"
+        style={{
+          backgroundColor: TOKEN.cardBg,
+          backdropFilter: "blur(24px)",
+          WebkitBackdropFilter: "blur(24px)",
+          border: `1px solid ${TOKEN.cardBorder}`,
+          borderRadius: 12,
+          padding: 22,
+          boxShadow:
+            "0 4px 12px rgba(0,0,0,0.4), 0 24px 48px -16px rgba(0,0,0,0.5)",
+        }}
+      >
+        {/* Brand header */}
+        <div className="flex items-center gap-2 mb-5">
+          <div
+            className="flex h-7 w-7 items-center justify-center"
+            style={{
+              background: "linear-gradient(135deg, #22c55e, #10b981, #059669)",
+              color: "#ffffff",
+              borderRadius: 7,
+              boxShadow: "0 0 12px rgba(34, 197, 94, 0.28)",
+            }}
+          >
+            <Mic className="h-3.5 w-3.5" />
+          </div>
+          <div>
+            <p
+              style={{
+                color: TOKEN.ink,
+                fontSize: 12.5,
+                fontWeight: 600,
+                letterSpacing: "-0.1px",
+                lineHeight: 1.2,
+                margin: 0,
+              }}
+            >
+              Interview Copilot
+            </p>
+            <p
+              style={{
+                color: TOKEN.steel,
+                fontSize: 10.5,
+                lineHeight: 1.3,
+                margin: 0,
+              }}
+            >
+              Your real-time interview workspace
+            </p>
+          </div>
+        </div>
+
+        {/* Title */}
+        <div className="mb-4">
+          <h1
+            style={{
+              color: TOKEN.ink,
+              fontSize: 18,
+              fontWeight: 600,
+              lineHeight: 1.25,
+              letterSpacing: "-0.3px",
+              margin: 0,
+            }}
+          >
+            {step === "welcome" && "Welcome back"}
+            {step === "signup" && "Create your account"}
+            {step === "signin" && "Sign in to your account"}
+          </h1>
+          <p
+            style={{
+              color: TOKEN.slate,
+              fontSize: 12.5,
+              lineHeight: 1.5,
+              marginTop: 4,
+              marginBottom: 0,
+            }}
+          >
+            {step === "welcome" && "Pick how you'd like to continue."}
+            {step === "signup" && "All you need is an email and a password."}
+            {step === "signin" && "Enter your email and password below."}
+          </p>
+        </div>
+
+        {/* Body */}
+        <div>
           {step === "welcome" && (
-            <div className="grid gap-4 animate-in slide-in-from-left-4 duration-300">
-              <Button
-                className="w-full bg-green-600 hover:bg-green-700 text-white transition-all font-semibold"
-                onClick={() => setStep("signup")}
+            <div className="grid gap-2">
+              <NotionPrimaryButton onClick={() => setStep("signup")}>
+                Create account
+                <MoveRight className="h-3.5 w-3.5" />
+              </NotionPrimaryButton>
+              <NotionSecondaryButton onClick={() => setStep("signin")}>
+                Sign in
+              </NotionSecondaryButton>
+
+              <div
+                className="mt-3 flex items-start gap-2 rounded-md px-2.5 py-2"
+                style={{
+                  backgroundColor: TOKEN.accentSoft,
+                  border: `1px solid ${TOKEN.accentBorder}`,
+                }}
               >
-                Create Account
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full border-gray-600/50 bg-transparent text-gray-300 hover:bg-gray-800 hover:text-white transition-all"
-                onClick={() => setStep("signin")}
-              >
-                Sign In
-              </Button>
+                <span
+                  className="mt-0.5 inline-flex items-center justify-center rounded"
+                  style={{
+                    backgroundColor: TOKEN.accent,
+                    color: "#ffffff",
+                    width: 14,
+                    height: 14,
+                    fontSize: 9,
+                    fontWeight: 700,
+                  }}
+                >
+                  i
+                </span>
+                <p
+                  style={{
+                    margin: 0,
+                    color: TOKEN.accentText,
+                    fontSize: 11,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  New accounts go through a quick admin approval. You&apos;ll
+                  be able to message the admin from the next screen.
+                </p>
+              </div>
             </div>
           )}
 
           {step === "signup" && (
-            <div className="grid gap-4 animate-in slide-in-from-right-4 duration-300">
-              <div className="grid gap-2">
-                <Label htmlFor="name" className="text-gray-300">
-                  Name
-                </Label>
-                <Input
+            <div className="grid gap-3">
+              <div className="grid gap-1">
+                <NotionLabel htmlFor="name">Name</NotionLabel>
+                <NotionInput
                   id="name"
-                  placeholder="John Doe"
+                  placeholder="Jane Doe"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="bg-gray-800/50 border-gray-600/50 text-white placeholder:text-gray-500 focus:border-green-500/50 transition-all"
+                  autoComplete="name"
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="email" className="text-gray-300">
-                  Email
-                </Label>
-                <Input
+              <div className="grid gap-1">
+                <NotionLabel htmlFor="email">Work email</NotionLabel>
+                <NotionInput
                   id="email"
                   type="email"
-                  placeholder="m@example.com"
+                  placeholder="you@company.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="bg-gray-800/50 border-gray-600/50 text-white placeholder:text-gray-500 focus:border-green-500/50 transition-all"
+                  autoComplete="email"
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="password" className="text-gray-300">
-                  Password
-                </Label>
-                <Input
+              <div className="grid gap-1">
+                <NotionLabel htmlFor="password">Password</NotionLabel>
+                <NotionInput
                   id="password"
                   type="password"
+                  placeholder="At least 8 characters"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="bg-gray-800/50 border-gray-600/50 text-white placeholder:text-gray-500 focus:border-green-500/50 transition-all"
+                  autoComplete="new-password"
                 />
               </div>
-              <div className="text-xs text-center text-gray-400">
+              <NotionPrimaryButton onClick={handleSignup} loading={loading}>
+                {loading ? "Creating account…" : "Create account"}
+              </NotionPrimaryButton>
+              <p
+                style={{
+                  color: TOKEN.steel,
+                  fontSize: 11.5,
+                  textAlign: "center",
+                  margin: 0,
+                }}
+              >
                 Already have an account?{" "}
                 <button
-                  className="text-green-400 hover:text-green-300 hover:underline transition-colors pointer"
+                  type="button"
                   onClick={() => setStep("signin")}
+                  style={{
+                    color: TOKEN.accent,
+                    fontWeight: 600,
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                  }}
                 >
-                  Sign In
+                  Sign in
                 </button>
-              </div>
+              </p>
             </div>
           )}
 
           {step === "signin" && (
-            <div className="grid gap-4 animate-in slide-in-from-right-4 duration-300">
-              <div className="grid gap-2">
-                <Label htmlFor="email" className="text-gray-300">
-                  Email
-                </Label>
-                <Input
+            <div className="grid gap-3">
+              <div className="grid gap-1">
+                <NotionLabel htmlFor="email">Email</NotionLabel>
+                <NotionInput
                   id="email"
                   type="email"
-                  placeholder="m@example.com"
+                  placeholder="you@company.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="bg-gray-800/50 border-gray-600/50 text-white placeholder:text-gray-500 focus:border-green-500/50 transition-all"
+                  autoComplete="email"
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="password" className="text-gray-300">
-                  Password
-                </Label>
-                <Input
+              <div className="grid gap-1">
+                <NotionLabel htmlFor="password">Password</NotionLabel>
+                <NotionInput
                   id="password"
                   type="password"
+                  placeholder="Your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="bg-gray-800/50 border-gray-600/50 text-white placeholder:text-gray-500 focus:border-green-500/50 transition-all"
+                  autoComplete="current-password"
                 />
               </div>
-              <div className="text-xs text-center text-gray-400">
+              <NotionPrimaryButton onClick={handleSignin} loading={loading}>
+                {loading ? "Signing in…" : "Sign in"}
+              </NotionPrimaryButton>
+              <p
+                style={{
+                  color: TOKEN.steel,
+                  fontSize: 11.5,
+                  textAlign: "center",
+                  margin: 0,
+                }}
+              >
                 Don&apos;t have an account?{" "}
                 <button
-                  className="text-green-400 hover:text-green-300 hover:underline transition-colors pointer"
+                  type="button"
                   onClick={() => setStep("signup")}
+                  style={{
+                    color: TOKEN.accent,
+                    fontWeight: 600,
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                  }}
                 >
-                  Create Account
+                  Create account
                 </button>
-              </div>
+              </p>
             </div>
           )}
-        </CardContent>
-        <CardFooter className="flex justify-between border-t border-gray-700/30 pt-4">
+
           {step !== "welcome" && (
-            <Button
-              variant="ghost"
+            <button
+              type="button"
               onClick={() => setStep("welcome")}
-              className="text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
+              className="mt-4 inline-flex items-center gap-1"
+              style={{
+                color: TOKEN.steel,
+                fontSize: 11.5,
+                background: "none",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+              }}
             >
+              <ArrowLeft className="h-3 w-3" />
               Back
-            </Button>
+            </button>
           )}
-          {step === "signup" && (
-            <Button
-              onClick={handleSignup}
-              disabled={loading}
-              className="bg-green-600 hover:bg-green-700 text-white border-0 transition-all duration-300 shadow-lg shadow-green-900/20 font-semibold"
-            >
-              {loading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
-              {loading ? "Creating..." : "Sign Up"}
-            </Button>
-          )}
-          {step === "signin" && (
-            <Button
-              onClick={handleSignin}
-              disabled={loading}
-              className="bg-green-600 hover:bg-green-700 text-white border-0 transition-all duration-300 shadow-lg shadow-green-900/20 font-semibold"
-            >
-              {loading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
-              {loading ? "Signing In..." : "Sign In"}
-            </Button>
-          )}
-        </CardFooter>
-      </Card>
+        </div>
+
+        {/* Footer fineprint */}
+        <div
+          className="mt-5 pt-4 text-center"
+          style={{ borderTop: `1px solid ${TOKEN.hairline}` }}
+        >
+          <p
+            style={{
+              color: TOKEN.stone,
+              fontSize: 10,
+              lineHeight: 1.4,
+              margin: 0,
+            }}
+          >
+            By continuing, you agree to our terms and acknowledge that this
+            tool is intended for educational use.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

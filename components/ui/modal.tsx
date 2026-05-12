@@ -3,7 +3,6 @@
 import * as React from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 
 interface ModalProps {
   isOpen: boolean;
@@ -13,6 +12,11 @@ interface ModalProps {
   className?: string;
 }
 
+/**
+ * Dark, glass-style modal that matches the rest of the Electron app
+ * (zinc-950 surface, white/.06 hairline, emerald accent on focus). Keeps
+ * the Notion-style geometry: 12px-rounded card, generous spacing.
+ */
 export function Modal({
   isOpen,
   onClose,
@@ -23,28 +27,62 @@ export function Modal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+    <div
+      className="fixed inset-0 z-[110] flex items-center justify-center p-4 animate-in fade-in duration-150"
+      style={{
+        backgroundColor: "rgba(0, 0, 0, 0.55)",
+        backdropFilter: "blur(6px)",
+      }}
+    >
       <div
         className={cn(
-          "relative w-full max-w-md overflow-hidden rounded-xl bg-gray-900/90 p-6 shadow-2xl backdrop-blur-xl border border-gray-700/50 animate-in zoom-in-95 duration-200",
+          "relative w-full max-w-sm rounded-xl p-5 animate-in zoom-in-95 duration-200",
           className,
         )}
+        style={{
+          backgroundColor: "rgba(24, 24, 27, 0.85)",
+          backdropFilter: "blur(20px)",
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+          boxShadow:
+            "0 24px 48px -8px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.02) inset",
+        }}
       >
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-start justify-between gap-3 mb-2">
           {title && (
-            <h2 className="text-lg font-semibold text-white">{title}</h2>
+            <h2
+              style={{
+                color: "#fafafa",
+                fontSize: 14,
+                fontWeight: 600,
+                letterSpacing: "-0.2px",
+                lineHeight: 1.3,
+                margin: 0,
+              }}
+            >
+              {title}
+            </h2>
           )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 rounded-full hover:bg-gray-700 text-gray-400 hover:text-white"
+          <button
+            type="button"
+            aria-label="Close"
             onClick={onClose}
+            className="-mr-1.5 -mt-1.5 inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors"
+            style={{ color: "#a1a1aa" }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.06)";
+              e.currentTarget.style.color = "#fafafa";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "transparent";
+              e.currentTarget.style.color = "#a1a1aa";
+            }}
           >
-            <X className="h-4 w-4" />
-            <span className="sr-only">Close</span>
-          </Button>
+            <X className="h-3.5 w-3.5" />
+          </button>
         </div>
-        <div className="text-sm text-gray-300">{children}</div>
+        <div style={{ color: "#d4d4d8", lineHeight: 1.5, fontSize: 12.5 }}>
+          {children}
+        </div>
       </div>
     </div>
   );

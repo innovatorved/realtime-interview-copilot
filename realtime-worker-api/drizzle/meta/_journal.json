@@ -64,6 +64,13 @@
       "when": 1764700000000,
       "tag": "0008_add_live_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1764750000000,
+      "tag": "0009_add_support_and_announcements",
+      "breakpoints": true
     }
   ]
 }

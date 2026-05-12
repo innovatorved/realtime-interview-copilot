@@ -5,8 +5,25 @@ import {
   interviewPreset,
   user as userTable,
   liveSession,
+  supportMessage,
+  appAnnouncement,
+  appAnnouncementDismissal,
 } from "./db/schema";
-import { eq, desc, like, or, and, sql, count } from "drizzle-orm";
+import {
+  eq,
+  desc,
+  like,
+  or,
+  and,
+  sql,
+  count,
+  inArray,
+  asc,
+  isNull,
+  gte,
+  lte,
+  isNotNull,
+} from "drizzle-orm";
 import {
   getCachedConfig,
   getEffectiveModelParams,
@@ -30,6 +47,13 @@ const MAX_NOTE_TAG_CHARS = 100;
 const MAX_NOTE_IDS_PER_EXPORT = 500;
 const DEEPGRAM_TIMEOUT_MS = 10_000;
 const SSE_BUFFER_MAX = 256 * 1024; // 256KB cap to avoid unbounded growth.
+
+// ─── Support / Announcement limits ──────────────────────────────────────────
+const MAX_SUPPORT_BODY_CHARS = 4_000;
+const MAX_SUPPORT_SUBJECT_CHARS = 200;
+const MAX_SUPPORT_THREADS_PER_USER = 100;
+const MAX_REPLIES_PER_THREAD = 200;
+const SAFE_RESOURCE_ID_RE = /^[a-zA-Z0-9_-]{1,128}$/;
 
 function escapeHtml(input: string): string {
   return input
@@ -273,6 +297,54 @@ function isAuthed(
   return !("error" in result);
 }
 
+/**
+ * Lenient variant of getAuthenticatedUser that lets pending-approval users
+ * through. This is the *only* auth gate we expose to pending users — used
+ * exclusively for support messaging so a user waiting for approval can
+ * still write to the admin. Banned users are still rejected because they
+ * may be banned for abuse.
+ */
+async function getAuthenticatedUserAllowPending(
+  request: Request,
+  env: Env,
+): Promise<AuthedUser | { error: AuthFailureReason; isPending?: boolean }> {
+  let session;
+  try {
+    session = await auth(env).api.getSession({ headers: request.headers });
+  } catch (e) {
+    console.warn("[Worker] getSession failed:", e);
+    return { error: "unauthorized" };
+  }
+  if (!session?.user) return { error: "unauthorized" };
+
+  const userId = session.user.id;
+
+  let flags: { isApproved: boolean | null; isBanned: boolean | null } | null =
+    null;
+  try {
+    const rows = await getDb(env)
+      .select({
+        isApproved: userTable.isApproved,
+        isBanned: userTable.isBanned,
+      })
+      .from(userTable)
+      .where(eq(userTable.id, userId))
+      .limit(1);
+    flags = rows[0] ?? null;
+  } catch (e) {
+    console.warn("[Worker] flag lookup failed:", e);
+    return { error: "unauthorized" };
+  }
+
+  if (flags?.isBanned === true) return { error: "banned" };
+
+  return {
+    id: userId,
+    email: session.user.email,
+    name: session.user.name,
+  };
+}
+
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: jsonHeaders });
 }
@@ -450,6 +522,45 @@ export default {
     if (path === "/api/events/track" && request.method === "POST") {
       const response = await handleEventTrack(request, env, ctx);
       return withCors(response, request);
+    }
+
+    // ── Support messages (pending or approved users) ───────────────
+    if (path === "/api/support/messages" && request.method === "GET") {
+      const response = await handleListSupportMessages(request, env);
+      return withCors(response, request);
+    }
+    if (path === "/api/support/messages" && request.method === "POST") {
+      const response = await handleCreateSupportMessage(request, env, ctx);
+      return withCors(response, request);
+    }
+    if (path === "/api/support/messages/read" && request.method === "POST") {
+      const response = await handleMarkSupportThreadReadByUser(request, env);
+      return withCors(response, request);
+    }
+
+    // ── Announcements (banners / popups) ──────────────────────────
+    if (path === "/api/announcements/active" && request.method === "GET") {
+      const response = await handleActiveAnnouncements(request, env, ctx);
+      return withCors(response, request);
+    }
+    {
+      const m = path.match(/^\/api\/announcements\/([^/]+)\/dismiss$/);
+      if (m && request.method === "POST") {
+        const response = await handleDismissAnnouncement(
+          request,
+          env,
+          ctx,
+          m[1],
+        );
+        return withCors(response, request);
+      }
+    }
+    {
+      const m = path.match(/^\/api\/announcements\/([^/]+)\/ack$/);
+      if (m && request.method === "POST") {
+        const response = await handleAckAnnouncement(request, env, ctx, m[1]);
+        return withCors(response, request);
+      }
     }
 
     if (path.startsWith("/api/auth")) {
@@ -1838,6 +1949,568 @@ async function handleEventTrack(
   }
 
   return jsonResponse({ ok: true });
+}
+
+// ─── Support Messages (user-facing) ─────────────────────────────────────────
+//
+// These three endpoints accept *pending* users — a user waiting for admin
+// approval can still write to the admin to explain their request. Banned
+// users are still rejected by getAuthenticatedUserAllowPending.
+
+interface CreateSupportMessageBody {
+  subject?: unknown;
+  body?: unknown;
+  parentId?: unknown;
+}
+
+async function handleCreateSupportMessage(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<Response> {
+  const authResult = await getAuthenticatedUserAllowPending(request, env);
+  if (!isAuthed(authResult)) return authErrorResponse(authResult.error);
+  const user = authResult;
+
+  // Per-user rate limit so a malicious script can't fill the inbox.
+  if (env.COMPLETION_LIMITER) {
+    try {
+      const { success } = await env.COMPLETION_LIMITER.limit({
+        key: `support_create:${user.id}`,
+      });
+      if (!success) {
+        return jsonResponse(
+          { error: "Too many messages. Please wait a moment." },
+          429,
+        );
+      }
+    } catch (err) {
+      console.warn("[Worker] support_create limiter threw:", err);
+      return jsonResponse({ error: "Rate limiter unavailable" }, 503);
+    }
+  }
+
+  let body: CreateSupportMessageBody;
+  try {
+    body = (await request.json()) as CreateSupportMessageBody;
+  } catch {
+    return jsonResponse({ error: "Invalid JSON" }, 400);
+  }
+  if (body === null || typeof body !== "object") {
+    return jsonResponse({ error: "Invalid body" }, 400);
+  }
+
+  const rawBody = typeof body.body === "string" ? body.body : "";
+  const messageBody = rawBody.trim();
+  if (!messageBody) {
+    return jsonResponse({ error: "body is required" }, 400);
+  }
+  if (messageBody.length > MAX_SUPPORT_BODY_CHARS) {
+    return jsonResponse(
+      { error: `body exceeds ${MAX_SUPPORT_BODY_CHARS} characters` },
+      413,
+    );
+  }
+
+  let subject: string | null = null;
+  if (body.subject !== undefined) {
+    if (typeof body.subject !== "string") {
+      return jsonResponse({ error: "subject must be a string" }, 400);
+    }
+    const trimmed = body.subject.trim().slice(0, MAX_SUPPORT_SUBJECT_CHARS);
+    subject = trimmed.length > 0 ? trimmed : null;
+  }
+
+  let parentId: string | null = null;
+  if (body.parentId !== undefined && body.parentId !== null) {
+    if (
+      typeof body.parentId !== "string" ||
+      !SAFE_RESOURCE_ID_RE.test(body.parentId)
+    ) {
+      return jsonResponse({ error: "Invalid parentId" }, 400);
+    }
+    parentId = body.parentId;
+  }
+
+  const db = getDb(env);
+
+  if (parentId) {
+    // Verify the user owns the parent thread before adding a reply.
+    const [parent] = await db
+      .select({
+        id: supportMessage.id,
+        userId: supportMessage.userId,
+        parentId: supportMessage.parentId,
+      })
+      .from(supportMessage)
+      .where(eq(supportMessage.id, parentId))
+      .limit(1);
+    if (!parent) {
+      return jsonResponse({ error: "Parent thread not found" }, 404);
+    }
+    if (parent.parentId !== null) {
+      return jsonResponse(
+        { error: "parentId must point at a thread root" },
+        400,
+      );
+    }
+    if (parent.userId !== user.id) {
+      return jsonResponse({ error: "Forbidden" }, 403);
+    }
+
+    const [{ replies }] = await db
+      .select({ replies: count() })
+      .from(supportMessage)
+      .where(eq(supportMessage.parentId, parentId));
+    if (replies >= MAX_REPLIES_PER_THREAD) {
+      return jsonResponse(
+        {
+          error: `Thread is full (max ${MAX_REPLIES_PER_THREAD} replies).`,
+        },
+        409,
+      );
+    }
+  } else {
+    // New thread — cap how many threads any one user can open.
+    const [{ threads }] = await db
+      .select({ threads: count() })
+      .from(supportMessage)
+      .where(
+        and(
+          eq(supportMessage.userId, user.id),
+          isNull(supportMessage.parentId),
+        ),
+      );
+    if (threads >= MAX_SUPPORT_THREADS_PER_USER) {
+      return jsonResponse(
+        {
+          error: `You have reached the maximum of ${MAX_SUPPORT_THREADS_PER_USER} threads.`,
+        },
+        409,
+      );
+    }
+  }
+
+  const id = crypto.randomUUID();
+  const now = new Date();
+
+  await db.insert(supportMessage).values({
+    id,
+    userId: user.id,
+    userEmail: user.email,
+    userName: user.name,
+    parentId,
+    authorType: "user",
+    authorEmail: user.email,
+    subject,
+    body: messageBody,
+    // Reply rows live at status 'reply' so admin filters can hide them
+    // when paginating the thread-roots list. Root rows go to 'open'.
+    status: parentId ? "reply" : "open",
+    unreadByAdmin: 1,
+    unreadByUser: 0,
+    ipAddress: getClientIp(request),
+    userAgent: request.headers.get("user-agent")?.slice(0, 500) ?? null,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  // If this was a reply, bump the parent thread's unread/updated state
+  // and reopen it ("user followed up after admin reply").
+  if (parentId) {
+    await db
+      .update(supportMessage)
+      .set({
+        status: "open",
+        unreadByAdmin: 1,
+        updatedAt: now,
+      })
+      .where(eq(supportMessage.id, parentId));
+  }
+
+  recordUsage(env, ctx, request, user, "support_message_create", {
+    promptChars: messageBody.length,
+    metadata: { messageId: id, parentId, hasSubject: Boolean(subject) },
+  });
+
+  return jsonResponse(
+    {
+      message: {
+        id,
+        parentId,
+        subject,
+        body: messageBody,
+        authorType: "user",
+        status: parentId ? "reply" : "open",
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      },
+    },
+    201,
+  );
+}
+
+async function handleListSupportMessages(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const authResult = await getAuthenticatedUserAllowPending(request, env);
+  if (!isAuthed(authResult)) return authErrorResponse(authResult.error);
+  const user = authResult;
+
+  const url = new URL(request.url);
+  const limit = Math.min(
+    100,
+    Math.max(1, parseInt(url.searchParams.get("limit") ?? "50", 10) || 50),
+  );
+  const offset = Math.max(
+    0,
+    parseInt(url.searchParams.get("offset") ?? "0", 10) || 0,
+  );
+  const threadIdRaw = url.searchParams.get("threadId");
+
+  const db = getDb(env);
+
+  if (threadIdRaw) {
+    if (!SAFE_RESOURCE_ID_RE.test(threadIdRaw)) {
+      return jsonResponse({ error: "Invalid threadId" }, 400);
+    }
+
+    const [root] = await db
+      .select()
+      .from(supportMessage)
+      .where(eq(supportMessage.id, threadIdRaw))
+      .limit(1);
+    if (!root) return jsonResponse({ error: "Thread not found" }, 404);
+    if (root.userId !== user.id) {
+      return jsonResponse({ error: "Forbidden" }, 403);
+    }
+    if (root.parentId !== null) {
+      return jsonResponse(
+        { error: "threadId must point at a thread root" },
+        400,
+      );
+    }
+
+    const messages = await db
+      .select()
+      .from(supportMessage)
+      .where(
+        or(
+          eq(supportMessage.id, threadIdRaw),
+          eq(supportMessage.parentId, threadIdRaw),
+        )!,
+      )
+      .orderBy(asc(supportMessage.createdAt));
+
+    return jsonResponse({
+      thread: serializeSupportMessage(root),
+      messages: messages.map(serializeSupportMessage),
+    });
+  }
+
+  // List all thread roots owned by this user.
+  const where = and(
+    eq(supportMessage.userId, user.id),
+    isNull(supportMessage.parentId),
+  );
+
+  const [rows, [{ total }]] = await Promise.all([
+    db
+      .select()
+      .from(supportMessage)
+      .where(where)
+      .orderBy(desc(supportMessage.updatedAt))
+      .limit(limit)
+      .offset(offset),
+    db.select({ total: count() }).from(supportMessage).where(where),
+  ]);
+
+  return jsonResponse({
+    threads: rows.map(serializeSupportMessage),
+    total,
+    pagination: { limit, offset },
+  });
+}
+
+async function handleMarkSupportThreadReadByUser(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const authResult = await getAuthenticatedUserAllowPending(request, env);
+  if (!isAuthed(authResult)) return authErrorResponse(authResult.error);
+  const user = authResult;
+
+  let body: { threadId?: unknown };
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    return jsonResponse({ error: "Invalid JSON" }, 400);
+  }
+  const threadId = typeof body?.threadId === "string" ? body.threadId : "";
+  if (!SAFE_RESOURCE_ID_RE.test(threadId)) {
+    return jsonResponse({ error: "Invalid threadId" }, 400);
+  }
+
+  const db = getDb(env);
+  const [root] = await db
+    .select({ id: supportMessage.id, userId: supportMessage.userId })
+    .from(supportMessage)
+    .where(
+      and(eq(supportMessage.id, threadId), isNull(supportMessage.parentId)),
+    )
+    .limit(1);
+  if (!root) return jsonResponse({ error: "Thread not found" }, 404);
+  if (root.userId !== user.id) {
+    return jsonResponse({ error: "Forbidden" }, 403);
+  }
+
+  await db
+    .update(supportMessage)
+    .set({ unreadByUser: 0, updatedAt: new Date() })
+    .where(eq(supportMessage.id, threadId));
+
+  return jsonResponse({ ok: true });
+}
+
+function serializeSupportMessage(row: {
+  id: string;
+  userId: string | null;
+  userEmail: string | null;
+  userName: string | null;
+  parentId: string | null;
+  authorType: string;
+  authorEmail: string | null;
+  subject: string | null;
+  body: string;
+  status: string;
+  unreadByAdmin: number;
+  unreadByUser: number;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    id: row.id,
+    userId: row.userId,
+    userEmail: row.userEmail,
+    userName: row.userName,
+    parentId: row.parentId,
+    authorType: row.authorType,
+    authorEmail: row.authorEmail,
+    subject: row.subject,
+    body: row.body,
+    status: row.status,
+    unreadByAdmin: Boolean(row.unreadByAdmin),
+    unreadByUser: Boolean(row.unreadByUser),
+    createdAt:
+      row.createdAt instanceof Date
+        ? row.createdAt.toISOString()
+        : new Date(row.createdAt).toISOString(),
+    updatedAt:
+      row.updatedAt instanceof Date
+        ? row.updatedAt.toISOString()
+        : new Date(row.updatedAt).toISOString(),
+  };
+}
+
+// ─── Announcements (user-facing) ────────────────────────────────────────────
+
+const ANNOUNCEMENT_KIND_VALUES = new Set(["banner", "popup", "toast"]);
+
+async function handleActiveAnnouncements(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<Response> {
+  // Approved users get the full set; pending users are shown announcements
+  // too because the "your account is being reviewed" notice still applies
+  // to them. Banned users are blocked.
+  const authResult = await getAuthenticatedUserAllowPending(request, env);
+  if (!isAuthed(authResult)) return authErrorResponse(authResult.error);
+  const user = authResult;
+
+  void ctx;
+
+  const url = new URL(request.url);
+  const kindRaw = url.searchParams.get("kind");
+  const filterKind =
+    kindRaw && ANNOUNCEMENT_KIND_VALUES.has(kindRaw) ? kindRaw : null;
+
+  const now = new Date();
+  const db = getDb(env);
+
+  const conditions = [eq(appAnnouncement.status, "active")];
+  if (filterKind) conditions.push(eq(appAnnouncement.kind, filterKind));
+
+  // Time window: a row matches when `startsAt IS NULL OR startsAt <= now`
+  // AND `expiresAt IS NULL OR expiresAt > now`.
+  conditions.push(
+    or(
+      isNull(appAnnouncement.startsAt),
+      lte(appAnnouncement.startsAt, now),
+    )!,
+  );
+  conditions.push(
+    or(
+      isNull(appAnnouncement.expiresAt),
+      gte(appAnnouncement.expiresAt, now),
+    )!,
+  );
+
+  const candidates = await db
+    .select()
+    .from(appAnnouncement)
+    .where(and(...conditions))
+    .orderBy(desc(appAnnouncement.createdAt))
+    .limit(200);
+
+  // Filter by audience in JS — JSON_LIKE on a small list is faster than
+  // an SQL JSON parse on every row, and we already capped the candidate
+  // set above. Then exclude popups the user has already dismissed.
+  const targeted = candidates.filter((a) => {
+    if (a.audience === "all") return true;
+    if (a.audience === "users") {
+      try {
+        const ids = JSON.parse(a.targetUserIds ?? "[]");
+        return Array.isArray(ids) && ids.includes(user.id);
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  });
+
+  if (targeted.length === 0) {
+    return jsonResponse({ announcements: [] });
+  }
+
+  const ids = targeted.map((a) => a.id);
+  const dismissals = await db
+    .select({
+      announcementId: appAnnouncementDismissal.announcementId,
+    })
+    .from(appAnnouncementDismissal)
+    .where(
+      and(
+        eq(appAnnouncementDismissal.userId, user.id),
+        inArray(appAnnouncementDismissal.announcementId, ids),
+      ),
+    );
+  const dismissedIds = new Set(dismissals.map((d) => d.announcementId));
+
+  const visible = targeted.filter((a) => !dismissedIds.has(a.id));
+
+  return jsonResponse({
+    announcements: visible.map(serializeAnnouncement),
+  });
+}
+
+async function handleDismissAnnouncement(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+  id: string,
+): Promise<Response> {
+  const authResult = await getAuthenticatedUserAllowPending(request, env);
+  if (!isAuthed(authResult)) return authErrorResponse(authResult.error);
+  const user = authResult;
+
+  void ctx;
+
+  if (!SAFE_RESOURCE_ID_RE.test(id)) {
+    return jsonResponse({ error: "Invalid announcement id" }, 400);
+  }
+
+  const db = getDb(env);
+
+  const [row] = await db
+    .select({
+      id: appAnnouncement.id,
+      dismissable: appAnnouncement.dismissable,
+    })
+    .from(appAnnouncement)
+    .where(eq(appAnnouncement.id, id))
+    .limit(1);
+
+  if (!row) return jsonResponse({ error: "Announcement not found" }, 404);
+  if (!row.dismissable) {
+    return jsonResponse(
+      { error: "This announcement cannot be dismissed" },
+      403,
+    );
+  }
+
+  // INSERT OR IGNORE — duplicate dismissals must be a no-op.
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO app_announcement_dismissal
+       (announcementId, userId, dismissedAt) VALUES (?1, ?2, ?3)`,
+  )
+    .bind(id, user.id, Math.floor(Date.now() / 1000))
+    .run();
+
+  return jsonResponse({ ok: true });
+}
+
+async function handleAckAnnouncement(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+  id: string,
+): Promise<Response> {
+  // Acknowledge = mark as seen but don't permanently dismiss. Only
+  // affects analytics for now; same code path as dismiss for popups but
+  // does NOT insert a dismissal row. We keep the endpoint to make the
+  // client integration cleaner (popup may "acknowledge" without
+  // dismissing if the popup is non-dismissable).
+  const authResult = await getAuthenticatedUserAllowPending(request, env);
+  if (!isAuthed(authResult)) return authErrorResponse(authResult.error);
+  const user = authResult;
+
+  if (!SAFE_RESOURCE_ID_RE.test(id)) {
+    return jsonResponse({ error: "Invalid announcement id" }, 400);
+  }
+
+  recordUsage(env, ctx, request, user, "announcement_ack", {
+    metadata: { announcementId: id },
+  });
+
+  return jsonResponse({ ok: true });
+}
+
+function serializeAnnouncement(row: {
+  id: string;
+  kind: string;
+  severity: string;
+  title: string | null;
+  body: string;
+  ctaLabel: string | null;
+  ctaUrl: string | null;
+  audience: string;
+  status: string;
+  dismissable: number;
+  startsAt: Date | null;
+  expiresAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  const toIso = (d: Date | null | undefined) =>
+    d ? (d instanceof Date ? d.toISOString() : new Date(d).toISOString()) : null;
+  return {
+    id: row.id,
+    kind: row.kind,
+    severity: row.severity,
+    title: row.title,
+    body: row.body,
+    ctaLabel: row.ctaLabel,
+    ctaUrl: row.ctaUrl,
+    audience: row.audience,
+    status: row.status,
+    dismissable: Boolean(row.dismissable),
+    startsAt: toIso(row.startsAt),
+    expiresAt: toIso(row.expiresAt),
+    createdAt: toIso(row.createdAt) ?? new Date().toISOString(),
+    updatedAt: toIso(row.updatedAt) ?? new Date().toISOString(),
+  };
 }
 
 function buildExportMarkdown(

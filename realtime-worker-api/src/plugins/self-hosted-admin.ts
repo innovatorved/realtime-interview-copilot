@@ -41,6 +41,9 @@ import {
   usageEvent,
   userModelParams,
   liveSession,
+  supportMessage,
+  appAnnouncement,
+  appAnnouncementDismissal,
 } from "../db/schema";
 import {
   getSystemUsageSummary,
@@ -177,6 +180,95 @@ const liveSessionTerminateSchema = z.object({
   reason: z.string().max(200).optional(),
   revokeAuthSessions: z.boolean().optional(),
 });
+
+// ─── Support message schemas ──────────────────────────────────────
+
+const supportReplySchema = z.object({
+  threadId: safeIdSchema,
+  body: z.string().min(1).max(8000),
+  closeAfter: z.boolean().optional(),
+});
+
+const supportUpdateStatusSchema = z.object({
+  threadId: safeIdSchema,
+  status: z.enum(["open", "pending", "resolved"]),
+});
+
+const supportDeleteSchema = z.object({
+  threadId: safeIdSchema,
+});
+
+// ─── Announcement schemas ─────────────────────────────────────────
+
+const ANNOUNCEMENT_KIND = ["banner", "popup", "toast"] as const;
+const ANNOUNCEMENT_SEVERITY = [
+  "info",
+  "success",
+  "warning",
+  "error",
+  "announcement",
+] as const;
+const ANNOUNCEMENT_STATUS = ["active", "paused", "archived"] as const;
+const ANNOUNCEMENT_AUDIENCE = ["all", "users"] as const;
+
+// Enforce http/https on CTA URLs so an admin (or compromised admin
+// account) cannot ship a `javascript:` or `data:` URL into every
+// user's UI as a clickable button. Zod's `.url()` alone happily
+// accepts `javascript:alert(1)`.
+const safeHttpUrlSchema = z
+  .string()
+  .url()
+  .max(500)
+  .refine(
+    (v) => {
+      try {
+        const u = new URL(v);
+        return u.protocol === "https:" || u.protocol === "http:";
+      } catch {
+        return false;
+      }
+    },
+    { message: "ctaUrl must use http or https" },
+  );
+
+const announcementCreateSchema = z
+  .object({
+    kind: z.enum(ANNOUNCEMENT_KIND).default("banner"),
+    severity: z.enum(ANNOUNCEMENT_SEVERITY).default("info"),
+    title: z.string().max(200).nullable().optional(),
+    body: z.string().min(1).max(4000),
+    ctaLabel: z.string().max(80).nullable().optional(),
+    ctaUrl: safeHttpUrlSchema.nullable().optional(),
+    audience: z.enum(ANNOUNCEMENT_AUDIENCE).default("all"),
+    targetUserIds: z.array(safeIdSchema).max(5000).optional(),
+    status: z.enum(ANNOUNCEMENT_STATUS).default("active"),
+    dismissable: z.boolean().default(true),
+    startsAt: z.string().datetime().nullable().optional(),
+    expiresAt: z.string().datetime().nullable().optional(),
+  })
+  .refine(
+    (v) => v.audience !== "users" || (v.targetUserIds && v.targetUserIds.length > 0),
+    { message: "audience='users' requires non-empty targetUserIds" },
+  );
+
+const announcementUpdateSchema = z
+  .object({
+    id: safeIdSchema,
+    kind: z.enum(ANNOUNCEMENT_KIND).optional(),
+    severity: z.enum(ANNOUNCEMENT_SEVERITY).optional(),
+    title: z.string().max(200).nullable().optional(),
+    body: z.string().min(1).max(4000).optional(),
+    ctaLabel: z.string().max(80).nullable().optional(),
+    ctaUrl: safeHttpUrlSchema.nullable().optional(),
+    audience: z.enum(ANNOUNCEMENT_AUDIENCE).optional(),
+    targetUserIds: z.array(safeIdSchema).max(5000).optional(),
+    status: z.enum(ANNOUNCEMENT_STATUS).optional(),
+    dismissable: z.boolean().optional(),
+    startsAt: z.string().datetime().nullable().optional(),
+    expiresAt: z.string().datetime().nullable().optional(),
+  });
+
+const announcementIdSchema = z.object({ id: safeIdSchema });
 
 // ─── Important-event query allow-list ──────────────────────────────
 //
@@ -2794,6 +2886,498 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
               start: startRaw ?? null, end: endRaw ?? null, sort,
             },
           });
+        },
+      ),
+
+      // ── Support Messages (admin) ─────────────────────────────────
+
+      adminSupportListThreads: createAuthEndpoint(
+        "/self-hosted-admin/support/threads",
+        { method: "GET", use: [sessionMiddleware] },
+        async (ctx) => {
+          if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const url = new URL(ctx.request?.url ?? "http://localhost");
+          const limit = parseLimit(url.searchParams.get("limit"));
+          const offset = parseOffset(url.searchParams.get("offset"));
+          const statusRaw = url.searchParams.get("status");
+          const unreadOnly = url.searchParams.get("unreadOnly") === "true";
+          const userId = url.searchParams.get("userId");
+          const q = sanitizeSearch(url.searchParams.get("q"));
+
+          // Only thread roots in this list — replies live under each thread.
+          const conditions: ReturnType<typeof eq>[] = [
+            isNull(supportMessage.parentId),
+          ];
+          if (statusRaw && /^(open|pending|resolved)$/.test(statusRaw)) {
+            conditions.push(eq(supportMessage.status, statusRaw));
+          }
+          if (unreadOnly) conditions.push(eq(supportMessage.unreadByAdmin, 1));
+          if (userId && SAFE_ID_RE.test(userId)) {
+            conditions.push(eq(supportMessage.userId, userId));
+          }
+          if (q) {
+            const safeQ = q.replace(/%/g, "\\%").replace(/_/g, "\\_");
+            conditions.push(
+              or(
+                like(supportMessage.body, `%${safeQ}%`),
+                like(supportMessage.subject, `%${safeQ}%`),
+                like(supportMessage.userEmail, `%${safeQ}%`),
+                like(supportMessage.userName, `%${safeQ}%`),
+              )!,
+            );
+          }
+
+          const where = and(...conditions);
+
+          const baseSelect = {
+            id: supportMessage.id,
+            userId: supportMessage.userId,
+            userEmail: supportMessage.userEmail,
+            userName: supportMessage.userName,
+            subject: supportMessage.subject,
+            body: supportMessage.body,
+            status: supportMessage.status,
+            unreadByAdmin: supportMessage.unreadByAdmin,
+            unreadByUser: supportMessage.unreadByUser,
+            ipAddress: supportMessage.ipAddress,
+            createdAt: supportMessage.createdAt,
+            updatedAt: supportMessage.updatedAt,
+          };
+
+          const [rows, totalRows, unreadCountRows] = await Promise.all([
+            db
+              .select(baseSelect)
+              .from(supportMessage)
+              .where(where)
+              .orderBy(desc(supportMessage.updatedAt))
+              .limit(limit)
+              .offset(offset),
+            db.select({ total: count() }).from(supportMessage).where(where),
+            db
+              .select({ unread: count() })
+              .from(supportMessage)
+              .where(
+                and(
+                  isNull(supportMessage.parentId),
+                  eq(supportMessage.unreadByAdmin, 1),
+                ),
+              ),
+          ]);
+
+          return ctx.json({
+            threads: rows,
+            total: totalRows[0]?.total ?? 0,
+            totalUnread: unreadCountRows[0]?.unread ?? 0,
+            pagination: { limit, offset },
+          });
+        },
+      ),
+
+      adminSupportGetThread: createAuthEndpoint(
+        "/self-hosted-admin/support/thread",
+        { method: "GET", use: [sessionMiddleware] },
+        async (ctx) => {
+          const adminEmail = ctx.context.session.user.email;
+          if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const url = new URL(ctx.request?.url ?? "http://localhost");
+          const id = url.searchParams.get("id") ?? "";
+          if (!SAFE_ID_RE.test(id)) {
+            throw new APIError("BAD_REQUEST", { message: "Invalid id" });
+          }
+
+          const [root] = await db
+            .select()
+            .from(supportMessage)
+            .where(eq(supportMessage.id, id))
+            .limit(1);
+          if (!root) throw new APIError("NOT_FOUND", { message: "Thread not found" });
+          if (root.parentId !== null) {
+            throw new APIError("BAD_REQUEST", { message: "id must point at a thread root" });
+          }
+
+          const messages = await db
+            .select()
+            .from(supportMessage)
+            .where(
+              or(
+                eq(supportMessage.id, id),
+                eq(supportMessage.parentId, id),
+              )!,
+            )
+            .orderBy(asc(supportMessage.createdAt));
+
+          // Mark thread as read by admin (best-effort — we never block on this).
+          if (root.unreadByAdmin) {
+            try {
+              await db
+                .update(supportMessage)
+                .set({ unreadByAdmin: 0, updatedAt: new Date() })
+                .where(eq(supportMessage.id, id));
+            } catch (e) {
+              console.warn("[admin] support read-mark failed:", e);
+            }
+          }
+
+          return ctx.json({
+            thread: {
+              ...root,
+              unreadByAdmin: false,
+            },
+            messages,
+          });
+        },
+      ),
+
+      adminSupportReply: createAuthEndpoint(
+        "/self-hosted-admin/support/reply",
+        { method: "POST", use: [sessionMiddleware], body: supportReplySchema },
+        async (ctx) => {
+          const adminEmail = ctx.context.session.user.email;
+          if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const { threadId, body, closeAfter } = ctx.body;
+
+          const [root] = await db
+            .select({
+              id: supportMessage.id,
+              userId: supportMessage.userId,
+              parentId: supportMessage.parentId,
+            })
+            .from(supportMessage)
+            .where(eq(supportMessage.id, threadId))
+            .limit(1);
+          if (!root) throw new APIError("NOT_FOUND", { message: "Thread not found" });
+          if (root.parentId !== null) {
+            throw new APIError("BAD_REQUEST", { message: "threadId must be a root id" });
+          }
+
+          const id = crypto.randomUUID();
+          const now = new Date();
+          await db.insert(supportMessage).values({
+            id,
+            userId: root.userId,
+            userEmail: null,
+            userName: null,
+            parentId: threadId,
+            authorType: "admin",
+            authorEmail: adminEmail,
+            subject: null,
+            body,
+            status: "reply",
+            // Reply rows themselves don't drive the unread badge — the
+            // root row's unreadByUser flag does.
+            unreadByAdmin: 0,
+            unreadByUser: 0,
+            createdAt: now,
+            updatedAt: now,
+          });
+
+          await db
+            .update(supportMessage)
+            .set({
+              status: closeAfter ? "resolved" : "pending",
+              unreadByUser: 1,
+              unreadByAdmin: 0,
+              updatedAt: now,
+            })
+            .where(eq(supportMessage.id, threadId));
+
+          await recordAudit({
+            eventType: "admin_action",
+            userEmail: adminEmail,
+            metadata: {
+              action: "support_reply",
+              threadId,
+              replyId: id,
+              closed: Boolean(closeAfter),
+            },
+          });
+
+          return ctx.json({
+            ok: true,
+            replyId: id,
+            createdAt: now.toISOString(),
+          });
+        },
+      ),
+
+      adminSupportUpdateStatus: createAuthEndpoint(
+        "/self-hosted-admin/support/update-status",
+        { method: "POST", use: [sessionMiddleware], body: supportUpdateStatusSchema },
+        async (ctx) => {
+          const adminEmail = ctx.context.session.user.email;
+          if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const { threadId, status } = ctx.body;
+
+          const [root] = await db
+            .select({
+              id: supportMessage.id,
+              parentId: supportMessage.parentId,
+            })
+            .from(supportMessage)
+            .where(eq(supportMessage.id, threadId))
+            .limit(1);
+          if (!root) throw new APIError("NOT_FOUND", { message: "Thread not found" });
+          if (root.parentId !== null) {
+            throw new APIError("BAD_REQUEST", { message: "threadId must be a root id" });
+          }
+
+          await db
+            .update(supportMessage)
+            .set({ status, updatedAt: new Date() })
+            .where(eq(supportMessage.id, threadId));
+
+          await recordAudit({
+            eventType: "admin_action",
+            userEmail: adminEmail,
+            metadata: { action: "support_update_status", threadId, status },
+          });
+
+          return ctx.json({ ok: true });
+        },
+      ),
+
+      adminSupportDelete: createAuthEndpoint(
+        "/self-hosted-admin/support/delete",
+        { method: "POST", use: [sessionMiddleware], body: supportDeleteSchema },
+        async (ctx) => {
+          const adminEmail = ctx.context.session.user.email;
+          if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const { threadId } = ctx.body;
+
+          // The schema's parentId column does not have ON DELETE CASCADE
+          // (legacy reasons), so we delete replies explicitly first to
+          // avoid orphan rows.
+          await db.delete(supportMessage).where(eq(supportMessage.parentId, threadId));
+          await db.delete(supportMessage).where(eq(supportMessage.id, threadId));
+
+          await recordAudit({
+            eventType: "admin_action",
+            userEmail: adminEmail,
+            metadata: { action: "support_delete", threadId },
+          });
+          return ctx.json({ ok: true });
+        },
+      ),
+
+      // ── Announcements (admin) ────────────────────────────────────
+
+      adminAnnouncementsList: createAuthEndpoint(
+        "/self-hosted-admin/announcements",
+        { method: "GET", use: [sessionMiddleware] },
+        async (ctx) => {
+          if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const url = new URL(ctx.request?.url ?? "http://localhost");
+          const limit = parseLimit(url.searchParams.get("limit"));
+          const offset = parseOffset(url.searchParams.get("offset"));
+          const statusRaw = url.searchParams.get("status");
+          const kindRaw = url.searchParams.get("kind");
+
+          const conditions: ReturnType<typeof eq>[] = [];
+          if (statusRaw && /^(active|paused|archived)$/.test(statusRaw)) {
+            conditions.push(eq(appAnnouncement.status, statusRaw));
+          }
+          if (kindRaw && /^(banner|popup|toast)$/.test(kindRaw)) {
+            conditions.push(eq(appAnnouncement.kind, kindRaw));
+          }
+          const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+          const [rows, totalRows] = await Promise.all([
+            where
+              ? db
+                  .select()
+                  .from(appAnnouncement)
+                  .where(where)
+                  .orderBy(desc(appAnnouncement.createdAt))
+                  .limit(limit)
+                  .offset(offset)
+              : db
+                  .select()
+                  .from(appAnnouncement)
+                  .orderBy(desc(appAnnouncement.createdAt))
+                  .limit(limit)
+                  .offset(offset),
+            where
+              ? db.select({ total: count() }).from(appAnnouncement).where(where)
+              : db.select({ total: count() }).from(appAnnouncement),
+          ]);
+
+          return ctx.json({
+            announcements: rows,
+            total: totalRows[0]?.total ?? 0,
+            pagination: { limit, offset },
+          });
+        },
+      ),
+
+      adminAnnouncementsCreate: createAuthEndpoint(
+        "/self-hosted-admin/announcements/create",
+        { method: "POST", use: [sessionMiddleware], body: announcementCreateSchema },
+        async (ctx) => {
+          const adminEmail = ctx.context.session.user.email;
+          if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const v = ctx.body;
+
+          // Verify each targeted userId actually exists when audience='users'.
+          // Drop unknown ids (best-effort) and reject if nothing is left.
+          let targetUserIdsJson: string | null = null;
+          if (v.audience === "users" && v.targetUserIds && v.targetUserIds.length > 0) {
+            const existing = await db
+              .select({ id: user.id })
+              .from(user)
+              .where(inArray(user.id, v.targetUserIds));
+            const found = new Set(existing.map((r) => r.id));
+            const valid = v.targetUserIds.filter((id) => found.has(id));
+            if (valid.length === 0) {
+              throw new APIError("BAD_REQUEST", { message: "None of targetUserIds exist" });
+            }
+            targetUserIdsJson = JSON.stringify(valid);
+          }
+
+          const id = crypto.randomUUID();
+          const now = new Date();
+          await db.insert(appAnnouncement).values({
+            id,
+            kind: v.kind,
+            severity: v.severity,
+            title: v.title ?? null,
+            body: v.body,
+            ctaLabel: v.ctaLabel ?? null,
+            ctaUrl: v.ctaUrl ?? null,
+            audience: v.audience,
+            targetUserIds: targetUserIdsJson,
+            status: v.status,
+            dismissable: v.dismissable ? 1 : 0,
+            startsAt: v.startsAt ? new Date(v.startsAt) : null,
+            expiresAt: v.expiresAt ? new Date(v.expiresAt) : null,
+            createdBy: adminEmail,
+            createdAt: now,
+            updatedAt: now,
+          });
+
+          await recordAudit({
+            eventType: "admin_action",
+            userEmail: adminEmail,
+            metadata: { action: "announcement_create", id, kind: v.kind, audience: v.audience },
+          });
+
+          return ctx.json({ ok: true, id });
+        },
+      ),
+
+      adminAnnouncementsUpdate: createAuthEndpoint(
+        "/self-hosted-admin/announcements/update",
+        { method: "POST", use: [sessionMiddleware], body: announcementUpdateSchema },
+        async (ctx) => {
+          const adminEmail = ctx.context.session.user.email;
+          if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const { id, ...fields } = ctx.body;
+
+          const [existing] = await db
+            .select()
+            .from(appAnnouncement)
+            .where(eq(appAnnouncement.id, id))
+            .limit(1);
+          if (!existing) throw new APIError("NOT_FOUND", { message: "Announcement not found" });
+
+          const updates: Record<string, unknown> = { updatedAt: new Date() };
+          if (fields.kind !== undefined) updates.kind = fields.kind;
+          if (fields.severity !== undefined) updates.severity = fields.severity;
+          if (fields.title !== undefined) updates.title = fields.title;
+          if (fields.body !== undefined) updates.body = fields.body;
+          if (fields.ctaLabel !== undefined) updates.ctaLabel = fields.ctaLabel;
+          if (fields.ctaUrl !== undefined) updates.ctaUrl = fields.ctaUrl;
+          if (fields.status !== undefined) updates.status = fields.status;
+          if (fields.dismissable !== undefined) updates.dismissable = fields.dismissable ? 1 : 0;
+          if (fields.startsAt !== undefined) {
+            updates.startsAt = fields.startsAt ? new Date(fields.startsAt) : null;
+          }
+          if (fields.expiresAt !== undefined) {
+            updates.expiresAt = fields.expiresAt ? new Date(fields.expiresAt) : null;
+          }
+
+          // Audience + targetUserIds change as a pair so we never end
+          // up with audience='users' and an empty list.
+          if (fields.audience !== undefined || fields.targetUserIds !== undefined) {
+            const newAudience = fields.audience ?? existing.audience;
+            if (newAudience === "users") {
+              const ids = fields.targetUserIds ?? (existing.targetUserIds ? JSON.parse(existing.targetUserIds) as string[] : []);
+              if (!Array.isArray(ids) || ids.length === 0) {
+                throw new APIError("BAD_REQUEST", { message: "audience='users' requires non-empty targetUserIds" });
+              }
+              const verified = await db
+                .select({ id: user.id })
+                .from(user)
+                .where(inArray(user.id, ids));
+              const valid = new Set(verified.map((r) => r.id));
+              const filtered = ids.filter((u) => valid.has(u));
+              if (filtered.length === 0) {
+                throw new APIError("BAD_REQUEST", { message: "None of targetUserIds exist" });
+              }
+              updates.audience = "users";
+              updates.targetUserIds = JSON.stringify(filtered);
+            } else if (newAudience === "all") {
+              updates.audience = "all";
+              updates.targetUserIds = null;
+            }
+          }
+
+          await db.update(appAnnouncement).set(updates).where(eq(appAnnouncement.id, id));
+
+          await recordAudit({
+            eventType: "admin_action",
+            userEmail: adminEmail,
+            metadata: { action: "announcement_update", id, updated: Object.keys(updates) },
+          });
+
+          return ctx.json({ ok: true });
+        },
+      ),
+
+      adminAnnouncementsDelete: createAuthEndpoint(
+        "/self-hosted-admin/announcements/delete",
+        { method: "POST", use: [sessionMiddleware], body: announcementIdSchema },
+        async (ctx) => {
+          const adminEmail = ctx.context.session.user.email;
+          if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const { id } = ctx.body;
+          // Dismissals cascade via FK ON DELETE CASCADE.
+          await db.delete(appAnnouncement).where(eq(appAnnouncement.id, id));
+          await recordAudit({
+            eventType: "admin_action",
+            userEmail: adminEmail,
+            metadata: { action: "announcement_delete", id },
+          });
+          return ctx.json({ ok: true });
+        },
+      ),
+
+      adminAnnouncementsStats: createAuthEndpoint(
+        "/self-hosted-admin/announcements/stats",
+        { method: "GET", use: [sessionMiddleware] },
+        async (ctx) => {
+          if (!(await isAdmin(ctx.context.session.user.email))) throw new APIError("FORBIDDEN");
+          const db = opts.getDb();
+          const url = new URL(ctx.request?.url ?? "http://localhost");
+          const id = url.searchParams.get("id") ?? "";
+          if (!SAFE_ID_RE.test(id)) {
+            throw new APIError("BAD_REQUEST", { message: "Invalid id" });
+          }
+
+          const [{ dismissed }] = await db
+            .select({ dismissed: count() })
+            .from(appAnnouncementDismissal)
+            .where(eq(appAnnouncementDismissal.announcementId, id));
+
+          return ctx.json({ id, dismissed });
         },
       ),
 
