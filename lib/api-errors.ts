@@ -21,9 +21,26 @@ const DEFAULT_MESSAGE = "Something went wrong. Please try again.";
  */
 export function humanizeHttpStatus(
   status: number,
-  opts: { kind?: "no-input" | "generic" } = {},
+  opts: { kind?: "no-input" | "generic" | "ask-ai" } = {},
 ): string {
   const { kind = "generic" } = opts;
+  if (kind === "ask-ai") {
+    // Tailored copy for the Ask AI surface — transcription is irrelevant
+    // here, so the Copilot wording ("start transcription") would be wrong
+    // and actively misleading. Cover both the empty-input 0 status and any
+    // real 4xx from the worker with a single Ask-AI-specific message.
+    if (status === 0) {
+      return "Type a question or attach a screenshot to get started.";
+    }
+    if (status === 400 || status === 422) {
+      return "Couldn't send that — type a question or attach a screenshot.";
+    }
+    if (status === 413) {
+      return "Question or screenshots too large. Remove an image or shorten the prompt.";
+    }
+    // Fall through for non-input-related 4xx/5xx (auth, rate-limit, etc.)
+    // — those messages below are already Ask-AI-friendly.
+  }
   if (kind === "no-input") {
     return "No data to work on yet — start transcription or type a question first.";
   }

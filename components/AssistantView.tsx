@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Card } from "@/components/ui/card";
 import SafeMarkdown from "@/components/SafeMarkdown";
 
 interface HistoryItem {
@@ -65,44 +64,47 @@ export function AssistantView() {
 
   return (
     <div className="min-h-screen bg-transparent p-4 overflow-hidden select-none flex flex-col items-center">
-      <div ref={containerRef} className="w-full space-y-4">
-        {/* Context Card (Big Card) */}
+      <div
+        ref={containerRef}
+        className="w-full max-w-[min(100%,72ch)] space-y-4"
+      >
         {context && (
-          <Card className="w-full bg-gray-900/90 backdrop-blur-xl border-green-900/50 shadow-2xl rounded-2xl overflow-hidden border p-6 animate-in fade-in slide-in-from-top-4 duration-500">
-            <h2 className="text-xs font-bold text-green-500 mb-2 uppercase tracking-widest">
-              Interview Context
+          <div className="glass-card p-6 border-emerald-500/15 animate-in fade-in slide-in-from-top-4 duration-500">
+            <h2 className="text-[10px] font-semibold text-emerald-400/90 mb-2 uppercase tracking-widest">
+              Interview context
             </h2>
-            <div className="text-sm text-gray-200 leading-relaxed font-medium prose prose-invert prose-sm max-w-none">
+            <div className="text-sm text-[color:var(--app-text)] leading-relaxed font-medium prose prose-invert prose-sm max-w-none">
               <SafeMarkdown>{context}</SafeMarkdown>
             </div>
-          </Card>
+          </div>
         )}
 
-        {/* History Cards */}
         {history.map((item) => (
-          <Card
+          <div
             key={item.id}
-            className="w-full bg-gray-800/90 backdrop-blur-xl border-gray-700/50 shadow-xl rounded-xl overflow-hidden border p-5 animate-in fade-in slide-in-from-bottom-4 duration-500"
+            className="glass-card p-5 animate-in fade-in slide-in-from-bottom-4 duration-500"
           >
-            <div className="text-sm text-gray-300 leading-relaxed prose prose-invert prose-sm max-w-none">
+            <div className="text-sm text-[color:color-mix(in_oklch,var(--app-text)_88%,transparent)] leading-relaxed prose prose-invert prose-sm max-w-none">
               <SafeMarkdown>{item.text}</SafeMarkdown>
             </div>
-          </Card>
+          </div>
         ))}
 
-        {/* Current Streaming Response Card */}
         {currentResponse && (
-          <Card className="w-full bg-gray-800/95 backdrop-blur-xl border-green-500/30 shadow-[0_0_15px_rgba(34,197,94,0.1)] rounded-xl overflow-hidden border p-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="glass-card p-5 border-emerald-500/20 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-[10px] text-green-400 font-mono">
-                GENERATING...
+              <span className="relative flex h-2 w-2" aria-hidden>
+                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400/35" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/30" />
+              </span>
+              <span className="text-[10px] text-emerald-400/90 font-mono tracking-wide">
+                Streaming
               </span>
             </div>
-            <div className="text-sm text-white leading-relaxed font-medium prose prose-invert prose-sm max-w-none">
+            <div className="text-sm text-[color:var(--app-text)] leading-relaxed font-medium prose prose-invert prose-sm max-w-none">
               <SafeMarkdown>{currentResponse}</SafeMarkdown>
             </div>
-          </Card>
+          </div>
         )}
       </div>
     </div>

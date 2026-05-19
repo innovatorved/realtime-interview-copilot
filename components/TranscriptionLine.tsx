@@ -27,12 +27,12 @@ export function TranscriptionLine({
       className={cn(
         " px-2 text-sm leading-tight break-words transition-colors",
         isFinal || segment.isFinal
-          ? "text-zinc-100"
-          : "text-zinc-400 opacity-75",
+          ? "text-neutral-100"
+          : "text-neutral-400 opacity-75",
         className,
       )}
     >
-      <span className="text-[10px] text-zinc-500 mr-2 font-mono tracking-wider">
+      <span className="text-[10px] text-neutral-500 mr-2 font-mono tracking-wider">
         {formatTime(segment.startTime)} → {formatTime(segment.endTime)}
       </span>
       <span className="text-xs">{segment.text}</span>

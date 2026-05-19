@@ -28,16 +28,16 @@ const SEVERITY_STYLES: Record<
     icon: "text-emerald-300",
   },
   warning: {
-    wrap: "border-amber-500/30 bg-amber-500/10 text-amber-100",
-    icon: "text-amber-300",
+    wrap: "border-sky-500/30 bg-sky-500/10 text-sky-100",
+    icon: "text-sky-300",
   },
   error: {
     wrap: "border-red-500/30 bg-red-500/10 text-red-100",
     icon: "text-red-300",
   },
   announcement: {
-    wrap: "border-violet-500/30 bg-violet-500/10 text-violet-100",
-    icon: "text-violet-300",
+    wrap: "border-emerald-500/25 bg-emerald-500/[0.08] text-emerald-50",
+    icon: "text-emerald-300",
   },
 };
 
@@ -67,9 +67,7 @@ function isSafeUrl(href: string | null | undefined): href is string {
 }
 
 function openExternal(href: string) {
-  // Electron preload may expose `electronAPI`; fall back to window.open.
   if (typeof window === "undefined") return;
-  // Use rel=noopener noreferrer when opening externally from React UI.
   window.open(href, "_blank", "noopener,noreferrer");
 }
 
@@ -241,14 +239,13 @@ function PopupQueue({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-[color:color-mix(in_oklch,var(--app-surface)_70%,transparent)] backdrop-blur-sm p-4"
       data-clickable
     >
       <div
         className={cn(
-          "relative w-full max-w-md rounded-xl border bg-zinc-900/95 shadow-2xl",
+          "relative w-full max-w-md rounded-xl border border-[color:var(--app-border)] bg-[color:color-mix(in_oklch,var(--app-surface-elev)_94%,transparent)] backdrop-blur-md shadow-2xl",
           styles.wrap.replace("text-", "ring-").replace("/10", "/30"),
-          "border",
         )}
       >
         <div className="flex items-start gap-3 p-5">
@@ -266,7 +263,7 @@ function PopupQueue({
                 {visible.title}
               </h2>
             )}
-            <p className="text-sm text-zinc-200 whitespace-pre-wrap break-words leading-relaxed">
+            <p className="text-sm text-neutral-200 whitespace-pre-wrap break-words leading-relaxed">
               {visible.body}
             </p>
             {visible.ctaLabel && isSafeUrl(visible.ctaUrl) && (
@@ -287,7 +284,7 @@ function PopupQueue({
               type="button"
               aria-label="Close"
               onClick={handleDismiss}
-              className="text-zinc-400 hover:text-white"
+              className="text-neutral-400 hover:text-white"
               data-clickable
             >
               <X className="h-4 w-4" />
@@ -298,7 +295,7 @@ function PopupQueue({
           <div className="px-5 pb-4 flex justify-end">
             <button
               type="button"
-              className="text-xs font-medium px-3 py-1.5 rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-100"
+              className="text-xs font-medium px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-100"
               onClick={handleDismiss}
             >
               Got it

@@ -32,7 +32,6 @@ export function ScreenRecordingOnboard() {
   const [showRelaunchHint, setShowRelaunchHint] = useState(false);
   const enableClickedAtRef = useRef<number | null>(null);
 
-  // Detect environment
   useEffect(() => {
     if (typeof window === "undefined") return;
     const api = window.electronAPI;
@@ -48,7 +47,6 @@ export function ScreenRecordingOnboard() {
     }
   }, []);
 
-  // Poll status while not granted
   useEffect(() => {
     if (!isElectron || !isMac) return;
     const api = window.electronAPI;
@@ -95,9 +93,9 @@ export function ScreenRecordingOnboard() {
     const api = window.electronAPI;
     if (!api) return;
     enableClickedAtRef.current = Date.now();
-    // 1. Trigger the native prompt (only fires the first time; otherwise noop).
+    // Triggers the native prompt the first time, otherwise no-op, then
+    // opens System Settings so the user can toggle / confirm.
     await api.screen.triggerPrompt();
-    // 2. Also open System Settings so the user can toggle / confirm.
     await api.screen.openSettings();
   }, []);
 
@@ -120,18 +118,17 @@ export function ScreenRecordingOnboard() {
     }
   }, []);
 
-  // Only relevant on macOS Electron builds
+  // Only relevant on macOS Electron builds.
   if (!isElectron || !isMac) return null;
-  if (status === null) return null; // still loading
+  if (status === null) return null;
   if (status === "granted" && !justGranted) return null;
 
   const needsAction = status !== "granted";
 
-  // Success flash (renders briefly after granting)
   if (status === "granted" && justGranted) {
     return (
       <div className="fixed top-14 left-1/2 -translate-x-1/2 z-[100] animate-fade-in-scale">
-        <div className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-emerald-500/15 border border-emerald-400/40 backdrop-blur-xl shadow-2xl shadow-emerald-500/20 text-emerald-300 text-xs font-medium">
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-emerald-500/15 border border-emerald-400/35 backdrop-blur-md shadow-lg shadow-emerald-950/20 text-emerald-300 text-xs font-medium">
           <CheckCircle2 className="w-4 h-4" />
           Screen Recording enabled — you&apos;re all set
         </div>
@@ -139,7 +136,6 @@ export function ScreenRecordingOnboard() {
     );
   }
 
-  // Modal (first launch)
   if (needsAction && !dismissedModal) {
     return (
       <div
@@ -148,14 +144,14 @@ export function ScreenRecordingOnboard() {
         aria-modal="true"
         aria-labelledby="sro-title"
       >
-        <div className="absolute inset-0 bg-zinc-950/80 backdrop-blur-xl" />
+        <div className="absolute inset-0 bg-[color:color-mix(in_oklch,var(--app-surface)_82%,transparent)] backdrop-blur-lg" />
 
-        <div className="relative w-full max-w-lg rounded-3xl overflow-hidden border border-white/10 bg-gradient-to-b from-zinc-900/95 to-zinc-950/95 shadow-2xl shadow-emerald-500/5">
+        <div className="relative w-full max-w-lg rounded-2xl overflow-hidden border border-[color:var(--app-border)] bg-[color:color-mix(in_oklch,var(--app-surface-elev)_94%,transparent)] backdrop-blur-lg shadow-2xl">
           <button
             type="button"
             onClick={dismiss}
             aria-label="Close"
-            className="absolute top-3 right-3 p-1.5 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-white/5 transition-colors"
+            className="absolute top-3 right-3 p-1.5 rounded-lg text-[color:var(--app-muted)] hover:text-[color:var(--app-text)] hover:bg-white/[0.05] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--app-ring)]"
           >
             <X className="w-4 h-4" />
           </button>
@@ -172,13 +168,13 @@ export function ScreenRecordingOnboard() {
                 >
                   Enable system audio capture
                 </h2>
-                <p className="text-[11px] text-zinc-500 mt-0.5">
+                <p className="text-[11px] text-[color:var(--app-muted)] mt-0.5">
                   One-time setup • stays invisible on screen share
                 </p>
               </div>
             </div>
 
-            <p className="text-sm text-zinc-300 leading-relaxed mb-5">
+            <p className="text-sm text-neutral-300 leading-relaxed mb-5">
               To hear the interviewer&apos;s voice from your speakers, macOS
               needs you to grant{" "}
               <span className="text-white font-medium">Screen Recording</span>{" "}
@@ -208,17 +204,17 @@ export function ScreenRecordingOnboard() {
                 return (
                   <li
                     key={i}
-                    className="flex items-start gap-3 px-3 py-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05]"
+                    className="flex items-start gap-3 px-3 py-2.5 rounded-xl bg-[color:color-mix(in_oklch,var(--app-surface)_38%,transparent)] border border-[color:var(--app-border)]"
                   >
                     <div className="shrink-0 w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/15 flex items-center justify-center text-emerald-400 text-[11px] font-semibold">
                       {i + 1}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 text-sm font-medium text-zinc-100">
-                        <Icon className="w-3.5 h-3.5 text-zinc-400" />
+                      <div className="flex items-center gap-1.5 text-sm font-medium text-neutral-100">
+                        <Icon className="w-3.5 h-3.5 text-neutral-400" />
                         {step.title}
                       </div>
-                      <p className="text-xs text-zinc-500 mt-0.5 leading-snug">
+                      <p className="text-xs text-[color:var(--app-muted)] mt-0.5 leading-snug">
                         {step.body}
                       </p>
                     </div>
@@ -238,21 +234,21 @@ export function ScreenRecordingOnboard() {
               <Button
                 variant="ghost"
                 onClick={dismiss}
-                className="h-11 px-4 text-zinc-400 hover:text-zinc-200 text-sm"
+                className="h-11 px-4 text-neutral-400 hover:text-neutral-200 text-sm"
               >
                 Later
               </Button>
             </div>
 
             {showRelaunchHint && (
-              <div className="mt-4 p-3 rounded-xl bg-amber-500/[0.06] border border-amber-400/25 animate-fade-in-scale">
-                <p className="text-xs text-amber-200 leading-relaxed">
+              <div className="mt-4 p-3 rounded-xl bg-sky-500/[0.06] border border-sky-400/25 animate-fade-in-scale">
+                <p className="text-xs text-sky-200 leading-relaxed">
                   <span className="font-medium">Already toggled it on?</span>{" "}
                   macOS needs the app to relaunch to pick up the new permission.
                 </p>
                 <Button
                   onClick={handleRelaunch}
-                  className="mt-2.5 h-9 px-3 bg-amber-500/15 hover:bg-amber-500/25 text-amber-100 border border-amber-400/30 text-xs rounded-lg"
+                  className="mt-2.5 h-9 px-3 bg-sky-500/15 hover:bg-sky-500/25 text-sky-100 border border-sky-400/30 text-xs rounded-lg"
                 >
                   <RotateCcw className="w-3 h-3 mr-1.5" />
                   Relaunch app
@@ -260,11 +256,11 @@ export function ScreenRecordingOnboard() {
               </div>
             )}
 
-            <div className="mt-4 flex items-center gap-2 text-[10px] text-zinc-600">
+            <div className="mt-4 flex items-center gap-2 text-[10px] text-[color:var(--app-muted)]">
               <StatusDot status={status} />
               <span>
                 Current status:{" "}
-                <span className="text-zinc-400 font-mono">{status}</span>
+                <span className="text-[color:color-mix(in_oklch,var(--app-text)_75%,transparent)] font-mono">{status}</span>
               </span>
             </div>
           </div>
@@ -273,7 +269,6 @@ export function ScreenRecordingOnboard() {
     );
   }
 
-  // Persistent compact banner after modal dismissal
   if (needsAction && dismissedModal) {
     return (
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[80] animate-fade-in-scale">
@@ -282,8 +277,8 @@ export function ScreenRecordingOnboard() {
           onClick={() => setDismissedModal(false)}
           className={cn(
             "flex items-center gap-2 px-3.5 py-2 rounded-full text-xs",
-            "bg-amber-500/10 border border-amber-400/30 text-amber-200",
-            "backdrop-blur-xl shadow-lg hover:bg-amber-500/15 transition-colors",
+            "bg-sky-500/10 border border-sky-400/30 text-sky-200",
+            "backdrop-blur-md shadow-lg hover:bg-sky-500/15 transition-colors",
           )}
         >
           <ShieldCheck className="w-3.5 h-3.5" />
@@ -302,7 +297,7 @@ function StatusDot({ status }: { status: Status }) {
       ? "bg-emerald-500"
       : status === "denied" || status === "restricted"
         ? "bg-red-500"
-        : "bg-amber-500";
+        : "bg-sky-500";
   return (
     <span
       className={cn("inline-block w-1.5 h-1.5 rounded-full", color)}

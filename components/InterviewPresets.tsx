@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Kbd } from "@/components/ui/Kbd";
 import type { InterviewPreset } from "@/lib/types";
 
 interface InterviewPresetsProps {
@@ -45,10 +46,10 @@ const categoryColors: Record<
     glow: "hover:shadow-purple-500/5",
   },
   Behavioral: {
-    bg: "bg-amber-500/[0.06]",
-    border: "border-amber-500/10",
-    text: "text-amber-400",
-    glow: "hover:shadow-amber-500/5",
+    bg: "bg-cyan-500/[0.06]",
+    border: "border-cyan-500/10",
+    text: "text-cyan-400",
+    glow: "hover:shadow-cyan-500/5",
   },
 };
 
@@ -129,7 +130,6 @@ export function InterviewPresets({
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6 animate-fade-in-up">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl accent-gradient flex items-center justify-center shadow-lg">
@@ -139,7 +139,7 @@ export function InterviewPresets({
             <h2 className="text-lg font-semibold text-white">
               Interview Presets
             </h2>
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-neutral-500">
               One-click context templates for different interview types
             </p>
           </div>
@@ -158,7 +158,6 @@ export function InterviewPresets({
         )}
       </div>
 
-      {/* Active Preset Indicator */}
       {activeContext && (
         <div className="glass-card p-4 border-emerald-500/10 bg-emerald-500/[0.03] animate-fade-in-scale">
           <div className="flex items-start gap-3">
@@ -169,7 +168,7 @@ export function InterviewPresets({
               <p className="text-xs font-medium text-emerald-400 mb-1">
                 Active Preset
               </p>
-              <p className="text-xs text-zinc-400 leading-relaxed line-clamp-2">
+              <p className="text-xs text-neutral-400 leading-relaxed line-clamp-2">
                 {activeContext}
               </p>
             </div>
@@ -177,16 +176,15 @@ export function InterviewPresets({
         </div>
       )}
 
-      {/* Preset Categories */}
       {categories.map((category) => {
         const catPresets = displayPresets.filter(
           (p) => p.category === category,
         );
         const colors = categoryColors[category] ?? {
-          bg: "bg-zinc-500/[0.06]",
-          border: "border-zinc-500/10",
-          text: "text-zinc-400",
-          glow: "hover:shadow-zinc-500/5",
+          bg: "bg-neutral-500/[0.06]",
+          border: "border-neutral-500/10",
+          text: "text-neutral-400",
+          glow: "hover:shadow-neutral-500/5",
         };
 
         return (
@@ -226,7 +224,7 @@ export function InterviewPresets({
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-zinc-500 leading-relaxed line-clamp-2">
+                        <p className="text-xs text-neutral-500 leading-relaxed line-clamp-2">
                           {preset.description}
                         </p>
                       </div>
@@ -239,14 +237,10 @@ export function InterviewPresets({
         );
       })}
 
-      {/* Keyboard hint */}
       <div className="flex items-center justify-center pt-4">
-        <p className="text-[10px] text-zinc-600">
-          Press{" "}
-          <kbd className="px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/[0.06] text-zinc-400 font-mono text-[9px]">
-            Alt+P
-          </kbd>{" "}
-          to switch to presets
+        <p className="text-[10px] text-[color:var(--app-muted)] flex items-center gap-1 flex-wrap justify-center">
+          <span>Jump here anytime:</span>
+          <Kbd keys={["Alt", "P"]} size="xs" className="text-neutral-300" />
         </p>
       </div>
     </div>

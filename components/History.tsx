@@ -114,7 +114,6 @@ export default function History({
           : "max-w-4xl mx-auto px-4 py-6 space-y-5",
       )}
     >
-      {/* Header */}
       <div
         className={cn(
           "flex items-center justify-between shrink-0",
@@ -131,7 +130,7 @@ export default function History({
             <button
               type="button"
               onClick={onCollapseSidebar}
-              className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06] shrink-0"
+              className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.06] shrink-0"
               title="Hide saved notes"
               aria-label="Hide saved notes panel"
             >
@@ -160,16 +159,15 @@ export default function History({
             >
               Saved notes
             </h2>
-            <p className="text-[10px] text-zinc-500 truncate">
+            <p className="text-[10px] text-neutral-500 truncate">
               {pagination.total} saved
             </p>
           </div>
         </div>
 
-        {/* Export buttons */}
         <div className="flex items-center gap-1 shrink-0">
           {selectedNotes.size > 0 && !isSidebar && (
-            <span className="text-[10px] text-zinc-500 mr-1">
+            <span className="text-[10px] text-neutral-500 mr-1">
               {selectedNotes.size} selected
             </span>
           )}
@@ -204,12 +202,11 @@ export default function History({
         </div>
       </div>
 
-      {/* Search + Filter */}
       <div className={cn("flex gap-2 shrink-0", isSidebar && "flex-col")}>
         <div className="relative flex-1 min-w-0">
           <Search
             className={cn(
-              "absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500",
+              "absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-500",
               isSidebar ? "w-3.5 h-3.5" : "w-4 h-4 left-3",
             )}
           />
@@ -240,8 +237,8 @@ export default function History({
                   : "px-2.5 py-1.5 text-[10px]",
                 activeTag === tag
                   ? (tagColors[tag] ??
-                      "bg-zinc-500/10 text-zinc-400 border-zinc-500/20")
-                  : "text-zinc-500 border-transparent hover:bg-white/[0.03]",
+                      "bg-neutral-500/10 text-neutral-400 border-neutral-500/20")
+                  : "text-neutral-500 border-transparent hover:bg-white/[0.03]",
               )}
             >
               {tag}
@@ -250,7 +247,6 @@ export default function History({
         </div>
       </div>
 
-      {/* Notes List */}
       <div
         className={cn(
           "space-y-3",
@@ -292,21 +288,21 @@ export default function History({
             >
               <FileText
                 className={cn(
-                  "text-zinc-600",
+                  "text-neutral-600",
                   isSidebar ? "w-5 h-5" : "w-7 h-7",
                 )}
               />
             </div>
             <p
               className={cn(
-                "text-zinc-400 font-medium",
+                "text-neutral-400 font-medium",
                 isSidebar ? "text-[11px]" : "text-sm",
               )}
             >
               No notes yet
             </p>
             {!isSidebar && (
-              <p className="text-zinc-600 text-xs mt-1">
+              <p className="text-neutral-600 text-xs mt-1">
                 Save answers from the Copilot to see them here
               </p>
             )}
@@ -329,7 +325,6 @@ export default function History({
                 style={{ animationDelay: `${idx * 40}ms` }}
                 onClick={() => setExpandedNote(isExpanded ? null : note.id)}
               >
-                {/* Note Header */}
                 <div
                   className={cn(
                     "flex items-center justify-between",
@@ -344,14 +339,14 @@ export default function History({
                           ? "px-1.5 py-0.5 text-[9px]"
                           : "px-2 py-0.5 text-[10px]",
                         tagColors[note.tag] ??
-                          "bg-zinc-500/10 text-zinc-400 border-zinc-500/20",
+                          "bg-neutral-500/10 text-neutral-400 border-neutral-500/20",
                       )}
                     >
                       {note.tag}
                     </span>
                     <span
                       className={cn(
-                        "text-zinc-600",
+                        "text-neutral-600",
                         isSidebar ? "text-[9px]" : "text-[10px]",
                       )}
                     >
@@ -367,7 +362,7 @@ export default function History({
                     )}
                   >
                     <button
-                      className="p-1.5 rounded-lg hover:bg-white/[0.06] text-zinc-500 hover:text-zinc-300 transition-colors"
+                      className="p-1.5 rounded-lg hover:bg-white/[0.06] text-neutral-500 hover:text-neutral-300 transition-colors"
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleSelect(note.id);
@@ -378,12 +373,12 @@ export default function History({
                         className={`w-3.5 h-3.5 rounded border transition-colors ${
                           isSelected
                             ? "bg-emerald-500 border-emerald-500"
-                            : "border-zinc-600"
+                            : "border-neutral-600"
                         }`}
                       />
                     </button>
                     <button
-                      className="p-1.5 rounded-lg hover:bg-red-500/10 text-zinc-500 hover:text-red-400 transition-colors"
+                      className="p-1.5 rounded-lg hover:bg-red-500/10 text-neutral-500 hover:text-red-400 transition-colors"
                       onClick={(e) => {
                         e.stopPropagation();
                         onDelete(note.id);
@@ -395,10 +390,9 @@ export default function History({
                   </div>
                 </div>
 
-                {/* Note Content */}
                 <div
                   className={cn(
-                    "text-zinc-300 leading-relaxed transition-all",
+                    "text-neutral-300 leading-relaxed transition-all",
                     isSidebar ? "text-[11px]" : "text-sm",
                     isExpanded
                       ? ""
@@ -438,7 +432,6 @@ export default function History({
         )}
       </div>
 
-      {/* Pagination */}
       {pagination.totalPages > 1 && (
         <div
           className={cn(
@@ -476,7 +469,7 @@ export default function History({
                     className={`w-8 h-8 rounded-lg text-xs font-medium transition-all ${
                       page === pagination.page
                         ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                        : "text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300"
+                        : "text-neutral-500 hover:bg-white/[0.04] hover:text-neutral-300"
                     }`}
                   >
                     {page}

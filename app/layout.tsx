@@ -23,7 +23,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#2f855a",
+  themeColor: "#0f172a",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -40,17 +40,35 @@ export default function RootLayout({
       <head>
         <link rel="icon" href="/icons/favicon.ico" />
         {/*
-          Static export ships no HTTP headers, so we also set CSP via meta.
-          We drop `unsafe-eval` (not required by Next 16 runtime or analytics),
-          keep `unsafe-inline` for scripts only because Next's inline bootstrap
-          and GTM require it in a static export, and constrain everything else
-          to an explicit allowlist. Edge-level headers in public/_headers
-          supersede this meta in production.
+          Static export ships no HTTP headers, so we set CSP via meta —
+          but ONLY in production builds. React's dev runtime needs
+          `eval()` for callstack reconstruction, which would force this
+          meta to include `'unsafe-eval'`. We don't want that weakening
+          our prod policy, and we don't need the meta in dev at all
+          because Electron's renderer session already sets a dev CSP
+          via HTTP header (electron/main.ts) that DOES allow
+          `'unsafe-eval'`. Browsers enforce the intersection of all CSP
+          sources, so a missing-in-meta directive silently overrides
+          the more permissive header — which was the source of the
+          "eval() is not supported … unsafe-eval … included" warning.
+
+          The Electron dev header CSP, this meta, and public/_headers
+          must stay in lockstep — any directive missing from one layer
+          is effectively blocked across all of them.
+
+          PostHog hosts use the `https://*.i.posthog.com` wildcard so EU
+          (eu.i / eu-assets.i) and the US fallback (us.i / us-assets.i)
+          both work without further edits. PostHog injects its sub-feature
+          scripts (recorder, web-vitals, surveys, dead-clicks, exception
+          autocapture) at runtime, so they need `script-src` — not just
+          `connect-src`. They also load assets via `img-src`.
         */}
-        <meta
-          httpEquiv="Content-Security-Policy"
-          content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://eu.i.posthog.com https://eu-assets.i.posthog.com; connect-src 'self' http://localhost:8787 https://realtime-worker-api.innovatorved.workers.dev https://realtime-worker-api-prod.vedgupta.in https://*.deepgram.com https://api.deepgram.com https://www.googletagmanager.com https://www.google-analytics.com wss://*.deepgram.com ws://localhost:* ws://127.0.0.1:* https://eu.i.posthog.com https://eu-assets.i.posthog.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://www.googletagmanager.com https://www.google-analytics.com; font-src 'self' data:; media-src 'self' blob:;"
-        />
+        {process.env.NODE_ENV === "production" && (
+          <meta
+            httpEquiv="Content-Security-Policy"
+            content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://*.i.posthog.com https://www.googletagmanager.com; connect-src 'self' http://localhost:8787 https://*.i.posthog.com https://realtime-worker-api.innovatorved.workers.dev https://realtime-worker-api-prod.vedgupta.in https://*.deepgram.com https://api.deepgram.com https://www.googletagmanager.com https://www.google-analytics.com wss://*.deepgram.com ws://localhost:* ws://127.0.0.1:*; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.i.posthog.com https://www.googletagmanager.com https://www.google-analytics.com; font-src 'self' data:; media-src 'self' blob:;"
+          />
+        )}
         <meta httpEquiv="X-Content-Type-Options" content="nosniff" />
         <meta name="referrer" content="strict-origin-when-cross-origin" />
       </head>

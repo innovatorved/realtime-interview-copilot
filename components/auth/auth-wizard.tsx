@@ -8,44 +8,20 @@ import { ArrowLeft, Loader2, Mic, MoveRight } from "lucide-react";
 import { sendGTMEvent } from "@next/third-parties/google";
 import posthog from "posthog-js";
 
+import { TOKEN as SHARED_TOKEN } from "./_shared/tokens";
+
 interface AuthWizardProps {
   initialStep?: "welcome" | "signup" | "signin";
   onSuccess?: () => void;
 }
 
-// ── App design tokens (dark / glass theme matching the rest of the app) ──
-// Notion's geometry (8px buttons, 12px cards, Inter type, generous spacing)
-// applied to the existing zinc-950 + emerald accent palette so this screen
-// feels native to the Electron shell.
+// Wizard-specific token overrides — the shared module unifies the
+// auth chrome palette; this screen historically used a slightly
+// brighter `accentSoft` (0.12 alpha vs 0.10) so we keep that variant
+// for byte-equivalent visuals.
 const TOKEN = {
-  // Surfaces
-  pageBg: "rgba(9, 9, 11, 0.55)", // page wrapper (lets the OS backdrop bleed)
-  cardBg: "rgba(24, 24, 27, 0.72)", // glass card
-  cardBorder: "rgba(255, 255, 255, 0.06)",
-  hairline: "rgba(255, 255, 255, 0.06)",
-  hairlineStrong: "rgba(255, 255, 255, 0.10)",
-  inputBg: "rgba(9, 9, 11, 0.6)",
-  surfaceSoft: "rgba(255, 255, 255, 0.03)",
-  // Text
-  ink: "#fafafa",
-  charcoal: "#e4e4e7",
-  slate: "#a1a1aa",
-  steel: "#71717a",
-  stone: "#52525b",
-  muted: "#3f3f46",
-  // Accent — matches the "Ask AI" tab in the title bar (emerald-600) and
-  // the app's accent gradient (#22c55e → #10b981 → #059669). Using
-  // green-500 / emerald-400 so the buttons read brighter than before.
-  accent: "#22c55e", // green-500 (matches accent-gradient start)
-  accentHover: "#16a34a", // green-600
+  ...SHARED_TOKEN,
   accentSoft: "rgba(34, 197, 94, 0.12)",
-  accentRing: "rgba(34, 197, 94, 0.35)",
-  accentBorder: "rgba(34, 197, 94, 0.30)",
-  accentText: "#86efac", // green-300 — bright on dark glass
-  // Semantic
-  semanticError: "#f87171",
-  semanticErrorSoft: "rgba(248, 113, 113, 0.10)",
-  semanticSuccess: "#34d399",
 } as const;
 
 const inputStyle: React.CSSProperties = {
@@ -378,7 +354,6 @@ export function AuthWizard({
             "0 4px 12px rgba(0,0,0,0.4), 0 24px 48px -16px rgba(0,0,0,0.5)",
         }}
       >
-        {/* Brand header */}
         <div className="flex items-center gap-2 mb-5">
           <div
             className="flex h-7 w-7 items-center justify-center"
@@ -417,7 +392,6 @@ export function AuthWizard({
           </div>
         </div>
 
-        {/* Title */}
         <div className="mb-4">
           <h1
             style={{
@@ -448,7 +422,6 @@ export function AuthWizard({
           </p>
         </div>
 
-        {/* Body */}
         <div>
           {step === "welcome" && (
             <div className="grid gap-2">
@@ -633,7 +606,6 @@ export function AuthWizard({
           )}
         </div>
 
-        {/* Footer fineprint */}
         <div
           className="mt-5 pt-4 text-center"
           style={{ borderTop: `1px solid ${TOKEN.hairline}` }}

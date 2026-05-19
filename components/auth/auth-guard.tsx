@@ -9,7 +9,7 @@ import { AppAnnouncements } from "@/components/announcements/AppAnnouncements";
 import { AlertTriangle, Ban, Loader2 } from "lucide-react";
 import posthog from "posthog-js";
 
-// Dark / glass tokens — mirrors the rest of the app (zinc-950 + emerald
+// Dark / glass tokens — mirrors the rest of the app (neutral-950 + emerald
 // accent, Notion-style geometry). Kept inline so the auth chrome is
 // self-contained and matches the auth screens visually.
 const TOKEN = {

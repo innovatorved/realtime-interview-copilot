@@ -32,17 +32,33 @@ export interface LiveSessionStartResult {
   startedAt: string;
 }
 
-/** Register a new live interview session. Returns null on auth/network failure. */
+/** Register a new live interview session. Returns null on auth/network failure.
+ *
+ *  On the "you already have N active sessions" 409 (the user's previous
+ *  Electron process was force-killed before its end ping fired), we
+ *  automatically call `/api/sessions/end-all` and retry ONCE so the user
+ *  never sees a stuck-recorder UX from a crash. We retry exactly once to
+ *  avoid an unbounded loop if the worker is genuinely refusing for
+ *  another reason.
+ */
 export async function startLiveSession(
   opts: LiveSessionStartOpts = {},
 ): Promise<LiveSessionStartResult | null> {
-  try {
-    const res = await fetch(`${BACKEND_API_URL}/api/sessions/start`, {
+  const post = (): Promise<Response> =>
+    fetch(`${BACKEND_API_URL}/api/sessions/start`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(opts),
     });
+
+  try {
+    let res = await post();
+    if (res.status === 409) {
+      // Stale-session cap hit — bulk-clear and retry once.
+      const cleared = await endAllLiveSessions("auto_recover_from_409");
+      if (cleared !== null) res = await post();
+    }
     if (!res.ok) return null;
     return (await res.json()) as LiveSessionStartResult;
   } catch {
@@ -70,6 +86,37 @@ export async function endLiveSession(
     });
   } catch {
     // Best-effort tracking call.
+  }
+}
+
+/**
+ * End every active live_session row owned by the signed-in user.
+ *
+ * Used in two places:
+ *   1. App startup, to clear zombie rows left by a force-killed Electron
+ *      process whose unload hook never got to call `endLiveSession`.
+ *   2. Recovery path when `startLiveSession` 409s with "you already have
+ *      N active sessions" — call this and retry start once.
+ *
+ * Returns the number of rows ended (or null on transport failure).
+ * Idempotent server-side: zero rows is a normal "all clean" response.
+ */
+export async function endAllLiveSessions(
+  reason: string = "client_cleanup",
+): Promise<number | null> {
+  try {
+    const res = await fetch(`${BACKEND_API_URL}/api/sessions/end-all`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason }),
+      keepalive: true,
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { endedCount?: number };
+    return typeof body.endedCount === "number" ? body.endedCount : 0;
+  } catch {
+    return null;
   }
 }
 

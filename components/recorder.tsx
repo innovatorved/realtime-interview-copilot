@@ -65,7 +65,7 @@ export default function RecorderTranscriber({
           sessionState === "live"
             ? "bg-red-500/15 text-red-300 border-red-500/25 hover:bg-red-500/25 animate-pulse"
             : isBusy
-              ? "bg-amber-500/10 text-amber-300 border-amber-500/20"
+              ? "bg-sky-500/10 text-sky-300 border-sky-500/20"
               : "bg-emerald-500/15 text-emerald-300 border-emerald-500/25 hover:bg-emerald-500/25",
         )}
       >
@@ -84,10 +84,10 @@ export default function RecorderTranscriber({
   return (
     <div className="w-full relative">
       <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2 p-1 bg-zinc-950/50 rounded-lg border border-white/5 h-10">
+        <div className="flex items-center gap-2 p-1 bg-neutral-950/50 rounded-lg border border-white/5 h-10">
           {isBusy ? (
             <div
-              className="flex-1 flex items-center justify-center gap-2 text-zinc-400 text-xs"
+              className="flex-1 flex items-center justify-center gap-2 text-neutral-400 text-xs"
               role="status"
               aria-live="polite"
             >
@@ -100,10 +100,10 @@ export default function RecorderTranscriber({
             </div>
           ) : (
             <div className="flex-1 flex items-center gap-2 px-2 min-w-0">
-              <span className="text-zinc-500 text-[10px] uppercase tracking-wider font-semibold shrink-0">
+              <span className="text-neutral-500 text-[10px] uppercase tracking-wider font-semibold shrink-0">
                 Source
               </span>
-              <span className="text-zinc-300 text-xs truncate">
+              <span className="text-neutral-300 text-xs truncate">
                 {isElectron
                   ? "System audio (loudspeaker)"
                   : "Browser tab / window audio"}
@@ -144,11 +144,11 @@ export default function RecorderTranscriber({
                 sessionState === "live"
                   ? "bg-green-500 animate-pulse"
                   : isActive
-                    ? "bg-yellow-500"
-                    : "bg-zinc-700",
+                    ? "bg-sky-500"
+                    : "bg-neutral-700",
               )}
             />
-            <span className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">
+            <span className="text-[10px] text-neutral-500 font-medium uppercase tracking-wider">
               {sessionState === "live"
                 ? "Live & Connected"
                 : sessionState === "idle"

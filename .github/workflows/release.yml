@@ -68,6 +68,21 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: bunx electron-builder --publish never
 
+      - name: Verify macOS microphone entitlement
+        if: matrix.os == 'macos-14'
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_path="$(find dist -name '*.app' -type d | head -n 1)"
+          if [ -z "$app_path" ]; then
+            echo "No .app bundle found under dist/"
+            exit 1
+          fi
+          echo "Inspecting $app_path"
+          codesign -d --entitlements :- "$app_path" 2>/dev/null | tee /tmp/entitlements.plist
+          grep -q "com.apple.security.device.audio-input" /tmp/entitlements.plist
+          plutil -p "$app_path/Contents/Info.plist" | grep -q "NSMicrophoneUsageDescription"
+
       - name: List built artifacts
         shell: bash
         run: ls -lh dist/ || dir dist

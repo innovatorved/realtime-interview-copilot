@@ -23,6 +23,11 @@ import { sendGTMEvent } from "@next/third-parties/google";
 
 import { useTab } from "@/components/TabContext";
 import { useAppBackdrop } from "@/components/AppBackdropContext";
+import { Kbd } from "@/components/ui/Kbd";
+import {
+  sessionDisplayName,
+  sessionUserTitle,
+} from "@/lib/session-display";
 
 export default function TitleBar() {
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(true);
@@ -34,11 +39,8 @@ export default function TitleBar() {
   const { activeTab, setActiveTab, compactMode, setCompactMode } = useTab();
 
   useEffect(() => {
-    // Check if running in Electron
     if (typeof window !== "undefined" && window.electronAPI) {
       setIsElectron(true);
-
-      // Get initial states
       window.electronAPI.windowIsAlwaysOnTop().then(setIsAlwaysOnTop);
       window.electronAPI.windowIsMaximized().then(setIsMaximized);
     }
@@ -87,7 +89,7 @@ export default function TitleBar() {
           },
         },
       });
-      // Fallback
+      // Always dispatch in case onSuccess didn't fire (auth client error).
       window.dispatchEvent(new Event("auth:logout"));
     } catch (error) {
       console.error("Sign out failed", error);
@@ -103,54 +105,79 @@ export default function TitleBar() {
   return (
     <div
       data-clickable
-      className="fixed top-0 left-0 right-0 h-8 glass z-50 flex items-center justify-between px-3
-                    select-none shadow-sm"
+      className="fixed top-0 left-0 right-0 h-8 titlebar-chrome z-50 flex items-center justify-between px-3
+                    select-none"
       style={
         {
           WebkitAppRegion: "drag",
         } as React.CSSProperties
       }
     >
-      {/* Left side - App title */}
-      <div className="flex items-center space-x-2">
-        <div className="w-3 h-3 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 animate-pulse" />
-        <span className="text-xs font-semibold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="relative flex h-2 w-2" aria-hidden>
+          <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400/35" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/25" />
+        </span>
+        <span className="text-xs font-semibold text-white drop-shadow-[0_1px_2px_color-mix(in_oklch,var(--app-shadow)_65%,transparent)]">
           Realtime Interview Copilot
         </span>
+
+        {/* Tab switcher now sits in the left cluster instead of the visual center. */}
+        {!compactMode && (
+          <div
+            className="flex items-center space-x-0.5 rounded-lg border border-white/[0.04] bg-neutral-900/60 p-0.5"
+            style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+          >
+            {[
+              {
+                id: "copilot" as const,
+                label: "Copilot",
+                icon: Mic,
+                shortcutKey: "C",
+              },
+              {
+                id: "ask-ai" as const,
+                label: "Ask AI",
+                icon: MessageSquare,
+                shortcutKey: "A",
+              },
+              {
+                id: "presets" as const,
+                label: "Presets",
+                icon: Sparkles,
+                shortcutKey: "P",
+              },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  title={`${tab.label} (Alt+${tab.shortcutKey})`}
+                  className={cn(
+                    "flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-medium transition-all duration-200",
+                    activeTab === tab.id
+                      ? "bg-emerald-600 text-white shadow-sm"
+                      : "text-neutral-400 hover:text-white",
+                  )}
+                >
+                  <Icon className="w-3 h-3" />
+                  {tab.label}
+                  <Kbd
+                    keys={["Alt", tab.shortcutKey]}
+                    size="xs"
+                    className={cn(
+                      "ml-0.5 opacity-70",
+                      activeTab === tab.id ? "" : "hidden md:inline-flex",
+                    )}
+                  />
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* Center - Tab Switcher (hidden in compact mode to keep titlebar minimal) */}
-      {!compactMode && (
-        <div
-          className="absolute left-1/2 transform -translate-x-1/2 flex items-center space-x-0.5 bg-zinc-900/60 rounded-lg p-0.5 border border-white/[0.04]"
-          style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
-        >
-          {[
-            { id: "copilot" as const, label: "Copilot", icon: Mic },
-            { id: "ask-ai" as const, label: "Ask AI", icon: MessageSquare },
-            { id: "presets" as const, label: "Presets", icon: Sparkles },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  "flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-medium transition-all duration-200",
-                  activeTab === tab.id
-                    ? "bg-emerald-600 text-white shadow-sm"
-                    : "text-gray-400 hover:text-white",
-                )}
-              >
-                <Icon className="w-3 h-3" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Right side - Controls */}
       <div
         className="flex items-center space-x-1"
         style={
@@ -159,16 +186,18 @@ export default function TitleBar() {
           } as React.CSSProperties
         }
       >
-        {/* Logout Button - Only show if logged in */}
         {session && (
-          <div className="flex items-center mr-2">
-            <span className="text-[10px] text-gray-400 mr-2 font-medium">
-              {session.user.name}
+          <div className="flex max-w-[min(14rem,36vw)] items-center mr-2 min-w-0 gap-1.5">
+            <span
+              className="truncate text-[10px] font-medium text-[color:var(--app-text)] mr-1.5"
+              title={sessionUserTitle(session.user)}
+            >
+              {sessionDisplayName(session.user)}
             </span>
             <Button
               size="sm"
               variant="ghost"
-              className="h-6 w-6 p-0 hover:bg-red-500/20 text-gray-300 hover:text-red-400"
+              className="h-6 w-6 p-0 hover:bg-red-500/20 text-neutral-300 hover:text-red-400"
               onClick={handleLogout}
               title="Sign Out"
             >
@@ -177,24 +206,23 @@ export default function TitleBar() {
           </div>
         )}
 
-        {/* Opacity controls */}
-        <div className="flex items-center space-x-1 mr-2 bg-gray-800/40 backdrop-blur-sm rounded px-2 py-1 border border-gray-700/30">
+        <div className="flex items-center space-x-1 mr-2 rounded px-2 py-1 border border-[color:var(--app-border)] bg-[color:color-mix(in_oklch,var(--app-surface-elev)_88%,transparent)] backdrop-blur-sm">
           <Button
             size="sm"
             variant="ghost"
-            className="h-6 w-6 p-0 hover:bg-gray-700/50 text-gray-200 hover:text-white"
+            className="h-6 w-6 p-0 hover:bg-neutral-700/50 text-neutral-200 hover:text-white"
             onClick={() => handleBackdropChange(-0.1)}
             title="More see-through (background only)"
           >
             <Minus className="h-3 w-3" />
           </Button>
-          <span className="text-[10px] text-gray-200 min-w-[32px] text-center font-medium drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+          <span className="text-[10px] text-neutral-200 min-w-[32px] text-center font-medium drop-shadow-[0_1px_2px_color-mix(in_oklch,var(--app-shadow)_65%,transparent)]">
             {Math.round(backdropOpacity * 100)}%
           </span>
           <Button
             size="sm"
             variant="ghost"
-            className="h-6 w-6 p-0 hover:bg-gray-700/50 text-gray-200 hover:text-white"
+            className="h-6 w-6 p-0 hover:bg-neutral-700/50 text-neutral-200 hover:text-white"
             onClick={() => handleBackdropChange(0.1)}
             title="Darker background (UI stays sharp)"
           >
@@ -202,15 +230,14 @@ export default function TitleBar() {
           </Button>
         </div>
 
-        {/* Compact-mode toggle */}
         <Button
           size="sm"
           variant="ghost"
           className={cn(
-            "h-7 w-7 p-0 hover:bg-gray-700/50",
+            "h-7 w-7 p-0 hover:bg-neutral-700/50",
             compactMode
               ? "text-emerald-400 hover:text-emerald-300"
-              : "text-gray-300 hover:text-gray-200",
+              : "text-neutral-300 hover:text-neutral-200",
           )}
           onClick={() => setCompactMode(!compactMode)}
           title={compactMode ? "Exit compact mode" : "Enter compact mode"}
@@ -218,15 +245,14 @@ export default function TitleBar() {
           <Rows3 className="h-3.5 w-3.5" />
         </Button>
 
-        {/* Always on top toggle */}
         <Button
           size="sm"
           variant="ghost"
           className={cn(
-            "h-7 w-7 p-0 hover:bg-gray-700/50",
+            "h-7 w-7 p-0 hover:bg-neutral-700/50",
             isAlwaysOnTop
               ? "text-blue-400 hover:text-blue-300"
-              : "text-gray-300 hover:text-gray-200",
+              : "text-neutral-300 hover:text-neutral-200",
           )}
           onClick={handleToggleAlwaysOnTop}
           title={
@@ -240,12 +266,11 @@ export default function TitleBar() {
           )}
         </Button>
 
-        {/* Window controls */}
         <div className="flex items-center space-x-1 ml-2">
           <Button
             size="sm"
             variant="ghost"
-            className="h-6 w-6 p-0 hover:bg-gray-700/50 text-gray-200 hover:text-white"
+            className="h-6 w-6 p-0 hover:bg-neutral-700/50 text-neutral-200 hover:text-white"
             onClick={handleMinimize}
             title="Minimize"
           >
@@ -254,7 +279,7 @@ export default function TitleBar() {
           <Button
             size="sm"
             variant="ghost"
-            className="h-6 w-6 p-0 hover:bg-gray-700/50 text-gray-200 hover:text-white"
+            className="h-6 w-6 p-0 hover:bg-neutral-700/50 text-neutral-200 hover:text-white"
             onClick={handleMaximize}
             title={isMaximized ? "Restore" : "Maximize"}
           >
@@ -263,7 +288,7 @@ export default function TitleBar() {
           <Button
             size="sm"
             variant="ghost"
-            className="h-6 w-6 p-0 hover:bg-red-600/80 text-gray-200 hover:text-white"
+            className="h-6 w-6 p-0 hover:bg-red-600/80 text-neutral-200 hover:text-white"
             onClick={handleClose}
             title="Close"
           >

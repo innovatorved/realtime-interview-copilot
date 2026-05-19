@@ -62,8 +62,6 @@ export interface TranscriptionSegment {
   timestamp: string;
 }
 
-// ─── Support messages ─────────────────────────────────────────────────────
-
 export type SupportAuthorType = "user" | "admin";
 
 export type SupportThreadStatus =
@@ -99,8 +97,6 @@ export interface SupportThreadResponse {
   thread: SupportMessage;
   messages: SupportMessage[];
 }
-
-// ─── Announcements ─────────────────────────────────────────────────────────
 
 export type AnnouncementKind = "banner" | "popup" | "toast";
 export type AnnouncementSeverity =

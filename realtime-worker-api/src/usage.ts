@@ -155,7 +155,7 @@ function clampInt(n: number): number {
   return Math.min(Math.floor(n), 2_000_000_000);
 }
 
-// ─── Query helpers (used by both user-facing and admin endpoints) ─────────
+// Query helpers used by both user-facing and admin endpoints.
 
 export interface UsageWindow {
   since: Date;

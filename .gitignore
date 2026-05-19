@@ -15,7 +15,10 @@
 /out/
 
 # production
-/build
+/build/*
+!/build/
+!/build/entitlements.mac.plist
+!/build/entitlements.mac.inherit.plist
 
 # misc
 .DS_Store
@@ -54,3 +57,6 @@ next-env.d.ts
 *.AppImage
 *.deb
 *.rpm
+
+.agents/
+skills-lock.json

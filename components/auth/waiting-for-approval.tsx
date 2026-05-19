@@ -12,46 +12,12 @@ import {
 import posthog from "posthog-js";
 import { useEffect, useMemo, useState } from "react";
 
+// Single source of truth for the auth chrome palette; the wizard pulls
+// from the same module.
+import { TOKEN } from "./_shared/tokens";
+
 const MAX_BODY = 2000;
 const MAX_SUBJECT = 200;
-
-// ── App design tokens (dark / glass theme matching the rest of the app) ──
-const TOKEN = {
-  pageBg: "rgba(9, 9, 11, 0.55)",
-  cardBg: "rgba(24, 24, 27, 0.72)",
-  cardBorder: "rgba(255, 255, 255, 0.06)",
-  hairline: "rgba(255, 255, 255, 0.06)",
-  hairlineSoft: "rgba(255, 255, 255, 0.04)",
-  hairlineStrong: "rgba(255, 255, 255, 0.10)",
-  inputBg: "rgba(9, 9, 11, 0.6)",
-  surfaceSoft: "rgba(255, 255, 255, 0.03)",
-  surfaceMid: "rgba(9, 9, 11, 0.45)",
-  // Text
-  ink: "#fafafa",
-  charcoal: "#e4e4e7",
-  slate: "#a1a1aa",
-  steel: "#71717a",
-  stone: "#52525b",
-  muted: "#3f3f46",
-  // Accent — matches the "Ask AI" tab in the title bar (emerald-600) and
-  // the app's accent gradient (#22c55e → #10b981 → #059669).
-  accent: "#22c55e", // green-500
-  accentHover: "#16a34a", // green-600
-  accentSoft: "rgba(34, 197, 94, 0.10)",
-  accentRing: "rgba(34, 197, 94, 0.35)",
-  accentBorder: "rgba(34, 197, 94, 0.30)",
-  accentText: "#86efac", // green-300
-  // Tones for status / icons
-  amber: "#fbbf24",
-  amberSoft: "rgba(251, 191, 36, 0.12)",
-  amberBorder: "rgba(251, 191, 36, 0.30)",
-  // Semantic
-  semanticError: "#f87171",
-  semanticErrorSoft: "rgba(248, 113, 113, 0.10)",
-  semanticSuccess: "#34d399",
-} as const;
-
-// ── Reusable styled primitives ────────────────────────────────────────────
 
 function PrimaryButton({
   children,
@@ -186,8 +152,6 @@ function focusOff(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) {
   e.currentTarget.style.border = `1px solid ${TOKEN.hairlineStrong}`;
   e.currentTarget.style.boxShadow = "none";
 }
-
-// ── Main component ────────────────────────────────────────────────────────
 
 export function WaitingForApproval({ email }: { email?: string }) {
   const {
@@ -329,7 +293,6 @@ export function WaitingForApproval({ email }: { email?: string }) {
           overflow: "hidden",
         }}
       >
-        {/* Header (fixed at top of card) */}
         <div
           className="flex items-start gap-2.5 shrink-0"
           style={{ padding: "20px 22px 12px" }}
@@ -337,10 +300,10 @@ export function WaitingForApproval({ email }: { email?: string }) {
           <div
             className="flex h-7 w-7 items-center justify-center shrink-0"
             style={{
-              backgroundColor: TOKEN.amberSoft,
-              color: TOKEN.amber,
+              backgroundColor: TOKEN.skySoft,
+              color: TOKEN.sky,
               borderRadius: 7,
-              border: `1px solid ${TOKEN.amberBorder}`,
+              border: `1px solid ${TOKEN.skyBorder}`,
             }}
           >
             <Clock className="h-3.5 w-3.5" />
@@ -377,12 +340,11 @@ export function WaitingForApproval({ email }: { email?: string }) {
           </div>
         </div>
 
-        {/* Card body: bounded, scrolls internally so the card never grows. */}
+        {/* Body: bounded, scrolls internally so the card never grows. */}
         <div
           className="flex-1 min-h-0 flex flex-col"
           style={{ padding: "0 22px 20px" }}
         >
-        {/* Sent confirmation strip */}
         {sentBanner && (
           <div
             className="mb-3 flex items-center gap-2 px-2.5 py-1.5 rounded-md shrink-0"
@@ -399,7 +361,6 @@ export function WaitingForApproval({ email }: { email?: string }) {
           </div>
         )}
 
-        {/* HOME VIEW */}
         {view === "home" && (
           <div className="flex flex-col flex-1 min-h-0">
             <div className="flex flex-wrap gap-1.5 mb-3 shrink-0">
@@ -579,7 +540,6 @@ export function WaitingForApproval({ email }: { email?: string }) {
           </div>
         )}
 
-        {/* COMPOSE VIEW */}
         {view === "compose" && (
           <div className="flex flex-col flex-1 min-h-0">
             <button
@@ -681,7 +641,6 @@ export function WaitingForApproval({ email }: { email?: string }) {
           </div>
         )}
 
-        {/* THREAD VIEW */}
         {view === "thread" && (
           <div className="flex flex-col flex-1 min-h-0">
             <button

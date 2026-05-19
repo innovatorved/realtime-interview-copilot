@@ -10,6 +10,38 @@ html {
   --background-end-rgb: 255, 255, 255;
   --accent: 142, 68%, 45%;
   --accent-foreground: 0, 0%, 100%;
+  /* True neutral dark (chroma 0): no brown / olive cast from tinted grays */
+  --app-surface: oklch(0.16 0 0);
+  --app-surface-elev: oklch(0.195 0 0);
+  --app-border: oklch(0.42 0 0 / 0.28);
+  --app-muted: oklch(0.58 0 0);
+  --app-ring: oklch(0.62 0.14 155 / 0.5);
+  --app-text: oklch(0.97 0 0);
+  --app-shadow: oklch(0 0 0 / 0.55);
+}
+
+/* Full-window web shell: neutral dark only */
+.app-page-bg {
+  background:
+    radial-gradient(
+      120% 70% at 50% -10%,
+      oklch(0.22 0 0 / 0.14),
+      transparent 55%
+    ),
+    linear-gradient(
+      to bottom right,
+      oklch(0.11 0 0),
+      oklch(0.135 0 0),
+      oklch(0.09 0 0)
+    );
+}
+
+/* Sticky headers and compact toolbars: one surface language */
+.app-toolbar {
+  background-color: color-mix(in oklch, var(--app-surface-elev) 94%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--app-border);
 }
 
 .animation-delay-100 {
@@ -43,7 +75,12 @@ html {
 }
 
 .animate-skeleton {
-  background: linear-gradient(90deg, #374151 25%, #4b5563 50%, #374151 75%);
+  background: linear-gradient(
+    90deg,
+    oklch(0.3 0 0) 25%,
+    oklch(0.36 0 0) 50%,
+    oklch(0.3 0 0) 75%
+  );
   background-size: 1000px 100%;
   animation: shimmer 2s infinite;
 }
@@ -91,53 +128,124 @@ html {
   }
 }
 
-@keyframes gradient-shift {
-  0%,
-  100% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-}
-
 @layer components {
+  .titlebar-chrome {
+    background-color: color-mix(in oklch, var(--app-surface) 94%, transparent);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--app-border);
+    box-shadow: 0 1px 2px color-mix(in oklch, var(--app-shadow) 30%, transparent);
+  }
+
   .glass {
-    @apply bg-zinc-900/40 backdrop-blur-xl border border-white/[0.06] shadow-lg;
+    background-color: color-mix(in oklch, var(--app-surface-elev) 86%, transparent);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--app-border);
+    box-shadow:
+      0 10px 15px -3px color-mix(in oklch, var(--app-shadow) 70%, transparent),
+      0 4px 6px -2px color-mix(in oklch, var(--app-shadow) 50%, transparent);
   }
 
   .glass-card {
-    @apply bg-zinc-900/50 backdrop-blur-2xl border border-white/[0.06] shadow-xl rounded-2xl transition-all duration-300;
+    border-radius: 1rem;
+    background-color: color-mix(in oklch, var(--app-surface-elev) 88%, transparent);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    border: 1px solid var(--app-border);
+    box-shadow:
+      0 20px 25px -5px color-mix(in oklch, var(--app-shadow) 55%, transparent),
+      0 8px 10px -6px color-mix(in oklch, var(--app-shadow) 40%, transparent);
+    transition-property: border-color, box-shadow, background-color;
+    transition-duration: 300ms;
+    transition-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
   }
 
   .glass-card-hover {
-    @apply bg-zinc-900/50 backdrop-blur-2xl border border-white/[0.06] shadow-xl rounded-2xl transition-all duration-300 hover:border-white/[0.12] hover:shadow-2xl hover:bg-zinc-900/60;
+    border-radius: 1rem;
+    background-color: color-mix(in oklch, var(--app-surface-elev) 88%, transparent);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    border: 1px solid var(--app-border);
+    box-shadow:
+      0 20px 25px -5px color-mix(in oklch, var(--app-shadow) 55%, transparent),
+      0 8px 10px -6px color-mix(in oklch, var(--app-shadow) 40%, transparent);
+    transition-property: border-color, box-shadow, background-color;
+    transition-duration: 300ms;
+    transition-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
+  }
+
+  .glass-card-hover:hover {
+    border-color: color-mix(in oklch, oklch(0.5 0 0) 42%, var(--app-border));
+    background-color: color-mix(in oklch, var(--app-surface-elev) 93%, transparent);
+    box-shadow:
+      0 25px 35px -5px color-mix(in oklch, var(--app-shadow) 65%, transparent),
+      0 12px 14px -8px color-mix(in oklch, var(--app-shadow) 45%, transparent);
   }
 
   .glass-panel {
-    @apply bg-zinc-950/40 backdrop-blur-md border border-white/[0.04] rounded-xl;
+    border-radius: 0.75rem;
+    background-color: color-mix(in oklch, var(--app-surface) 82%, transparent);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--app-border);
   }
 
   .glass-light {
-    @apply bg-white/[0.03] backdrop-blur-md border border-white/[0.06] shadow-sm;
+    border-radius: 0.75rem;
+    background-color: color-mix(in oklch, oklch(1 0 0) 4%, transparent);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--app-border);
+    box-shadow: 0 1px 2px color-mix(in oklch, var(--app-shadow) 35%, transparent);
   }
 
   .glass-input {
-    @apply bg-zinc-950/60 backdrop-blur-md border border-white/[0.08] text-zinc-100 placeholder:text-zinc-600 focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/30 transition-all duration-300 rounded-xl;
+    border-radius: 0.75rem;
+    background-color: color-mix(in oklch, var(--app-surface) 78%, transparent);
+    border: 1px solid color-mix(in oklch, var(--app-border) 120%, transparent);
+    color: var(--app-text);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    transition-property: border-color, box-shadow;
+    transition-duration: 300ms;
+    transition-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
+  }
+
+  .glass-input::placeholder {
+    color: color-mix(in oklch, var(--app-muted) 88%, transparent);
+  }
+
+  .glass-input:focus,
+  .glass-input:focus-visible {
+    outline: none;
+    border-color: color-mix(in oklch, oklch(0.55 0.14 155) 45%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in oklch, var(--app-ring) 55%, transparent);
   }
 
   .glass-button {
-    @apply bg-white/[0.04] hover:bg-white/[0.08] active:bg-white/[0.12] border border-white/[0.08] text-white backdrop-blur-sm transition-all duration-200 rounded-xl;
+    border-radius: 0.75rem;
+    background-color: color-mix(in oklch, oklch(1 0 0) 5%, transparent);
+    border: 1px solid var(--app-border);
+    color: var(--app-text);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    transition-property: background-color, border-color;
+    transition-duration: 200ms;
+    transition-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
   }
 
-  .glass-nav {
-    @apply bg-zinc-950/70 backdrop-blur-2xl border-b border-white/[0.06] shadow-lg;
+  .glass-button:hover {
+    background-color: color-mix(in oklch, oklch(1 0 0) 9%, transparent);
   }
 
+  .glass-button:active {
+    background-color: color-mix(in oklch, oklch(1 0 0) 12%, transparent);
+  }
+
+  /* Primary actions: solid diagonal blend, no looping motion (less noisy while coding) */
   .accent-gradient {
-    background: linear-gradient(135deg, #22c55e, #10b981, #059669);
-    background-size: 200% 200%;
-    animation: gradient-shift 3s ease infinite;
+    background: linear-gradient(135deg, oklch(0.55 0.17 152), oklch(0.48 0.14 160));
   }
 
   .accent-glow {
@@ -155,16 +263,14 @@ html {
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-white/[0.08] rounded-full hover:bg-white/[0.15] transition-colors;
+    background-color: color-mix(in oklch, var(--app-border) 90%, transparent);
+    border-radius: 9999px;
   }
 
-  .tab-active {
-    @apply bg-emerald-500/10 text-emerald-400 border-emerald-500/20;
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklch, var(--app-muted) 45%, transparent);
   }
 
-  .tab-inactive {
-    @apply text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03] border-transparent;
-  }
 }
 
 .animate-fade-in-scale {

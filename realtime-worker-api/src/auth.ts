@@ -12,6 +12,8 @@ import { invalidateConfigCache } from "./config-cache";
  * Access-Control-Allow-Origin response never disagree.
  */
 export const TRUSTED_ORIGINS = [
+  "null",
+  "file://",
   "http://localhost:3000",
   "http://localhost:3001",
   "https://copilot.vedgupta.in",
