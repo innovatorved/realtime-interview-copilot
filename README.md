@@ -17,7 +17,7 @@ Or grab the DMG and right-click the app → **Open** on first launch.
 
 ### Windows
 
-Run the installer. If SmartScreen warns, click **More info → Run anyway**.
+Download the Windows installer from Releases, then run the setup `.exe`. If SmartScreen warns, click **More info → Run anyway**.
 
 ## Features
 

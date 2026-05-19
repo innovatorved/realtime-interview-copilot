@@ -113,9 +113,12 @@
     "win": {
       "icon": "public/icons/favicon.ico",
       "target": [
-        "nsis",
-        "portable"
+        "nsis"
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
     },
     "linux": {
       "icon": "public/icons/android-chrome-512x512.png",

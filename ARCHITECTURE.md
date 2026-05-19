@@ -306,7 +306,7 @@ The main workflows are driven by `package.json`:
 The app is configured to produce:
 
 - macOS: `dmg`, `zip`
-- Windows: `nsis`, `portable`
+- Windows: `nsis`
 - Linux: `AppImage`, `deb`
 
 The release pipeline currently publishes macOS and Windows artifacts. Linux support exists in the packaging config, but it is not part of the default release matrix.
