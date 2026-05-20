@@ -1,39 +1,32 @@
 # Realtime Interview Copilot
 
-Real-time AI copilot for interviews. Captures your system audio, transcribes it live with Deepgram, and answers questions on the fly using multimodal AI (text + screenshots). Desktop app window is hidden from screen shares.
+Desktop app for live interview assistance. It captures system audio, transcribes speech in real time, and can answer questions using text or screenshots.
 
-## Download
+## About
 
-Get the latest build from the [**Releases page**](https://github.com/innovatorved/realtime-interview-copilot/releases/latest) — macOS (Apple Silicon) `.dmg` or Windows (x64) `.exe`.
+I’m Ved Gupta. I built this project to make live interview support faster and less distracting.
 
-### macOS
+Contact: [vedgupta@protonmail.com](mailto:vedgupta@protonmail.com)
+
+If you find the project useful, please star the repo on GitHub.
+
+## Install
+
+macOS:
 
 ```bash
 brew tap innovatorved/tap
 brew install --cask realtime-interview-copilot
 ```
 
-Or grab the DMG and right-click the app → **Open** on first launch.
-
-### Windows
-
-Download the Windows installer from Releases, then run the setup `.exe`. If SmartScreen warns, click **More info → Run anyway**.
+Windows releases are available on the GitHub Releases page.
 
 ## Features
 
-- 🎙️ **Live transcription** of system audio (Deepgram) — no BlackHole / VB-Cable needed
-- 🤖 **Ask AI** with streaming answers (Gemini / OpenAI-compatible)
-- 🖼️ **Vision** — press `⌘⇧1` to snap your screen and ask AI about it
-- 🕵️ **Undetectable** — window is hidden from screen shares and full-screen spaces
-- ⌨️ **Shortcuts** — `K` focus Ask AI, `C` Copilot mode, `S` Summarizer, `Escape` clear
-
-## System Audio — No Virtual Drivers
-
-The app uses Electron's native display-media loopback.
-
-- **macOS**: grant *Screen Recording* once (System Settings → Privacy & Security), relaunch. Silent after that.
-- **Windows**: works out of the box (WASAPI loopback).
-- **Linux**: use any PulseAudio / PipeWire monitor source.
+- Live transcription of system audio
+- AI answers from text or screenshots
+- Hidden window for screen sharing
+- Keyboard shortcuts for quick actions
 
 ## Development
 
@@ -41,32 +34,23 @@ The app uses Electron's native display-media loopback.
 git clone https://github.com/innovatorved/realtime-interview-copilot.git
 cd realtime-interview-copilot
 bun install
-bun run electron:dev      # dev
-bun run electron:build    # package installers into dist/
+bun run electron:dev
 ```
 
-Requires Node 20+ and [Bun](https://bun.sh) 1.3+.
+Build installers with:
 
-## Stack
+```bash
+bun run electron:build
+```
 
-React · Next.js · Electron 41 · Tailwind · Shadcn/UI · Deepgram · Gemini · Cloudflare Workers + D1
+## Requirements
 
-## Releases
+Node 20+ and Bun 1.3+
 
-Tagged pushes (`v*`) trigger a GitHub Actions workflow that builds macOS and Windows artifacts and publishes them to a GitHub Release automatically.
+## Links
 
-## Contributing
-
-PRs welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md). Windows/Linux test reports especially appreciated.
-
-## Architecture
-
-For a complete walkthrough — audio capture, transcription pipeline, AI/vision backend, worker API, CI, distribution, and security — see [ARCHITECTURE.md](./ARCHITECTURE.md).
-
-## License, Privacy & Contact
-
-[LICENSE](./LICENSE) · [Privacy Policy](./PRIVACY.md) · [Architecture](./ARCHITECTURE.md) · [vedgupta@protonmail.com](mailto:vedgupta@protonmail.com) · [Report issues](https://github.com/innovatorved/realtime-interview-copilot/issues)
-
----
-
-⚠️ For educational use. Check your interview platform's terms before using any AI assistance tool.
+- [Releases](https://github.com/innovatorved/realtime-interview-copilot/releases/latest)
+- [Contributing](./CONTRIBUTING.md)
+- [License](./LICENSE)
+- [Privacy Policy](./PRIVACY.md)
+- [Issues](https://github.com/innovatorved/realtime-interview-copilot/issues)
