@@ -78,7 +78,7 @@ bun run electron:build
 
 ## Requirements
 
-Node 20+ and Bun 1.3+
+Node 22+ and Bun 1.3+
 
 ## Links
 

@@ -362,7 +362,7 @@ macOS packaging uses Electron Builder entitlements from `build/entitlements.mac.
 
 The build job runs on macOS and Windows:
 
-- Installs Bun and Node 20.
+- Installs Bun and Node 22.
 - Runs `bun install --frozen-lockfile`.
 - Trusts only the native packages that need postinstall scripts.
 - Builds Electron and Next.js.
