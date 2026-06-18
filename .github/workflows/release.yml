@@ -23,9 +23,9 @@ jobs:
       matrix:
         include:
           - os: macos-14
-            artifact_glob: "dist/*.dmg dist/*.zip dist/*.blockmap"
+            artifact_glob: "dist/*.dmg dist/*.zip dist/*.blockmap dist/*.yml"
           - os: windows-latest
-            artifact_glob: "dist/*.exe dist/*.blockmap"
+            artifact_glob: "dist/*.exe dist/*.blockmap dist/*.yml"
 
     steps:
       - name: Checkout
@@ -51,7 +51,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for pkg in electron esbuild sharp @img/sharp-darwin-arm64 @img/sharp-darwin-x64 @img/sharp-linux-x64 @img/sharp-win32-x64; do
+          for pkg in electron electron-winstaller @biomejs/biome @tailwindcss/oxide esbuild sharp core-js unrs-resolver protobufjs workerd; do
             bun pm trust "$pkg" || true
           done
 
@@ -96,6 +96,7 @@ jobs:
             dist/*.zip
             dist/*.exe
             dist/*.blockmap
+            dist/*.yml
           if-no-files-found: warn
           retention-days: 14
 
@@ -146,6 +147,7 @@ jobs:
             release-assets/*.zip
             release-assets/*.exe
             release-assets/*.blockmap
+            release-assets/*.yml
 
   tap:
     name: Update Homebrew tap

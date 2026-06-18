@@ -1,10 +1,12 @@
 "use client";
 
 import {
-  createClient,
-  type LiveClient,
-  LiveTranscriptionEvents,
-} from "@deepgram/sdk";
+  closeDeepgramLive,
+  connectDeepgramLive,
+  isDeepgramResultsMessage,
+  startDeepgramLiveConnection,
+  type DeepgramLiveConnection,
+} from "@/lib/transcription/deepgramLiveConnection";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { dbg } from "@/lib/debug";
 import { fetchAskMicKey } from "./mic/keyFetch";
@@ -138,7 +140,7 @@ export function useAskMic(options: UseAskMicOptions = {}): UseAskMicReturn {
     onFinalRef.current = onFinal;
   }, [onTranscript, onFinal]);
 
-  const connectionRef = useRef<LiveClient | null>(null);
+  const connectionRef = useRef<DeepgramLiveConnection | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
 
@@ -214,11 +216,7 @@ export function useAskMic(options: UseAskMicOptions = {}): UseAskMicReturn {
       mediaStreamRef.current = null;
     }
     if (connectionRef.current) {
-      try {
-        connectionRef.current.finish();
-      } catch {
-        /* already closed */
-      }
+      closeDeepgramLive(connectionRef.current);
       connectionRef.current = null;
     }
   }, [stopLevelMeter]);
@@ -351,22 +349,22 @@ export function useAskMic(options: UseAskMicOptions = {}): UseAskMicReturn {
     //    on top of smart_format either (redundant + sometimes conflicts).
     setState("connecting");
     dlog("state → connecting; minting Deepgram client");
-    const deepgram = createClient(apiKey);
-    const conn = deepgram.listen.live({
-      model: "nova-2",
-      interim_results: true,
-      smart_format: true,
-    });
+    let conn: DeepgramLiveConnection;
+    try {
+      conn = await connectDeepgramLive(apiKey);
+    } catch (connectErr) {
+      console.error("[useAskMic] Deepgram connect failed:", connectErr);
+      setError("Could not connect to transcription service. Try again.");
+      teardown();
+      setState("idle");
+      return;
+    }
     connectionRef.current = conn;
 
-    conn.on(LiveTranscriptionEvents.Open, () => {
+    conn.on("open", () => {
       if (isStale()) {
         dlog("WS Open fired but session is stale; closing immediately");
-        try {
-          conn.finish();
-        } catch {
-          /* ignore */
-        }
+        closeDeepgramLive(conn);
         return;
       }
 
@@ -411,7 +409,7 @@ export function useAskMic(options: UseAskMicOptions = {}): UseAskMicReturn {
         if (isStale() || !connectionRef.current) return;
         if (e.data.size > 0) {
           try {
-            connectionRef.current.send(e.data);
+            connectionRef.current.sendMedia(e.data);
             chunksSentRef.current++;
             bytesSentRef.current += e.data.size;
             // Throttle: only log every 8th chunk (~2s) so DevTools
@@ -437,7 +435,7 @@ export function useAskMic(options: UseAskMicOptions = {}): UseAskMicReturn {
       };
     });
 
-    conn.on(LiveTranscriptionEvents.Error, (err) => {
+    conn.on("error", (err) => {
       console.error("[useAskMic] Deepgram WS error:", err);
       if (connectionRef.current !== conn) return;
       setError("Transcription connection error. Try again.");
@@ -445,24 +443,22 @@ export function useAskMic(options: UseAskMicOptions = {}): UseAskMicReturn {
       setState("idle");
     });
 
-    conn.on(LiveTranscriptionEvents.Close, (ev) => {
+    conn.on("close", (ev) => {
       dlog("WS Close:", ev);
       if (connectionRef.current !== conn) return;
       wsOpenRef.current = false;
-      // Only flip back to idle if the consumer didn't trigger an
-      // intentional stop (which already sets state).
       if (sessionIdRef.current === thisSession) {
         setState("idle");
       }
     });
 
-    conn.on(LiveTranscriptionEvents.Transcript, (data) => {
-      if (isStale()) return;
+    conn.on("message", (data: unknown) => {
+      if (isStale() || !isDeepgramResultsMessage(data)) return;
       transcriptEventsRef.current++;
-      const isFinal = !!data?.is_final;
+      const isFinal = !!data.is_final;
       if (isFinal) finalEventsRef.current++;
 
-      const alt = data?.channel?.alternatives?.[0] as
+      const alt = data.channel?.alternatives?.[0] as
         | DeepgramAlternative
         | undefined;
       if (!alt) {
@@ -524,6 +520,8 @@ export function useAskMic(options: UseAskMicOptions = {}): UseAskMicReturn {
       setTranscript(composed);
       onTranscriptRef.current?.(composed);
     });
+
+    startDeepgramLiveConnection(conn);
   }, [teardown, composeText, startLevelMeter]);
 
   // Wait up to `maxMs` for an additional final to land after the user
@@ -591,11 +589,7 @@ export function useAskMic(options: UseAskMicOptions = {}): UseAskMicReturn {
 
     stopLevelMeter();
     if (connectionRef.current) {
-      try {
-        connectionRef.current.finish();
-      } catch {
-        /* already closed */
-      }
+      closeDeepgramLive(connectionRef.current);
       connectionRef.current = null;
     }
 

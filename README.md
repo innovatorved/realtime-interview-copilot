@@ -19,6 +19,21 @@ brew tap innovatorved/tap
 brew install --cask realtime-interview-copilot
 ```
 
+To update an existing Homebrew install:
+
+```bash
+brew update
+brew upgrade --cask realtime-interview-copilot
+```
+
+If the upgrade fails, reinstall:
+
+```bash
+brew reinstall --cask realtime-interview-copilot
+```
+
+Homebrew-managed installs should use `brew upgrade` rather than the in-app updater.
+
 Windows releases are available on the GitHub Releases page.
 
 ## Features

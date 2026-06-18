@@ -8,14 +8,14 @@
     "deploy": "wrangler deploy"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20251213.0",
-    "drizzle-kit": "^0.31.8",
-    "typescript": "^5.9.3",
-    "wrangler": "^4.54.0"
+    "@cloudflare/workers-types": "^4.20260617.1",
+    "drizzle-kit": "^0.31.10",
+    "typescript": "^6.0.3",
+    "wrangler": "^4.102.0"
   },
   "dependencies": {
-    "better-auth": "^1.4.7",
-    "drizzle-orm": "^0.41.0",
-    "zod": "^4.3.6"
+    "better-auth": "^1.6.19",
+    "drizzle-orm": "^0.45.2",
+    "zod": "^4.4.3"
   }
 }

@@ -11,6 +11,15 @@ type ScreenCaptureResult =
   | { success: true; dataUrl: string }
   | { success: false; error: string };
 
+type UpdaterStatusPayload =
+  | { type: "idle" }
+  | { type: "checking" }
+  | { type: "available"; version: string }
+  | { type: "not-available"; version: string }
+  | { type: "downloading"; percent: number }
+  | { type: "downloaded"; version: string }
+  | { type: "error"; message: string };
+
 export interface ElectronAPI {
   windowMinimize: () => Promise<void>;
   windowMaximize: () => Promise<boolean>;
@@ -42,6 +51,12 @@ export interface ElectronAPI {
   onSyncContext?: (callback: (text: string) => void) => () => void;
   appQuit: () => Promise<void>;
   appRelaunch: () => Promise<void>;
+  updaterGetVersion?: () => Promise<string>;
+  updaterGetStatus?: () => Promise<UpdaterStatusPayload>;
+  updaterCheck?: () => Promise<void>;
+  onUpdaterStatus?: (
+    callback: (status: UpdaterStatusPayload) => void,
+  ) => () => void;
   platform: string;
   isElectron: boolean;
   supportsSystemAudio: boolean;

@@ -61,5 +61,7 @@ cask "realtime-interview-copilot" do
     Apple Silicon (arm64) only for now. The app needs Microphone and
     Screen Recording permission (System Settings → Privacy & Security)
     for the live transcription and Ask AI screenshot features.
+
+    To update: `brew update && brew upgrade --cask realtime-interview-copilot`
   EOS
 end

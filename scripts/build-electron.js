@@ -8,20 +8,9 @@ const path = require("path");
 // unrelated `tsc@2.0.4` stub package on Windows).
 const tscBin = require.resolve("typescript/bin/tsc");
 
-function runTsc(entry) {
+function runTscProject() {
   return new Promise((resolve, reject) => {
-    const args = [
-      tscBin,
-      entry,
-      "--outDir",
-      "electron",
-      "--module",
-      "commonjs",
-      "--target",
-      "es2020",
-      "--esModuleInterop",
-      "--skipLibCheck",
-    ];
+    const args = [tscBin, "-p", "tsconfig.electron.json"];
     const child = spawn(process.execPath, args, {
       stdio: "inherit",
       cwd: path.resolve(__dirname, ".."),
@@ -29,7 +18,7 @@ function runTsc(entry) {
     child.on("error", reject);
     child.on("exit", (code) => {
       if (code === 0) resolve();
-      else reject(new Error(`tsc exited with code ${code} for ${entry}`));
+      else reject(new Error(`tsc exited with code ${code}`));
     });
   });
 }
@@ -37,8 +26,7 @@ function runTsc(entry) {
 async function buildElectron() {
   console.log("🔨 Building Electron main and preload scripts...");
   try {
-    await runTsc("electron/main.ts");
-    await runTsc("electron/preload.ts");
+    await runTscProject();
     console.log("Electron build completed successfully!");
   } catch (error) {
     console.error("❌ Error building Electron:", error.message || error);

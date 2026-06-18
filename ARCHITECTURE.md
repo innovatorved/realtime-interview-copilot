@@ -318,7 +318,7 @@ macOS packaging uses Electron Builder entitlements from `build/entitlements.mac.
 
 ### 10.4 Homebrew cask
 
-`scripts/update-homebrew-cask.js` regenerates the Homebrew cask version and SHA256 from the release artifacts. The cask update is part of the release flow so macOS users can install with Homebrew after each tagged release.
+`scripts/update-homebrew-cask.js` regenerates the Homebrew cask version and SHA256 from the release artifacts. The cask update is part of the release flow so macOS users can install with `brew install --cask realtime-interview-copilot` and update with `brew upgrade --cask realtime-interview-copilot` after each tagged release.
 
 ## 11. Release pipeline
 

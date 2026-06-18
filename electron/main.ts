@@ -27,6 +27,7 @@ import {
   installPermissionRequestHandler,
 } from "./security/permissions";
 import { isTrustedOrigin } from "./security/origin";
+import { initAutoUpdater } from "./updater";
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -249,6 +250,8 @@ app.whenReady().then(async () => {
     console.error("Failed to create Electron window:", error);
     app.quit();
   });
+
+  initAutoUpdater(getMainWindow);
 
   registerCaptureAndAskShortcut(getMainWindow);
 

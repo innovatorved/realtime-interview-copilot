@@ -1,16 +1,17 @@
 import { defineConfig } from "eslint/config";
-import { FlatCompat } from "@eslint/eslintrc";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const compat = new FlatCompat({ baseDirectory: __dirname });
+import nextVitals from "eslint-config-next/core-web-vitals";
 
 export default defineConfig([
   {
-    ignores: [".next/**", "out/**", "dist/**", "node_modules/**"],
+    ignores: [".next/**", "out/**", "dist/**", "node_modules/**", "electron/**/*.js"],
   },
-  ...compat.extends("next/core-web-vitals"),
+  ...nextVitals,
+  {
+    rules: {
+      // Enabled by eslint-config-next 16 / react-hooks v7; existing code
+      // uses intentional mount-time hydration patterns.
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/refs": "off",
+    },
+  },
 ]);

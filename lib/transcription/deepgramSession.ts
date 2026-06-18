@@ -12,11 +12,13 @@
  *  here verbatim. */
 
 import {
-  type CreateProjectKeyResponse,
-  createClient,
-  type LiveClient,
-  LiveTranscriptionEvents,
-} from "@deepgram/sdk";
+  type DeepgramProjectKeyResponse,
+  closeDeepgramLive,
+  connectDeepgramLive,
+  isDeepgramResultsMessage,
+  startDeepgramLiveConnection,
+  type DeepgramLiveConnection,
+} from "@/lib/transcription/deepgramLiveConnection";
 import posthog from "posthog-js";
 import { BACKEND_API_URL } from "@/lib/constant";
 import {
@@ -74,7 +76,7 @@ export async function startDeepgramSession(
     onSegment,
   } = callbacks;
 
-  let connection: LiveClient | null = null;
+  let connection: DeepgramLiveConnection | null = null;
   let mediaRecorder: MediaRecorder | null = null;
   let mediaStream: MediaStream | null = null;
   let liveSessionId: string | null = null;
@@ -100,11 +102,7 @@ export async function startDeepgramSession(
       mediaStream = null;
     }
     if (connection) {
-      try {
-        connection.finish();
-      } catch {
-        /* already closed */
-      }
+      closeDeepgramLive(connection);
       connection = null;
     }
     setState("idle");
@@ -172,7 +170,7 @@ export async function startDeepgramSession(
   }
   liveSessionId = live.sessionId;
 
-  let apiKeyResponse: CreateProjectKeyResponse;
+  let apiKeyResponse: DeepgramProjectKeyResponse;
   try {
     const res = await fetch(
       `${BACKEND_API_URL}/api/deepgram?sessionId=${encodeURIComponent(live.sessionId)}`,
@@ -185,7 +183,7 @@ export async function startDeepgramSession(
     if (typeof object !== "object" || object === null || !("key" in object)) {
       throw new Error("No api key returned");
     }
-    apiKeyResponse = object as CreateProjectKeyResponse;
+    apiKeyResponse = object as DeepgramProjectKeyResponse;
   } catch (e) {
     console.error("Failed to get API key:", e);
     onError("Failed to get API key. Please try again.");
@@ -213,21 +211,23 @@ export async function startDeepgramSession(
 
   setState("connecting");
 
-  const deepgram = createClient(apiKeyResponse.key);
-  const conn = deepgram.listen.live({
-    model: "nova-2",
-    interim_results: true,
-    smart_format: true,
-  });
+  let conn: DeepgramLiveConnection;
+  try {
+    conn = await connectDeepgramLive(apiKeyResponse.key);
+  } catch (error) {
+    console.error("Failed to open Deepgram connection:", error);
+    onError("Failed to connect to transcription service. Please try again.");
+    void endLiveSession(live.sessionId, "deepgram_connect_failed");
+    liveSessionId = null;
+    teardown();
+    return handle;
+  }
+
   connection = conn;
 
-  conn.on(LiveTranscriptionEvents.Open, () => {
+  conn.on("open", () => {
     if (stale) {
-      try {
-        conn.finish();
-      } catch {
-        /* ignore */
-      }
+      closeDeepgramLive(conn);
       return;
     }
     setState("live");
@@ -238,7 +238,7 @@ export async function startDeepgramSession(
       if (stale || !connection) return;
       if (e.data.size > 0) {
         try {
-          connection.send(e.data);
+          connection.sendMedia(e.data);
         } catch {
           /* connection gone */
         }
@@ -256,14 +256,9 @@ export async function startDeepgramSession(
     });
   });
 
-  conn.on(LiveTranscriptionEvents.Close, () => {
+  conn.on("close", () => {
     if (connection !== conn) return;
 
-    // If we still own a live session id when the WS closes, it usually
-    // means an admin terminated this session (Deepgram revoked the key)
-    // or the network blipped. Either way, mark it ended server-side
-    // and surface a hint. The provider doesn't auto-reconnect — the
-    // user must press Start again, which re-runs auth.
     const sid = liveSessionId;
     if (sid && currentState === "live") {
       onError(
@@ -275,20 +270,17 @@ export async function startDeepgramSession(
     teardown();
   });
 
-  conn.on(LiveTranscriptionEvents.Error, (error) => {
+  conn.on("error", (error) => {
     console.error("Deepgram connection error:", error);
     if (connection === conn) {
       teardown();
     }
   });
 
-  conn.on(LiveTranscriptionEvents.Transcript, (data) => {
-    if (stale) return;
+  conn.on("message", (data: unknown) => {
+    if (stale || !isDeepgramResultsMessage(data)) return;
 
-    // Defensive: Deepgram has occasionally been observed sending
-    // payloads without `alternatives` or `words`. Bail rather than
-    // throwing inside an event handler (which would crash the WS).
-    const alt = data?.channel?.alternatives?.[0];
+    const alt = data.channel?.alternatives?.[0];
     if (!alt || !Array.isArray(alt.words)) return;
     const words: DeepgramWord[] = alt.words;
     const caption = words
@@ -308,7 +300,7 @@ export async function startDeepgramSession(
       start: word.start,
       end: word.end,
       confidence: word.confidence,
-      speaker: data.channel.speaker,
+      speaker: data.channel?.speaker,
     }));
 
     const segment: TranscriptionSegment = {
@@ -322,12 +314,14 @@ export async function startDeepgramSession(
           ? words.reduce((acc, w) => acc + (w.confidence ?? 0), 0) /
             words.length
           : 0,
-      speaker: data.channel.speaker,
+      speaker: data.channel?.speaker,
       isFinal: data.is_final ?? false,
       timestamp: new Date().toISOString(),
     };
     onSegment(segment);
   });
+
+  startDeepgramLiveConnection(conn);
 
   return handle;
 }

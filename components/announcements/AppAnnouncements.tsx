@@ -41,20 +41,13 @@ const SEVERITY_STYLES: Record<
   },
 };
 
-function severityIcon(s: AnnouncementSeverity) {
-  switch (s) {
-    case "success":
-      return CheckCircle2;
-    case "warning":
-      return AlertTriangle;
-    case "error":
-      return AlertCircle;
-    case "announcement":
-      return Megaphone;
-    default:
-      return Info;
-  }
-}
+const SEVERITY_ICONS: Record<AnnouncementSeverity, typeof Info> = {
+  info: Info,
+  success: CheckCircle2,
+  warning: AlertTriangle,
+  error: AlertCircle,
+  announcement: Megaphone,
+};
 
 function isSafeUrl(href: string | null | undefined): href is string {
   if (!href) return false;
@@ -124,7 +117,7 @@ function BannerItem({
   onAck: () => void;
 }) {
   const styles = SEVERITY_STYLES[announcement.severity] ?? SEVERITY_STYLES.info;
-  const Icon = severityIcon(announcement.severity);
+  const Icon = SEVERITY_ICONS[announcement.severity] ?? Info;
 
   useEffect(() => {
     onAck();
@@ -215,7 +208,7 @@ function PopupQueue({
   if (!visible) return null;
 
   const styles = SEVERITY_STYLES[visible.severity] ?? SEVERITY_STYLES.info;
-  const Icon = severityIcon(visible.severity);
+  const Icon = SEVERITY_ICONS[visible.severity] ?? Info;
 
   const markSeen = (id: string) => {
     try {

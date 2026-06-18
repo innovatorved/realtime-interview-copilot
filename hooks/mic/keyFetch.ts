@@ -9,10 +9,10 @@
  *  ask_mic`), and so a future live_session binding on the transcript
  *  endpoint never accidentally applies here. */
 
-import type { CreateProjectKeyResponse } from "@deepgram/sdk";
+import type { DeepgramProjectKeyResponse } from "@/lib/transcription/deepgramLiveConnection";
 import { BACKEND_API_URL } from "@/lib/constant";
 
-export async function fetchAskMicKey(): Promise<CreateProjectKeyResponse> {
+export async function fetchAskMicKey(): Promise<DeepgramProjectKeyResponse> {
   const res = await fetch(`${BACKEND_API_URL}/api/deepgram/ask`, {
     method: "GET",
     cache: "no-store",
@@ -27,9 +27,9 @@ export async function fetchAskMicKey(): Promise<CreateProjectKeyResponse> {
     }
     throw new Error(`Key endpoint returned ${res.status}`);
   }
-  const body = (await res.json()) as Partial<CreateProjectKeyResponse>;
+  const body = (await res.json()) as Partial<DeepgramProjectKeyResponse>;
   if (!body || typeof body.key !== "string" || !body.key) {
     throw new Error("Key endpoint returned no key");
   }
-  return body as CreateProjectKeyResponse;
+  return body as DeepgramProjectKeyResponse;
 }

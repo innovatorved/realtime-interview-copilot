@@ -11,6 +11,15 @@ type ScreenCaptureResult =
   | { success: true; dataUrl: string }
   | { success: false; error: string };
 
+type UpdaterStatusPayload =
+  | { type: "idle" }
+  | { type: "checking" }
+  | { type: "available"; version: string }
+  | { type: "not-available"; version: string }
+  | { type: "downloading"; percent: number }
+  | { type: "downloaded"; version: string }
+  | { type: "error"; message: string };
+
 contextBridge.exposeInMainWorld("electronAPI", {
   windowMinimize: () => ipcRenderer.invoke("window-minimize"),
   windowMaximize: () => ipcRenderer.invoke("window-maximize"),
@@ -30,6 +39,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("window-set-ignore-mouse-events", ignore, options),
   appQuit: () => ipcRenderer.invoke("app-quit"),
   appRelaunch: () => ipcRenderer.invoke("app-relaunch"),
+  updaterGetVersion: () => ipcRenderer.invoke("updater:get-version"),
+  updaterGetStatus: () => ipcRenderer.invoke("updater:get-status"),
+  updaterCheck: () => ipcRenderer.invoke("updater:check"),
+  onUpdaterStatus: (callback: (status: UpdaterStatusPayload) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, status: UpdaterStatusPayload) =>
+      callback(status);
+    ipcRenderer.on("updater:status", handler);
+    return () => ipcRenderer.removeListener("updater:status", handler);
+  },
   platform: process.platform,
   isElectron: true,
   supportsSystemAudio: true,
@@ -66,6 +84,10 @@ export interface ElectronAPI {
   ) => Promise<void>;
   appQuit: () => Promise<void>;
   appRelaunch: () => Promise<void>;
+  updaterGetVersion: () => Promise<string>;
+  updaterGetStatus: () => Promise<UpdaterStatusPayload>;
+  updaterCheck: () => Promise<void>;
+  onUpdaterStatus: (callback: (status: UpdaterStatusPayload) => void) => () => void;
   platform: string;
   isElectron: boolean;
   supportsSystemAudio: boolean;

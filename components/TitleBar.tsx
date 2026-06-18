@@ -15,6 +15,7 @@ import {
   MessageSquare,
   Sparkles,
   Rows3,
+  Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { authClient } from "@/lib/auth-client";
@@ -33,6 +34,8 @@ export default function TitleBar() {
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(true);
   const [isMaximized, setIsMaximized] = useState(false);
   const [isElectron, setIsElectron] = useState(false);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<string | null>(null);
   const { backdropOpacity, adjustBackdropOpacity } = useAppBackdrop();
   const { data: session } = authClient.useSession();
   const router = useRouter();
@@ -43,6 +46,37 @@ export default function TitleBar() {
       setIsElectron(true);
       window.electronAPI.windowIsAlwaysOnTop().then(setIsAlwaysOnTop);
       window.electronAPI.windowIsMaximized().then(setIsMaximized);
+
+      if (window.electronAPI.updaterGetVersion) {
+        void window.electronAPI.updaterGetVersion().then(setAppVersion);
+      }
+      if (window.electronAPI.onUpdaterStatus) {
+        const unsubscribe = window.electronAPI.onUpdaterStatus((status) => {
+          switch (status.type) {
+            case "checking":
+              setUpdateStatus("Checking for updates…");
+              break;
+            case "available":
+              setUpdateStatus(`Update ${status.version} available`);
+              break;
+            case "downloading":
+              setUpdateStatus(`Downloading update (${Math.round(status.percent)}%)`);
+              break;
+            case "downloaded":
+              setUpdateStatus(`Update ${status.version} ready — restart to install`);
+              break;
+            case "not-available":
+              setUpdateStatus(`Up to date (${status.version})`);
+              break;
+            case "error":
+              setUpdateStatus("Update check failed");
+              break;
+            default:
+              setUpdateStatus(null);
+          }
+        });
+        return unsubscribe;
+      }
     }
   }, []);
 
@@ -77,6 +111,12 @@ export default function TitleBar() {
     if (window.electronAPI) {
       adjustBackdropOpacity(delta);
     }
+  };
+
+  const handleCheckForUpdates = async () => {
+    if (!window.electronAPI?.updaterCheck) return;
+    setUpdateStatus("Checking for updates…");
+    await window.electronAPI.updaterCheck();
   };
 
   const handleLogout = async () => {
@@ -243,6 +283,19 @@ export default function TitleBar() {
           title={compactMode ? "Exit compact mode" : "Enter compact mode"}
         >
           <Rows3 className="h-3.5 w-3.5" />
+        </Button>
+
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 w-7 p-0 hover:bg-neutral-700/50 text-neutral-300 hover:text-neutral-200"
+          onClick={() => void handleCheckForUpdates()}
+          title={
+            updateStatus ??
+            (appVersion ? `Check for updates (v${appVersion})` : "Check for updates")
+          }
+        >
+          <Download className="h-3.5 w-3.5" />
         </Button>
 
         <Button
