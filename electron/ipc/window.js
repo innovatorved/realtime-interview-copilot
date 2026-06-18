@@ -78,4 +78,12 @@ function registerWindowIpc(getWindow) {
     electron_1.ipcMain.handle("window-is-maximized", () => {
         return getWindow()?.isMaximized() || false;
     });
+    electron_1.ipcMain.handle("window-focus", () => {
+        const w = getWindow();
+        if (!w)
+            return;
+        if (!w.isVisible())
+            w.show();
+        w.focus();
+    });
 }

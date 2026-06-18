@@ -5,15 +5,15 @@
     "": {
       "name": "realtime-worker-api",
       "dependencies": {
-        "better-auth": "latest",
-        "drizzle-orm": "latest",
-        "zod": "latest",
+        "better-auth": "^1.6.19",
+        "drizzle-orm": "^0.45.2",
+        "zod": "^4.4.3",
       },
       "devDependencies": {
-        "@cloudflare/workers-types": "latest",
-        "drizzle-kit": "latest",
-        "typescript": "latest",
-        "wrangler": "latest",
+        "@cloudflare/workers-types": "^4.20260617.1",
+        "drizzle-kit": "^0.31.10",
+        "typescript": "^6.0.3",
+        "wrangler": "^4.102.0",
       },
     },
   },
