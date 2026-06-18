@@ -79,9 +79,13 @@ jobs:
             exit 1
           fi
           echo "Inspecting $app_path"
-          codesign -d --entitlements :- "$app_path" 2>/dev/null | tee /tmp/entitlements.plist
-          grep -q "com.apple.security.device.audio-input" /tmp/entitlements.plist
+          # Unsigned beta builds (CSC_IDENTITY_AUTO_DISCOVERY=false) do not embed
+          # entitlements via codesign. Mic access is declared in Info.plist and
+          # configured in build/entitlements.mac*.plist for when signing is enabled.
           plutil -p "$app_path/Contents/Info.plist" | grep -q "NSMicrophoneUsageDescription"
+          grep -q "com.apple.security.device.audio-input" build/entitlements.mac.plist
+          grep -q "com.apple.security.device.audio-input" build/entitlements.mac.inherit.plist
+          echo "Microphone Info.plist + entitlements config verified."
 
       - name: List built artifacts
         shell: bash

@@ -1,6 +1,8 @@
 {
   "name": "realtime-interview-copilot",
   "version": "0.10.0-beta",
+  "description": "Real-time AI copilot for interviews (beta desktop app)",
+  "author": "Ved Gupta <vedgupta@protonmail.com>",
   "private": true,
   "packageManager": "bun@1.3.10",
   "scripts": {
