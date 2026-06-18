@@ -47,6 +47,33 @@ Important UI surfaces include:
 - `components/CompactCopilot.tsx` for compact overlay mode.
 - `components/InterviewPresets.tsx`, `hooks/usePresets.ts`, `hooks/useNotes.ts`, and `hooks/useExport.ts` for saved workflows.
 
+### 2.3 Compact overlay mode
+
+Compact mode (`components/CompactCopilot.tsx`, toggled from the Title bar) resizes the Electron window to a thin toolbar strip (expanding when an answer or drawer is open). Most of the window is transparent so the user can see and click through to apps behind the interview.
+
+Click-through is implemented in `hooks/useClickThrough.ts`:
+
+- The main process calls `setIgnoreMouseEvents(true, { forward: true })` so mousemove still reaches the renderer.
+- Interactive regions (`.titlebar-chrome`, `.app-toolbar`, `[data-clickable]`, form controls, buttons) disable ignore so clicks and window drag work on the chrome.
+- `pointerdown` syncs ignore state before drag so the title bar can be grabbed without a prior mousemove.
+- Entering an interactive region calls `window-focus` IPC so keyboard shortcuts work immediately after hover.
+
+Compact-only keyboard handling lives in `CompactCopilot.tsx` (Mod+Enter generate, Alt+A Ask drawer) with shared Esc / Mod+Shift+N from `components/ask/useAskKeyboard.ts`. Tab shortcuts in `TabContext.tsx` are disabled while compact mode is active so Alt+A does not also switch hidden tabs.
+
+### 2.4 Backdrop opacity
+
+The Title bar **− / +** control adjusts `backdropOpacity` in `components/AppBackdropContext.tsx` (persisted in `localStorage` on Electron). The value is published as CSS variable `--app-backdrop-opacity` on `document.documentElement`.
+
+| Surface | Full mode | Compact mode |
+|---------|-----------|--------------|
+| Full-window fill | `AppBackdrop` rgba layer follows slider | No full-window layer |
+| Title bar / toolbars | `.titlebar-chrome`, `.app-toolbar` (minimum opacity floor so chrome stays grabbable) | Same — only navbar strip dims |
+| Content cards | `.glass-card` mix scales with slider | Output area stays transparent; text uses light inline halos only |
+
+### 2.5 Auto-update
+
+`electron/updater.ts` wraps `electron-updater` for packaged builds. The Title bar download icon triggers `updaterCheck`; status events flow to the renderer via preload. Release artifacts include `latest-mac.yml` / `latest.yml` for the updater. Homebrew cask installs are expected to use `brew upgrade --cask` instead of the in-app updater.
+
 ## 3. Security model
 
 ### 3.1 Window hardening
@@ -66,8 +93,8 @@ The main process installs a strict content security policy and origin header han
 
 `electron/preload.ts` exposes only the capabilities the UI needs:
 
-- Window controls such as minimize, maximize, close, always-on-top, resize, and ignore mouse events.
-- App lifecycle actions such as quit and relaunch.
+- Window controls such as minimize, maximize, close, always-on-top, resize, ignore mouse events, and focus.
+- App lifecycle actions such as quit, relaunch, and auto-update check.
 - Screen capture helpers such as access checks, OS settings, the macOS permission prompt, screenshot capture, and capture-and-ask events.
 - Platform flags such as `platform`, `isElectron`, and `supportsSystemAudio`.
 
@@ -94,6 +121,8 @@ macOS requires separate permissions for screen capture and microphone capture.
 Screen recording uses a dedicated onboarding flow:
 
 - `components/ScreenRecordingOnboard.tsx` polls permission state.
+- In **full mode**, a modal explains the one-time setup; **Later** collapses to a bottom pill.
+- In **compact mode**, a non-blocking **Screen access** chip on the right opens System Settings so the overlay stays usable without granting permission first.
 - `screen:trigger-prompt` in `electron/ipc/screen.ts` triggers the native prompt by calling `desktopCapturer.getSources()`.
 - `screen:open-settings` opens the correct macOS settings page.
 - After permission changes, the app relaunches so the OS can apply the updated TCC state cleanly.
@@ -392,8 +421,11 @@ From the user's point of view, the whole loop is one assistant experience. Under
 - `components/QuestionAssistant.tsx`
 - `components/CompactCopilot.tsx`
 - `components/ScreenRecordingOnboard.tsx`
+- `components/AppBackdropContext.tsx`
+- `hooks/useClickThrough.ts`
 - `hooks/useAskMic.ts`
 - `hooks/useMicPushToTalk.ts`
+- `electron/updater.ts`
 - `lib/sse.ts`
 - `lib/vision-screenshot.ts`
 - `realtime-worker-api/src/index.ts`

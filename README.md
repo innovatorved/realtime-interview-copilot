@@ -38,10 +38,28 @@ Windows releases are available on the GitHub Releases page.
 
 ## Features
 
-- Live transcription of system audio
-- AI answers from text or screenshots
-- Hidden window for screen sharing
-- Keyboard shortcuts for quick actions
+- Live transcription of system audio (no virtual audio driver required on macOS)
+- AI answers from transcript, typed questions, or screenshots
+- **Compact mode** — picture-in-picture overlay with click-through; toolbar stays interactive while empty space passes clicks to apps behind
+- **Backdrop slider** — Title bar **− / +** controls window transparency (full mode dims the whole UI; compact mode dims only the title bar and toolbar strip)
+- Hidden from normal screen sharing (`contentProtection` + macOS sharing settings)
+- In-app **Check for updates** (Title bar download icon); Homebrew installs should still use `brew upgrade --cask`
+- Keyboard shortcuts (see below)
+
+### Keyboard shortcuts
+
+| Action | macOS | Windows |
+|--------|-------|---------|
+| Switch tab (full mode) | ⌥C Copilot · ⌥A Ask AI · ⌥P Presets | Alt+C / A / P |
+| Generate Copilot answer | ⌘Enter | Ctrl+Enter |
+| Summarize transcript | ⌘⇧Enter | Ctrl+Shift+Enter |
+| Toggle Ask drawer (compact) | ⌥A | Alt+A |
+| New Ask chat | ⌘⇧N | Ctrl+Shift+N |
+| Push-to-talk mic (empty input) | Space (hold) | Space (hold) |
+| Attach screenshot | ⌘⇧1 (global) | Ctrl+Shift+1 (global) |
+| Cancel mic / close drawer | Esc | Esc |
+
+On first launch, macOS may prompt for **Screen Recording** (system audio) and **Microphone** (Ask AI dictation). In compact mode, a small **Screen access** chip opens System Settings without blocking the overlay.
 
 ## Development
 
