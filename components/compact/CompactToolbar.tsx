@@ -91,6 +91,7 @@ export function CompactToolbar({
   return (
     <div
       data-clickable
+      data-window-chrome
       className="app-toolbar flex items-center gap-1.5 px-2.5 py-1.5"
     >
       <RecorderTranscriber compact />
@@ -320,10 +321,12 @@ export function CompactToolbar({
 
       {transcribedText.trim() && !hasOutput && (
         <span
-          className="text-[10px] text-neutral-500 truncate max-w-[24ch] hidden md:inline"
+          className="text-[10px] text-neutral-500 truncate max-w-[32ch] hidden sm:inline italic"
           title={transcribedText}
         >
-          {transcribedText.length} chars buffered
+          {transcribedText.replace(/\s+/g, " ").trim().length > 40
+            ? `${transcribedText.replace(/\s+/g, " ").trim().slice(0, 40)}…`
+            : transcribedText.replace(/\s+/g, " ").trim()}
         </span>
       )}
 

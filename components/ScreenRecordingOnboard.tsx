@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   RotateCcw,
 } from "lucide-react";
+import { useTab } from "@/components/TabContext";
 
 const LS_DISMISSED_KEY = "screen-onboard-dismissed-v1";
 
@@ -23,7 +24,11 @@ type Status =
   | "restricted"
   | "unknown";
 
+const COMPACT_CHIP_TOOLTIP =
+  "Screen Recording is only for system audio — open Settings to enable. Ask AI and mic still work without it.";
+
 export function ScreenRecordingOnboard() {
+  const { compactMode } = useTab();
   const [isElectron, setIsElectron] = useState(false);
   const [isMac, setIsMac] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
@@ -133,6 +138,19 @@ export function ScreenRecordingOnboard() {
           Screen Recording enabled — you&apos;re all set
         </div>
       </div>
+    );
+  }
+
+  if (needsAction && compactMode) {
+    return (
+      <CompactScreenAccessChip
+        status={status}
+        minimized={dismissedModal}
+        showRelaunchHint={showRelaunchHint}
+        onEnable={() => void handleEnable()}
+        onDismiss={dismiss}
+        onRelaunch={() => void handleRelaunch()}
+      />
     );
   }
 
@@ -291,7 +309,103 @@ export function ScreenRecordingOnboard() {
   return null;
 }
 
-function StatusDot({ status }: { status: Status }) {
+function CompactScreenAccessChip({
+  status,
+  minimized,
+  showRelaunchHint,
+  onEnable,
+  onDismiss,
+  onRelaunch,
+}: {
+  status: Status;
+  minimized: boolean;
+  showRelaunchHint: boolean;
+  onEnable: () => void;
+  onDismiss: () => void;
+  onRelaunch: () => void;
+}) {
+  const denied = status === "denied" || status === "restricted";
+  const chipTone = denied
+    ? "bg-red-500/10 border-red-400/30 text-red-200 hover:bg-red-500/15"
+    : "bg-sky-500/10 border-sky-400/30 text-sky-200 hover:bg-sky-500/15";
+
+  const tooltip = showRelaunchHint
+    ? `${COMPACT_CHIP_TOOLTIP} Already toggled on? Relaunch the app after granting access.`
+    : COMPACT_CHIP_TOOLTIP;
+
+  if (minimized) {
+    return (
+      <div className="fixed top-9 right-2 z-[85] animate-fade-in-scale">
+        <button
+          type="button"
+          data-clickable
+          onClick={onEnable}
+          title={tooltip}
+          aria-label="Open Screen Recording settings"
+          className={cn(
+            "relative flex h-7 w-7 items-center justify-center rounded-full border backdrop-blur-md shadow-lg transition-colors",
+            chipTone,
+          )}
+        >
+          <ShieldCheck className="w-3.5 h-3.5" />
+          <StatusDot
+            status={status}
+            className="absolute -top-0.5 -right-0.5 ring-2 ring-[color:var(--app-surface)]"
+          />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      data-clickable
+      className="fixed top-9 right-2 z-[85] flex max-w-[min(100vw-1rem,20rem)] items-center gap-0.5 animate-fade-in-scale"
+    >
+      <button
+        type="button"
+        onClick={onEnable}
+        title={tooltip}
+        className={cn(
+          "flex min-w-0 items-center gap-1.5 rounded-full border py-1 pl-2 pr-2.5 text-[10px] font-medium backdrop-blur-md shadow-lg transition-colors",
+          chipTone,
+        )}
+      >
+        <StatusDot status={status} />
+        <ShieldCheck className="w-3 h-3 shrink-0" />
+        <span className="truncate">Screen access</span>
+      </button>
+      {showRelaunchHint && (
+        <button
+          type="button"
+          onClick={onRelaunch}
+          title="Relaunch app to pick up Screen Recording permission"
+          aria-label="Relaunch app"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-sky-400/30 bg-sky-500/10 text-sky-200 backdrop-blur-md shadow-lg transition-colors hover:bg-sky-500/15"
+        >
+          <RotateCcw className="w-3 h-3" />
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="Hide screen access reminder"
+        title="Hide reminder"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[color:var(--app-border)] bg-[color:color-mix(in_oklch,var(--app-surface-elev)_80%,transparent)] text-[color:var(--app-muted)] backdrop-blur-md shadow-lg transition-colors hover:text-[color:var(--app-text)] hover:bg-white/[0.05]"
+      >
+        <X className="w-3 h-3" />
+      </button>
+    </div>
+  );
+}
+
+function StatusDot({
+  status,
+  className,
+}: {
+  status: Status;
+  className?: string;
+}) {
   const color =
     status === "granted"
       ? "bg-emerald-500"
@@ -300,7 +414,7 @@ function StatusDot({ status }: { status: Status }) {
         : "bg-sky-500";
   return (
     <span
-      className={cn("inline-block w-1.5 h-1.5 rounded-full", color)}
+      className={cn("inline-block w-1.5 h-1.5 rounded-full shrink-0", color, className)}
       aria-hidden
     />
   );

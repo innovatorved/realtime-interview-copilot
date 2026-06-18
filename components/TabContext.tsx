@@ -52,6 +52,11 @@ export function TabProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // CompactCopilot owns its own shortcuts (Alt+A drawer, Mod+Enter, etc.).
+      // Tab switcher is hidden there — letting these through would mutate
+      // activeTab with no visible effect until the user exits compact.
+      if (compactMode) return;
+
       if (e.altKey && e.code === "KeyC") {
         e.preventDefault();
         setActiveTab("copilot");
@@ -68,7 +73,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [compactMode]);
 
   return (
     <TabContext.Provider

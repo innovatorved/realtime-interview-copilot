@@ -24,7 +24,7 @@ import { sendGTMEvent } from "@next/third-parties/google";
 
 import { useTab } from "@/components/TabContext";
 import { useAppBackdrop } from "@/components/AppBackdropContext";
-import { Kbd } from "@/components/ui/Kbd";
+import { formatShortcut, Kbd } from "@/components/ui/Kbd";
 import {
   sessionDisplayName,
   sessionUserTitle,
@@ -145,6 +145,7 @@ export default function TitleBar() {
   return (
     <div
       data-clickable
+      data-window-chrome
       className="fixed top-0 left-0 right-0 h-8 titlebar-chrome z-50 flex items-center justify-between px-3
                     select-none"
       style={
@@ -193,7 +194,7 @@ export default function TitleBar() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  title={`${tab.label} (Alt+${tab.shortcutKey})`}
+                  title={`${tab.label} (${formatShortcut(["Alt", tab.shortcutKey])})`}
                   className={cn(
                     "flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-medium transition-all duration-200",
                     activeTab === tab.id
@@ -246,7 +247,12 @@ export default function TitleBar() {
           </div>
         )}
 
-        <div className="flex items-center space-x-1 mr-2 rounded px-2 py-1 border border-[color:var(--app-border)] bg-[color:color-mix(in_oklch,var(--app-surface-elev)_88%,transparent)] backdrop-blur-sm">
+        <div
+          className="flex items-center space-x-1 mr-2 rounded px-2 py-1 border border-[color:var(--app-border)] backdrop-blur-sm"
+          style={{
+            backgroundColor: `rgba(9, 9, 11, ${backdropOpacity * 0.55})`,
+          }}
+        >
           <Button
             size="sm"
             variant="ghost"

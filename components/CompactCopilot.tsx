@@ -3,6 +3,7 @@
 import posthog from "posthog-js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAskScreenshotBridge } from "@/components/ask/useAskScreenshotBridge";
+import { useAskKeyboard } from "@/components/ask/useAskKeyboard";
 import { useTranscription } from "@/components/TranscriptionContext";
 import { useAskChat } from "@/hooks/useAskChat";
 import { useAskMic } from "@/hooks/useAskMic";
@@ -268,15 +269,48 @@ export function CompactCopilot({
     disabled: isLoading,
   });
 
-  // Global keyboard handlers for the compact surface.
-  //   - Mod+Shift+N      → reset Ask AI chat
-  //   - Mod+Enter        → trigger Copilot (Ask) generation
-  //   - Mod+Shift+Enter  → trigger Summarizer generation
-  //   - Alt+A            → toggle the Ask AI input drawer (the toolbar
-  //                        already advertises this in its tooltip and Kbd;
-  //                        without a binding the hint was misleading)
-  //   - Esc              → cancel mic > abort chat stream > abort transcript
-  //                        completion (priority order)
+  const toggleAskDrawer = useCallback(() => {
+    if (askMode) {
+      clearAttachedImages();
+      setAskMode(false);
+    } else {
+      setAskMode(true);
+      setTimeout(() => askInputRef.current?.focus(), 50);
+    }
+  }, [askMode, clearAttachedImages]);
+
+  useAskKeyboard({
+    enabled: true,
+    isMicActive: askMic.isActive,
+    isChatStreaming: chat.isStreaming,
+    onMicCancel: () => ptt.cancel(),
+    onChatAbort: () => chat.abort(),
+    onNewChat: () => {
+      chat.reset();
+      setAskInput("");
+      clearAttachedImages();
+      setOutputMode("chat");
+      setAskMode(true);
+    },
+    onEscapeFallback: () => {
+      if (isLoading && generateControllerRef.current) {
+        abortGeneration();
+        return true;
+      }
+      const target = document.activeElement as HTMLElement | null;
+      const tag = target?.tagName ?? "";
+      const isTypingInInput =
+        tag === "INPUT" || tag === "TEXTAREA" || !!target?.isContentEditable;
+      if (askMode && !isTypingInInput) {
+        setAskMode(false);
+        return true;
+      }
+      return false;
+    },
+  });
+
+  // Compact-only shortcuts: Mod+Enter / Mod+Shift+Enter (Copilot/Summarize)
+  // and Alt+A (toggle Ask drawer). Mod+Shift+N and Esc live in useAskKeyboard.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const modKey = e.ctrlKey || e.metaKey;
@@ -285,30 +319,13 @@ export function CompactCopilot({
       const isTypingInInput =
         tag === "INPUT" || tag === "TEXTAREA" || !!target?.isContentEditable;
 
-      if (modKey && e.shiftKey && e.key.toLowerCase() === "n") {
-        e.preventDefault();
-        dbg("ask-ui", "Mod+Shift+N → reset Ask AI chat (compact)");
-        chat.reset();
-        setAskInput("");
-        clearAttachedImages();
-        setOutputMode("chat");
-        setAskMode(true);
-        return;
-      }
-
-      // Mod+Enter (Ask) and Mod+Shift+Enter (Summarize). Only fire when
-      // there's transcribed text — the buttons are disabled in the same
-      // condition so keyboard parity is intentional. Guard against
-      // double-firing while a generation is already in flight for the
-      // OTHER flag — matches the button's disabled-state logic.
       if (modKey && (e.key === "Enter" || e.key === "Return")) {
+        // Let the Ask drawer handle Enter / Mod+Enter for chat submit.
+        if (isTypingInInput) return;
         if (!transcribedText.trim()) return;
         const wantSummarize = e.shiftKey;
         const wantFlag = wantSummarize ? FLAGS.SUMMARIZER : FLAGS.COPILOT;
         if (isLoading) {
-          // If the SAME flag is streaming, toggle stop. Otherwise ignore
-          // — preserves the button's "disabled when other flag is live"
-          // behaviour.
           if (activeFlag === wantFlag) {
             e.preventDefault();
             dbg("ask-ui", "Mod+Enter while streaming → stop");
@@ -327,43 +344,10 @@ export function CompactCopilot({
         return;
       }
 
-      // Alt+A — toggle the Ask AI input drawer. Safe inside inputs
-      // because Alt is a modifier; ordinary typing never collides.
-      if (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "a") {
+      if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === "KeyA") {
         e.preventDefault();
         dbg("ask-ui", "Alt+A → toggle Ask AI drawer");
-        if (askMode) {
-          clearAttachedImages();
-          setAskMode(false);
-        } else {
-          setAskMode(true);
-          // Defer focus so the input is in the DOM before we focus it.
-          setTimeout(() => askInputRef.current?.focus(), 50);
-        }
-        return;
-      }
-
-      if (e.key !== "Escape") return;
-      // Esc while typing should NOT bubble to the global abort path if
-      // the focused input still has content the user might want to keep
-      // — but the existing semantics drop typing context, so we keep
-      // parity with the prior implementation and only short-circuit on
-      // active recording / streaming.
-      if (askMic.isActive) {
-        e.preventDefault();
-        dbg("ask-ui", "Esc → cancel active mic recording (compact)");
-        ptt.cancel();
-      } else if (chat.isStreaming) {
-        e.preventDefault();
-        dbg("ask-ui", "Esc → abort in-flight chat stream (compact)");
-        chat.abort();
-      } else if (isLoading && generateControllerRef.current) {
-        e.preventDefault();
-        abortGeneration();
-      } else if (askMode && !isTypingInInput) {
-        // Esc with the drawer open but nothing in flight → close drawer.
-        e.preventDefault();
-        setAskMode(false);
+        toggleAskDrawer();
       }
     };
     window.addEventListener("keydown", handler);
@@ -371,17 +355,9 @@ export function CompactCopilot({
   }, [
     abortGeneration,
     activeFlag,
-    askMic.isActive,
-    askMode,
-    chat.abort,
-    chat.isStreaming,
-    chat.reset,
-    clearAttachedImages,
     generate,
-    generateControllerRef,
     isLoading,
-    ptt,
-    setOutputMode,
+    toggleAskDrawer,
     transcribedText,
   ]);
 
@@ -453,14 +429,7 @@ export function CompactCopilot({
         onGenerate={(f) => void generate(f)}
         onStop={stop}
         onCaptureScreen={() => void handleCaptureScreen()}
-        onToggleAskMode={() => {
-          if (askMode) {
-            clearAttachedImages();
-            setAskMode(false);
-            return;
-          }
-          setAskMode(true);
-        }}
+        onToggleAskMode={toggleAskDrawer}
         onToggleContext={() => setShowContext((s) => !s)}
         onToggleOutputCollapsed={() => setOutputCollapsed((c) => !c)}
         onSave={handleSave}

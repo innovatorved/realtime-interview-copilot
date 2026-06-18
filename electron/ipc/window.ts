@@ -87,4 +87,11 @@ export function registerWindowIpc(getWindow: WindowAccessor): void {
   ipcMain.handle("window-is-maximized", () => {
     return getWindow()?.isMaximized() || false;
   });
+
+  ipcMain.handle("window-focus", () => {
+    const w = getWindow();
+    if (!w) return;
+    if (!w.isVisible()) w.show();
+    w.focus();
+  });
 }

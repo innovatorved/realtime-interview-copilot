@@ -139,8 +139,10 @@ function ChatBubble({
               ? "px-2.5 py-1.5 text-xs"
               : "px-3.5 py-2.5 text-sm",
             isUser
-              ? "bg-emerald-500/10 border border-emerald-500/20 text-neutral-100"
-              : "bg-white/[0.04] border border-white/[0.06] text-neutral-200",
+              ? "bg-emerald-500/10 border border-emerald-500/15 text-neutral-100"
+              : density === "compact"
+                ? "bg-black/20 border border-white/[0.06] text-neutral-100 backdrop-blur-[2px]"
+                : "bg-white/[0.04] border border-white/[0.06] text-neutral-200",
           )}
         >
           {isUser ? (

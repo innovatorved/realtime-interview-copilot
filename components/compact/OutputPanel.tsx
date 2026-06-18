@@ -40,6 +40,13 @@ interface OutputPanelProps {
   chatUserLabel?: string;
 }
 
+const compactTextShadow =
+  "[text-shadow:0_1px_3px_rgba(0,0,0,0.85),0_0_8px_rgba(0,0,0,0.4)]";
+
+/** Very subtle inline halo — only behind text blocks, not the whole panel. */
+const compactTextSurface =
+  "rounded-md px-2 py-1 bg-black/20 backdrop-blur-[2px]";
+
 export function OutputPanel({
   outputMode,
   chatMessages,
@@ -52,13 +59,8 @@ export function OutputPanel({
   chatUserLabel,
 }: OutputPanelProps) {
   return (
-    <div
-      className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-4 py-3 text-white [text-shadow:0_1px_2px_color-mix(in_oklch,var(--app-shadow)_70%,transparent)]"
-    >
+    <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-3 py-2">
       {outputMode === "chat" ? (
-        // Multi-turn Ask AI thread. Errors from the chat hook are shown
-        // INSIDE the thread area (rather than replacing it) so the
-        // user can still see their previous answers and just retry.
         <div data-clickable className="flex flex-col gap-2">
           {(chatError || error) && (
             <div
@@ -88,7 +90,9 @@ export function OutputPanel({
               userLabel={chatUserLabel}
             />
           ) : chatIsStreaming ? (
-            <div className="flex items-center gap-2 text-xs text-white">
+            <div
+              className={`inline-flex items-center gap-2 text-xs text-[color:var(--app-text)] ${compactTextSurface} ${compactTextShadow}`}
+            >
               <span className="relative flex h-2 w-2" aria-hidden>
                 <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400/35" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/25" />
@@ -119,14 +123,14 @@ export function OutputPanel({
       ) : completion ? (
         <div
           data-clickable
-          className="prose prose-invert prose-xs max-w-none text-white text-xs leading-relaxed font-medium"
+          className={`prose prose-invert prose-xs max-w-none text-[color:var(--app-text)] text-xs leading-relaxed font-medium ${compactTextSurface} ${compactTextShadow}`}
         >
           <SafeMarkdown>{completion}</SafeMarkdown>
         </div>
       ) : (
         <div
           data-clickable
-          className="flex items-center gap-2 text-xs text-white"
+          className={`inline-flex items-center gap-2 text-xs text-[color:var(--app-text)] ${compactTextSurface} ${compactTextShadow}`}
         >
           <span className="relative flex h-2 w-2" aria-hidden>
             <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400/35" />

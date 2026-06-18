@@ -18,6 +18,7 @@ html {
   --app-ring: oklch(0.62 0.14 155 / 0.5);
   --app-text: oklch(0.97 0 0);
   --app-shadow: oklch(0 0 0 / 0.55);
+  --app-backdrop-opacity: 1;
 }
 
 /* Full-window web shell: neutral dark only */
@@ -38,7 +39,12 @@ html {
 
 /* Sticky headers and compact toolbars: one surface language */
 .app-toolbar {
-  background-color: color-mix(in oklch, var(--app-surface-elev) 94%, transparent);
+  background-color: rgba(
+    9,
+    9,
+    11,
+    clamp(0.72, calc(var(--app-backdrop-opacity, 1) * 0.85), 0.92)
+  );
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--app-border);
@@ -130,7 +136,12 @@ html {
 
 @layer components {
   .titlebar-chrome {
-    background-color: color-mix(in oklch, var(--app-surface) 94%, transparent);
+    background-color: rgba(
+      9,
+      9,
+      11,
+      clamp(0.72, calc(var(--app-backdrop-opacity, 1) * 0.85), 0.92)
+    );
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--app-border);
@@ -138,7 +149,11 @@ html {
   }
 
   .glass {
-    background-color: color-mix(in oklch, var(--app-surface-elev) 86%, transparent);
+    background-color: color-mix(
+      in oklch,
+      var(--app-surface-elev) calc(var(--app-backdrop-opacity, 1) * 86%),
+      transparent
+    );
     -webkit-backdrop-filter: blur(12px);
     backdrop-filter: blur(12px);
     border: 1px solid var(--app-border);
@@ -149,7 +164,11 @@ html {
 
   .glass-card {
     border-radius: 1rem;
-    background-color: color-mix(in oklch, var(--app-surface-elev) 88%, transparent);
+    background-color: color-mix(
+      in oklch,
+      var(--app-surface-elev) calc(var(--app-backdrop-opacity, 1) * 88%),
+      transparent
+    );
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);
     border: 1px solid var(--app-border);
@@ -163,7 +182,11 @@ html {
 
   .glass-card-hover {
     border-radius: 1rem;
-    background-color: color-mix(in oklch, var(--app-surface-elev) 88%, transparent);
+    background-color: color-mix(
+      in oklch,
+      var(--app-surface-elev) calc(var(--app-backdrop-opacity, 1) * 88%),
+      transparent
+    );
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);
     border: 1px solid var(--app-border);
@@ -177,7 +200,11 @@ html {
 
   .glass-card-hover:hover {
     border-color: color-mix(in oklch, oklch(0.5 0 0) 42%, var(--app-border));
-    background-color: color-mix(in oklch, var(--app-surface-elev) 93%, transparent);
+    background-color: color-mix(
+      in oklch,
+      var(--app-surface-elev) calc(var(--app-backdrop-opacity, 1) * 93%),
+      transparent
+    );
     box-shadow:
       0 25px 35px -5px color-mix(in oklch, var(--app-shadow) 65%, transparent),
       0 12px 14px -8px color-mix(in oklch, var(--app-shadow) 45%, transparent);
@@ -185,7 +212,11 @@ html {
 
   .glass-panel {
     border-radius: 0.75rem;
-    background-color: color-mix(in oklch, var(--app-surface) 82%, transparent);
+    background-color: color-mix(
+      in oklch,
+      var(--app-surface) calc(var(--app-backdrop-opacity, 1) * 82%),
+      transparent
+    );
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
     border: 1px solid var(--app-border);

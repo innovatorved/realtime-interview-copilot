@@ -58,6 +58,20 @@ export function AppBackdropProvider({
     }
   }, []);
 
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+    if (isElectron) {
+      document.documentElement.style.setProperty(
+        "--app-backdrop-opacity",
+        String(backdropOpacity),
+      );
+    } else {
+      document.documentElement.style.removeProperty("--app-backdrop-opacity");
+    }
+  }, [backdropOpacity, isElectron]);
+
   const persistIfElectron = useCallback((next: number) => {
     if (typeof window !== "undefined" && window.electronAPI) {
       window.localStorage.setItem(STORAGE_KEY, String(next));
@@ -106,24 +120,29 @@ export function AppBackdropProvider({
  *
  * Lives as a sibling of the routed content (not inside the provider) so
  * that a parent can pass in a `clipToNavbar` flag for compact mode. In
- * compact mode we limit the backdrop to a thin strip behind the toolbar
- * — everything below that becomes truly transparent so the answer text
- * floats over the desktop with no dark sheet visible at all.
+ * In compact mode the navbar strip is dimmed only via `titlebar-chrome` and
+ * `app-toolbar` (both tied to `--app-backdrop-opacity`). The output area
+ * below stays fully transparent — no separate backdrop layer.
  */
 export function AppBackdrop({
   clipToNavbar = false,
-  navbarHeightPx = 64,
+  navbarHeightPx: _navbarHeightPx = 64,
 }: {
   clipToNavbar?: boolean;
   navbarHeightPx?: number;
 }) {
   const { backdropOpacity } = useAppBackdrop();
+
+  if (clipToNavbar) {
+    return null;
+  }
+
   return (
     <div
       aria-hidden
       className="fixed left-0 right-0 top-0 -z-10 pointer-events-none transition-[background-color,height] duration-200 ease-out"
       style={{
-        height: clipToNavbar ? `${navbarHeightPx}px` : "100%",
+        height: "100%",
         backgroundColor: `rgba(9, 9, 11, ${backdropOpacity})`,
       }}
     />

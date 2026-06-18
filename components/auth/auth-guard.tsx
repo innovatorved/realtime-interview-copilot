@@ -28,13 +28,47 @@ const TOKEN = {
   err: "#f87171",
 } as const;
 
+function AuthLoadingShell() {
+  return (
+    <div
+      className="flex items-center justify-center min-h-screen px-4"
+      style={{ backgroundColor: TOKEN.pageBg }}
+    >
+      <div
+        className="flex items-center gap-2.5 px-4 py-2.5 rounded-lg"
+        style={{
+          backgroundColor: TOKEN.cardBg,
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          border: `1px solid ${TOKEN.cardBorder}`,
+          color: TOKEN.charcoal,
+          fontSize: 14,
+          fontWeight: 500,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+        }}
+      >
+        <Loader2
+          className="h-4 w-4 animate-spin"
+          style={{ color: TOKEN.accent }}
+        />
+        Loading workspace…
+      </div>
+    </div>
+  );
+}
+
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { data: session, isPending, error } = authClient.useSession();
+  const [mounted, setMounted] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
   // Mark the router as used so stricter lint rules don't drop it; we keep it
   // for future redirects triggered from this component.
   void router;
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (isPending) return;
@@ -56,34 +90,11 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  if (isPending) {
-    return (
-      <div
-        className="flex items-center justify-center min-h-screen px-4"
-        style={{ backgroundColor: TOKEN.pageBg }}
-      >
-        <div
-          className="flex items-center gap-2.5 px-4 py-2.5 rounded-lg"
-          style={{
-            backgroundColor: TOKEN.cardBg,
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
-            border: `1px solid ${TOKEN.cardBorder}`,
-            color: TOKEN.charcoal,
-            fontSize: 14,
-            fontWeight: 500,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
-          }}
-        >
-          <Loader2
-            className="h-4 w-4 animate-spin"
-            style={{ color: TOKEN.accent }}
-          />
-          Loading workspace…
-        </div>
-      </div>
-    );
+  if (!mounted || isPending) {
+    return <AuthLoadingShell />;
   }
+
+  const loggedIn = authenticated || Boolean(session);
 
   if (error) {
     const msg = error instanceof Error ? error.message : String(error);
@@ -194,7 +205,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!authenticated) {
+  if (!loggedIn) {
     return <AuthWizard onSuccess={() => setAuthenticated(true)} />;
   }
 

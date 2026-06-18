@@ -166,10 +166,9 @@ export default function MainPage() {
           : "app-page-bg",
       )}
     >
-      {/* Window backdrop. In compact mode it is clipped to the navbar
-          height so the area where the answer renders below is truly
-          transparent (no dark sheet showing through). 80px = title bar
-          (32px) + pt-10 gap + toolbar height. */}
+      {/* Window backdrop. In compact mode navbar dimming comes from
+          titlebar-chrome + app-toolbar only (no full-window sheet).
+          pt-8 matches the 32px TitleBar so there is no click-through gap. */}
       <AppBackdrop clipToNavbar={compactMode} navbarHeightPx={80} />
 
       {!isElectron && !compactMode && (
@@ -305,7 +304,7 @@ export default function MainPage() {
         </div>
       )}
       <main className="flex-1 overflow-hidden min-h-0">
-        <div className={cn("h-full min-h-0", isElectron ? "pt-10" : "")}>
+        <div className={cn("h-full min-h-0", isElectron ? "pt-8" : "")}>
           {compactMode ? (
             <CompactCopilot
               addInSavedData={({ data, tag }) => handleSaveNote(data, tag)}

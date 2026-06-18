@@ -64,7 +64,10 @@ export function useAskKeyboard({
         onChatAbort();
         return;
       }
-      onEscapeFallback?.();
+      const handled = onEscapeFallback?.();
+      if (handled) {
+        e.preventDefault();
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
