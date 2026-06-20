@@ -5,6 +5,7 @@ export const SSE_BUFFER_MAX = 256 * 1024;
 export enum FLAGS {
   COPILOT = "copilot",
   SUMMARIZER = "summarizer",
+  ASK_AI = "ask-ai",
 }
 
 /** Hard cap on attached images per /api/completion call. Keeps per-request
@@ -45,7 +46,7 @@ export interface CompletionRequestBody {
    *  the final element MUST be a `user` message — it represents the
    *  question being submitted now — and `prompt` / `image` are ignored.
    *  Older entries provide context the model gets to see. Only meaningful
-   *  for the COPILOT flag (Ask AI chat); other flags continue to use the
+   *  for the COPILOT and ASK_AI flags; other flags continue to use the
    *  single-turn `prompt` path. */
   messages?: ChatMessageBody[];
 }

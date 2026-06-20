@@ -12,6 +12,7 @@ import { Camera, ImageIcon, Mic, Plus, Send, X } from "lucide-react";
 import posthog from "posthog-js";
 import type { RefObject } from "react";
 import { AskListeningBanner } from "@/components/ask/AskListeningBanner";
+import { useInterviewContext } from "@/hooks/useInterviewContext";
 import type { useAskChat } from "@/hooks/useAskChat";
 import type { useAskMic } from "@/hooks/useAskMic";
 import type { useMicPushToTalk } from "@/hooks/useMicPushToTalk";
@@ -20,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { formatShortcut, Kbd } from "@/components/ui/Kbd";
 import { LevelMeter } from "@/components/ui/LevelMeter";
 import { cn } from "@/lib/utils";
+import { hasAttachedContext } from "@/lib/prompt-context";
 import { VISION_FALLBACK_PROMPT } from "@/lib/vision-screenshot";
 import type { CompactOutputMode } from "./OutputPanel";
 
@@ -62,6 +64,10 @@ export function AskDrawer({
   setOutputMode,
   setOutputCollapsed,
 }: AskDrawerProps) {
+  const { resumeText, jobDescription, interviewNotes } = useInterviewContext();
+  const contextAttached = hasAttachedContext({ resumeText, jobDescription });
+  const hasNotes = !!interviewNotes.trim();
+
   return (
     <div data-clickable className="app-toolbar flex flex-col gap-2 px-3 py-2">
       {/* Chat header row — turn counter + New chat. Only visible once
@@ -95,6 +101,23 @@ export function AskDrawer({
           </button>
         </div>
       )}
+      <div className="flex flex-wrap items-center gap-1">
+        {resumeText?.trim() && (
+          <span className="text-[9px] text-sky-300/90 bg-sky-500/[0.08] px-1.5 py-0.5 rounded-full border border-sky-500/15">
+            Resume
+          </span>
+        )}
+        {jobDescription.trim() && (
+          <span className="text-[9px] text-violet-300/90 bg-violet-500/[0.08] px-1.5 py-0.5 rounded-full border border-violet-500/15">
+            JD
+          </span>
+        )}
+        {!contextAttached && !hasNotes && (
+          <span className="text-[9px] text-neutral-500">
+            Add context in Copilot tab
+          </span>
+        )}
+      </div>
       {/* Live "listening" banner: removes the "is the mic even on?"
           ambiguity that the previous toggle UX had — without this,
           a silently denied mic permission looked identical to the

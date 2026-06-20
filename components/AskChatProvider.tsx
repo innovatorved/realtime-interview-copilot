@@ -4,16 +4,23 @@
  * Single Ask AI conversation shared by the full Ask tab and compact drawer.
  */
 
-import { createContext, useContext, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  type ReactNode,
+} from "react";
+import { useInterviewContext } from "@/hooks/useInterviewContext";
 import { useAskChat, type UseAskChatHandle } from "@/hooks/useAskChat";
 import {
   APP_SESSION_KEYS,
   migrateLegacySessionKeys,
 } from "@/lib/app-session-storage";
-import { useEffect } from "react";
+import { buildContextBlock } from "@/lib/prompt-context";
 
 const ASK_AI_BACKGROUND =
-  "You are a professional interview coach. Provide detailed, comprehensive, interview-ready answers. When the user follows up with a clarifying question, treat it as a continuation of the same conversation and reference your earlier answers when relevant.";
+  "Optional interview-prep context below (talking points, role focus). Use it when relevant to the user's question.";
 
 const AskChatContext = createContext<UseAskChatHandle | null>(null);
 
@@ -22,9 +29,23 @@ export function AskChatProvider({ children }: { children: ReactNode }) {
     migrateLegacySessionKeys();
   }, []);
 
+  const { interviewNotes, resumeText, jobDescription } = useInterviewContext();
+
+  const background = useMemo(
+    () =>
+      buildContextBlock({
+        existingBg: [ASK_AI_BACKGROUND, interviewNotes.trim()]
+          .filter(Boolean)
+          .join("\n\n"),
+        resumeText,
+        jobDescription,
+      }),
+    [interviewNotes, resumeText, jobDescription],
+  );
+
   const chat = useAskChat({
     storageKey: APP_SESSION_KEYS.askChat,
-    background: ASK_AI_BACKGROUND,
+    background,
     sendCap: 16,
   });
 

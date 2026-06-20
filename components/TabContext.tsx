@@ -8,7 +8,7 @@ import {
   ReactNode,
 } from "react";
 
-export type TabType = "copilot" | "ask-ai";
+export type TabType = "copilot" | "ask-ai" | "notes";
 
 const COMPACT_MODE_STORAGE_KEY = "interview-copilot-compact-mode";
 
@@ -61,6 +61,10 @@ export function TabProvider({ children }: { children: ReactNode }) {
       if (e.altKey && e.code === "KeyA") {
         e.preventDefault();
         setActiveTab("ask-ai");
+      }
+      if (e.altKey && e.code === "KeyN") {
+        e.preventDefault();
+        setActiveTab("notes");
       }
     };
 

@@ -10,22 +10,15 @@ import { useCaptureAndAsk } from "@/hooks/useCaptureAndAsk";
 import { useClickThrough } from "@/hooks/useClickThrough";
 import { useCompactWindowSize } from "@/hooks/useCompactWindowSize";
 import { useNotes } from "@/hooks/useNotes";
-import { useNotesSidebar } from "@/hooks/useNotesSidebar";
 import { useExport } from "@/hooks/useExport";
 import { cn } from "@/lib/utils";
+import { WORKSPACE_TABS } from "@/lib/workspace-tabs";
 import { authClient } from "@/lib/auth-client";
 import { sessionDisplayName, sessionUserTitle } from "@/lib/session-display";
 import { useEffect, useState, useCallback, useLayoutEffect } from "react";
 import { useTab } from "@/components/TabContext";
 import { useInterviewContext } from "@/hooks/useInterviewContext";
-import {
-  BookOpen,
-  ChevronDown,
-  LogOut,
-  MessageSquare,
-  Mic,
-  Minimize2,
-} from "lucide-react";
+import { LogOut, Mic, Minimize2 } from "lucide-react";
 import { formatShortcut, Kbd } from "@/components/ui/Kbd";
 import { sendGTMEvent } from "@next/third-parties/google";
 
@@ -34,11 +27,6 @@ export default function MainPage() {
   const { saveContext } = useInterviewContext();
   const { data: session } = authClient.useSession();
   const [isElectron, setIsElectron] = useState(false);
-  const {
-    open: notesSidebarOpen,
-    setOpenPersisted: setNotesSidebarPersisted,
-    toggle: toggleNotesSidebar,
-  } = useNotesSidebar();
   // True whenever the compact surface has an answer/error/loading panel to
   // show. Drives a window-size grow so the panel is actually visible.
   const [compactHasOutput, setCompactHasOutput] = useState(false);
@@ -136,22 +124,7 @@ export default function MainPage() {
     }
   }, []);
 
-  const tabs = [
-    {
-      id: "copilot" as const,
-      label: "Copilot",
-      icon: Mic,
-      description: "Live transcript and model answers",
-      shortcutKey: "C",
-    },
-    {
-      id: "ask-ai" as const,
-      label: "Ask AI",
-      icon: MessageSquare,
-      description: "Chat with context and screenshots",
-      shortcutKey: "A",
-    },
-  ];
+  const tabs = WORKSPACE_TABS;
 
   return (
     <div
@@ -295,7 +268,10 @@ export default function MainPage() {
         <div className={cn("h-full min-h-0", isElectron ? "pt-8" : "")}>
           {/* Full layout stays mounted so Copilot / Ask AI state survives compact toggles. */}
           <div
-            className={cn("h-full min-h-0 flex flex-col", compactMode && "hidden")}
+            className={cn(
+              "h-full min-h-0 flex flex-col",
+              compactMode && "hidden",
+            )}
             aria-hidden={compactMode}
           >
             <>
@@ -306,95 +282,14 @@ export default function MainPage() {
                 className={cn(
                   "h-full min-h-0 transition-opacity duration-200",
                   activeTab === "copilot"
-                    ? "flex flex-col md:flex-row gap-0 md:gap-0 opacity-100"
+                    ? "flex flex-col opacity-100"
                     : "hidden opacity-0",
                 )}
               >
-                <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
-                  <Copilot
-                    addInSavedData={({ data, tag }) =>
-                      handleSaveNote(data, tag)
-                    }
-                    isActive={activeTab === "copilot" && !compactMode}
-                  />
-                </div>
-
-                <div className="flex flex-col shrink-0 md:h-full md:min-h-0">
-                  <button
-                    type="button"
-                    className="md:hidden flex items-center justify-between gap-2 w-full px-3 py-2.5 border-t border-white/[0.08] bg-neutral-900/55 text-left text-xs text-neutral-300 hover:bg-neutral-900/80 transition-colors"
-                    onClick={toggleNotesSidebar}
-                    aria-expanded={notesSidebarOpen}
-                  >
-                    <span className="flex items-center gap-2 font-medium min-w-0">
-                      <BookOpen className="w-4 h-4 shrink-0 text-emerald-500/80" />
-                      <span className="truncate">Saved notes</span>
-                      {pagination.total > 0 && (
-                        <span className="text-[10px] text-neutral-500 tabular-nums shrink-0">
-                          ({pagination.total})
-                        </span>
-                      )}
-                    </span>
-                    <ChevronDown
-                      className={cn(
-                        "w-4 h-4 shrink-0 text-neutral-500 transition-transform duration-200",
-                        notesSidebarOpen && "rotate-180",
-                      )}
-                    />
-                  </button>
-
-                  <aside
-                    className={cn(
-                      "flex flex-col min-h-0 border-[color:var(--app-border)] bg-[color:color-mix(in_oklch,var(--app-surface)_55%,transparent)] backdrop-blur-md",
-                      "md:border-l md:border-t-0",
-                      notesSidebarOpen
-                        ? "flex w-full max-h-[42vh] min-h-[160px] md:min-h-0 md:max-h-none md:h-full md:w-[300px] lg:w-[320px] border-t md:border-t-0 overflow-hidden"
-                        : "hidden md:flex md:w-11 md:shrink-0 md:h-full overflow-hidden",
-                    )}
-                  >
-                    {!notesSidebarOpen ? (
-                      <button
-                        type="button"
-                        className="hidden md:flex flex-1 flex-col items-center gap-3 pt-5 px-1 w-full min-h-0 bg-transparent hover:bg-white/[0.04] text-neutral-400 hover:text-neutral-200 transition-colors"
-                        onClick={() => setNotesSidebarPersisted(true)}
-                        aria-label="Open saved notes"
-                      >
-                        <BookOpen className="w-4 h-4 text-emerald-500/80 shrink-0" />
-                        <span
-                          className="text-[10px] font-semibold uppercase tracking-widest text-neutral-500"
-                          style={{
-                            writingMode: "vertical-rl",
-                            transform: "rotate(180deg)",
-                          }}
-                        >
-                          Notes
-                        </span>
-                        {pagination.total > 0 && (
-                          <span className="text-[9px] font-medium tabular-nums bg-emerald-500/15 text-emerald-400/90 px-1.5 py-0.5 rounded-full border border-emerald-500/25">
-                            {pagination.total}
-                          </span>
-                        )}
-                      </button>
-                    ) : (
-                      <div className="flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden">
-                        <History
-                          variant="sidebar"
-                          notes={notes}
-                          pagination={pagination}
-                          isLoading={notesLoading}
-                          onPageChange={(page) => fetchNotes(page)}
-                          onSearch={(q, tag) => fetchNotes(1, q, tag)}
-                          onDelete={deleteNote}
-                          onExport={exportNotes}
-                          isExporting={isExporting}
-                          onCollapseSidebar={() =>
-                            setNotesSidebarPersisted(false)
-                          }
-                        />
-                      </div>
-                    )}
-                  </aside>
-                </div>
+                <Copilot
+                  addInSavedData={({ data, tag }) => handleSaveNote(data, tag)}
+                  isActive={activeTab === "copilot" && !compactMode}
+                />
               </div>
 
               <div
@@ -408,13 +303,44 @@ export default function MainPage() {
                     : "hidden opacity-0",
                 )}
               >
-                <QuestionAssistant isActive={activeTab === "ask-ai" && !compactMode} />
+                <QuestionAssistant
+                  isActive={activeTab === "ask-ai" && !compactMode}
+                />
+              </div>
+
+              <div
+                id="panel-notes"
+                role="tabpanel"
+                aria-labelledby="tab-notes"
+                className={cn(
+                  "h-full min-h-0 transition-opacity duration-200 overflow-hidden",
+                  activeTab === "notes"
+                    ? "flex flex-col opacity-100"
+                    : "hidden opacity-0",
+                )}
+              >
+                <div className="flex-1 min-h-0 overflow-hidden px-3 py-3 sm:px-4 sm:py-4">
+                  <History
+                    variant="page"
+                    notes={notes}
+                    pagination={pagination}
+                    isLoading={notesLoading}
+                    onPageChange={(page) => fetchNotes(page)}
+                    onSearch={(q, tag) => fetchNotes(1, q, tag)}
+                    onDelete={deleteNote}
+                    onExport={exportNotes}
+                    isExporting={isExporting}
+                  />
+                </div>
               </div>
             </>
           </div>
 
           <div
-            className={cn("h-full min-h-0 flex flex-col", !compactMode && "hidden")}
+            className={cn(
+              "h-full min-h-0 flex flex-col",
+              !compactMode && "hidden",
+            )}
             aria-hidden={!compactMode}
           >
             <CompactCopilot

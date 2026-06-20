@@ -17,7 +17,11 @@ import {
   type AuthedUser,
 } from "../middleware/auth";
 import { encoder, jsonResponse } from "../lib/http";
-import { buildPrompt, buildSummarizerPrompt } from "../lib/prompt";
+import {
+  buildAskAiPrompt,
+  buildPrompt,
+  buildSummarizerPrompt,
+} from "../lib/prompt";
 import { recordUsage, startUsage } from "../usage";
 import { getDb } from "../db";
 import { consumeQuota } from "../services/quota.service";
@@ -388,6 +392,12 @@ function buildWireMessages(
       let text = m.text;
       if (i === 0 && m.role === "user" && payload.flag === FLAGS.COPILOT) {
         text = buildPrompt(payload.bg, text);
+      } else if (
+        i === 0 &&
+        m.role === "user" &&
+        payload.flag === FLAGS.ASK_AI
+      ) {
+        text = buildAskAiPrompt(payload.bg, text);
       }
       const msgImages = parseImageDataUrls(m.images);
       wireMessages.push({ role: m.role, text, images: msgImages });
@@ -396,6 +406,8 @@ function buildWireMessages(
     let text = basePrompt;
     if (payload.flag === FLAGS.COPILOT) {
       text = buildPrompt(payload.bg, basePrompt);
+    } else if (payload.flag === FLAGS.ASK_AI) {
+      text = buildAskAiPrompt(payload.bg, basePrompt);
     } else if (payload.flag === FLAGS.SUMMARIZER) {
       text = buildSummarizerPrompt(basePrompt);
     }

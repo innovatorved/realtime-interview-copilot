@@ -92,7 +92,9 @@ export function CopilotSessionProvider({ children }: { children: ReactNode }) {
 export function useCopilotSession() {
   const ctx = useContext(CopilotSessionContext);
   if (!ctx) {
-    throw new Error("useCopilotSession must be used within CopilotSessionProvider");
+    throw new Error(
+      "useCopilotSession must be used within CopilotSessionProvider",
+    );
   }
   return ctx;
 }

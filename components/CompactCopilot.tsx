@@ -38,12 +38,8 @@ export function CompactCopilot({
   onExitCompact,
   onHasOutputChange,
 }: CompactCopilotProps) {
-  const {
-    interviewNotes,
-    resumeText,
-    jobDescription,
-    setInterviewNotes,
-  } = useInterviewContext();
+  const { interviewNotes, resumeText, jobDescription, setInterviewNotes } =
+    useInterviewContext();
   const { transcribedText, clearTranscription } = useTranscription();
   const {
     completion,

@@ -1,9 +1,8 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { sendGTMEvent } from "@next/third-parties/google";
 import posthog from "posthog-js";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { ContextCard } from "@/components/copilot/ContextCard";
 import { OutputCard } from "@/components/copilot/OutputCard";
 import { TranscriptionCard } from "@/components/copilot/TranscriptionCard";
@@ -17,11 +16,6 @@ import { authClient } from "@/lib/auth-client";
 import { buildContextBlock } from "@/lib/prompt-context";
 import { trackEvent } from "@/lib/session-tracking";
 import { FLAGS, type HistoryData } from "@/lib/types";
-
-const RecorderTranscriber = dynamic(() => import("@/components/recorder"), {
-  ssr: false,
-  loading: () => <RecorderFallback />,
-});
 
 interface CopilotProps {
   addInSavedData: (data: HistoryData) => void;
@@ -44,7 +38,6 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
     isLoading: contextLoading,
     isSaving,
     error: contextError,
-    saveContext,
   } = useInterviewContext();
 
   const { transcribedText, transcriptionSegments, clearTranscription } =
@@ -150,10 +143,6 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
     };
   }, [handleKeyDown, isActive]);
 
-  const handleSaveContext = useCallback(async () => {
-    await saveContext();
-  }, [saveContext]);
-
   const handleSave = () => {
     addInSavedData({
       createdAt: new Date().toISOString(),
@@ -190,7 +179,7 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
   const displayError = error ?? (contextError ? new Error(contextError) : null);
 
   return (
-    <div className="flex flex-col h-full min-h-0 gap-3 px-3 py-3 sm:gap-4 sm:px-4 sm:py-4 overflow-hidden">
+    <div className="flex flex-col h-full min-h-0 w-full gap-3 px-3 py-3 sm:gap-4 sm:px-4 sm:py-4 overflow-hidden">
       {displayError && (
         <div className="fixed top-12 left-1/2 -translate-x-1/2 px-4 py-2 text-center text-xs bg-red-600/95 text-white z-[60] animate-fade-in-scale rounded-xl border border-red-500/35 shadow-xl max-w-md flex items-center gap-3">
           <span className="flex-1">{displayError.message}</span>
@@ -206,7 +195,7 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 h-[320px] shrink-0">
+      <div className="grid gap-4 md:grid-cols-2 h-[320px] shrink-0 min-h-0 w-full [&>*]:min-w-0 [&>*]:min-h-0">
         <ContextCard
           interviewNotes={interviewNotes}
           onInterviewNotesChange={setInterviewNotes}
@@ -216,10 +205,8 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
           onJobDescriptionChange={setJobDescription}
           onResumeParsed={setResumeParsed}
           onClearResume={clearResume}
-          onSave={() => void handleSaveContext()}
           isSaving={isSaving}
           isLoading={contextLoading}
-          recorder={<RecorderTranscriber />}
           formRef={formRef}
           flag={flag}
           isLoadingGenerate={isLoading}
@@ -256,14 +243,6 @@ function CopilotSkeleton() {
       <div className="glass-card p-6 h-40">
         <div className="h-3 w-48 bg-white/[0.04] rounded-md mx-auto" />
       </div>
-    </div>
-  );
-}
-
-function RecorderFallback() {
-  return (
-    <div className="flex h-9 items-center justify-center rounded-xl border border-[color:var(--app-border)] bg-[color:color-mix(in_oklch,var(--app-surface)_70%,transparent)] text-xs text-[color:var(--app-muted)]">
-      Initializing recorder...
     </div>
   );
 }

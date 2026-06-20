@@ -20,8 +20,8 @@ export function TranscriptionCard({
   onClear,
 }: TranscriptionCardProps) {
   return (
-    <div className="glass-card p-5 flex flex-col h-full min-h-0 overflow-hidden">
-      <div className="flex items-center justify-between mb-3 shrink-0">
+    <div className="glass-card p-4 flex flex-col h-full min-h-0 overflow-hidden">
+      <div className="flex items-center justify-between mb-2 shrink-0">
         <Label
           htmlFor="transcription"
           className="text-neutral-500 font-semibold tracking-wider text-[10px] uppercase flex items-center gap-1.5"
@@ -31,7 +31,7 @@ export function TranscriptionCard({
         </Label>
         <button
           type="button"
-          className="text-[10px] text-neutral-600 hover:text-red-400 transition-colors font-medium tracking-wide px-2 py-1 rounded-lg hover:bg-red-500/[0.06]"
+          className="text-[10px] text-neutral-600 hover:text-red-400 transition-colors font-medium tracking-wide px-2 py-1 rounded-md hover:bg-red-500/[0.06]"
           onClick={onClear}
         >
           Clear
@@ -39,7 +39,7 @@ export function TranscriptionCard({
       </div>
       <div
         ref={transcriptionBoxRef}
-        className="flex-1 min-h-0 overflow-y-auto rounded-xl custom-scrollbar -mr-2 pr-2"
+        className="flex-1 min-h-0 overflow-y-auto rounded-md custom-scrollbar -mr-2 pr-2"
       >
         <TranscriptionDisplay segments={segments} />
       </div>

@@ -11,8 +11,6 @@ import {
   Minus,
   Plus,
   LogOut,
-  Mic,
-  MessageSquare,
   Rows3,
   Download,
 } from "lucide-react";
@@ -26,6 +24,7 @@ import { useAppBackdrop } from "@/components/AppBackdropContext";
 import { useInterviewContext } from "@/hooks/useInterviewContext";
 import { formatShortcut, Kbd } from "@/components/ui/Kbd";
 import { sessionDisplayName, sessionUserTitle } from "@/lib/session-display";
+import { WORKSPACE_TABS } from "@/lib/workspace-tabs";
 
 export default function TitleBar() {
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(true);
@@ -175,20 +174,7 @@ export default function TitleBar() {
             className="flex items-center space-x-0.5 rounded-lg border border-white/[0.04] bg-neutral-900/60 p-0.5"
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
           >
-            {[
-              {
-                id: "copilot" as const,
-                label: "Copilot",
-                icon: Mic,
-                shortcutKey: "C",
-              },
-              {
-                id: "ask-ai" as const,
-                label: "Ask AI",
-                icon: MessageSquare,
-                shortcutKey: "A",
-              },
-            ].map((tab) => {
+            {WORKSPACE_TABS.map((tab) => {
               const Icon = tab.icon;
               return (
                 <button
@@ -286,7 +272,11 @@ export default function TitleBar() {
               : "text-neutral-300 hover:text-neutral-200",
           )}
           onClick={toggleCompactMode}
-          title={compactMode ? "Exit compact mode (full layout)" : "Enter compact mode"}
+          title={
+            compactMode
+              ? "Exit compact mode (full layout)"
+              : "Enter compact mode"
+          }
         >
           {compactMode ? (
             <>

@@ -44,7 +44,7 @@ interface UseAskChatOptions {
   storageKey?: string;
   /**
    * Background / system context. Folded into the first user turn on the
-   * server (see `buildPrompt` in the worker). Doesn't repeat each turn.
+   * server (see `buildAskAiPrompt` in the worker). Doesn't repeat each turn.
    */
   background?: string;
   /**
@@ -285,7 +285,7 @@ export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
         : undefined;
       const payload = {
         bg,
-        flag: FLAGS.COPILOT,
+        flag: FLAGS.ASK_AI,
         prompt: trimmed,
         ...(legacyImage !== undefined ? { image: legacyImage } : {}),
         messages: trimmedHistory.map((m) => ({

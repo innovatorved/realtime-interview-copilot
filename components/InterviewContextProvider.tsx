@@ -78,7 +78,11 @@ function applyServerContext(
   setters.setJobDescription(server.jobDescription ?? "");
 }
 
-export function InterviewContextProvider({ children }: { children: ReactNode }) {
+export function InterviewContextProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
   const { data: session } = authClient.useSession();
   const [context, setContext] = useState<UserInterviewContext>(EMPTY);
   const [interviewNotes, setInterviewNotes] = useState("");
@@ -90,6 +94,22 @@ export function InterviewContextProvider({ children }: { children: ReactNode }) 
   const [isHydrated, setIsHydrated] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const lastSavedSnapshotRef = useRef<string | null>(null);
+
+  const fieldsSnapshot = useCallback(
+    () =>
+      JSON.stringify({
+        interviewNotes: interviewNotes.trim(),
+        resumeText,
+        resumeFileName,
+        jobDescription: jobDescription.trim(),
+      }),
+    [interviewNotes, resumeText, resumeFileName, jobDescription],
+  );
+
+  const markFieldsSaved = useCallback(() => {
+    lastSavedSnapshotRef.current = fieldsSnapshot();
+  }, [fieldsSnapshot]);
 
   useEffect(() => {
     return () => {
@@ -121,6 +141,12 @@ export function InterviewContextProvider({ children }: { children: ReactNode }) 
       const data = (await res.json()) as { context: UserInterviewContext };
       syncDraftFromServer(data.context ?? EMPTY);
       setIsHydrated(true);
+      lastSavedSnapshotRef.current = JSON.stringify({
+        interviewNotes: (data.context?.interviewNotes ?? "").trim(),
+        resumeText: data.context?.resumeText ?? null,
+        resumeFileName: data.context?.resumeFileName ?? null,
+        jobDescription: (data.context?.jobDescription ?? "").trim(),
+      });
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") return;
       const msg = err instanceof Error ? err.message : String(err);
@@ -145,13 +171,7 @@ export function InterviewContextProvider({ children }: { children: ReactNode }) 
     } catch {
       /* non-fatal */
     }
-  }, [
-    interviewNotes,
-    resumeText,
-    resumeFileName,
-    jobDescription,
-    isHydrated,
-  ]);
+  }, [interviewNotes, resumeText, resumeFileName, jobDescription, isHydrated]);
 
   useEffect(() => {
     if (session?.user) {
@@ -210,6 +230,12 @@ export function InterviewContextProvider({ children }: { children: ReactNode }) 
         const data = (await res.json()) as { context: UserInterviewContext };
         if (data.context) {
           syncDraftFromServer(data.context);
+          lastSavedSnapshotRef.current = JSON.stringify({
+            interviewNotes: (data.context.interviewNotes ?? "").trim(),
+            resumeText: data.context.resumeText,
+            resumeFileName: data.context.resumeFileName,
+            jobDescription: (data.context.jobDescription ?? "").trim(),
+          });
         } else {
           await fetchContext();
         }
@@ -239,6 +265,29 @@ export function InterviewContextProvider({ children }: { children: ReactNode }) 
     resumeText,
     resumeFileName,
     jobDescription,
+  ]);
+
+  // Debounced server sync — drafts already persist to sessionStorage on change.
+  useEffect(() => {
+    if (!session?.user || !isHydrated || isLoading) return;
+
+    const snapshot = fieldsSnapshot();
+    if (snapshot === lastSavedSnapshotRef.current) return;
+
+    const timer = window.setTimeout(() => {
+      void saveContext().then((ok) => {
+        if (ok) markFieldsSaved();
+      });
+    }, 900);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    fieldsSnapshot,
+    isHydrated,
+    isLoading,
+    markFieldsSaved,
+    saveContext,
+    session?.user,
   ]);
 
   const setResumeParsed = useCallback((text: string, fileName: string) => {
@@ -271,7 +320,9 @@ export function InterviewContextProvider({ children }: { children: ReactNode }) 
   };
 
   return (
-    <InterviewContext.Provider value={value}>{children}</InterviewContext.Provider>
+    <InterviewContext.Provider value={value}>
+      {children}
+    </InterviewContext.Provider>
   );
 }
 

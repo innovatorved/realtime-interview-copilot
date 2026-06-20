@@ -164,7 +164,7 @@ html {
   }
 
   .glass-card {
-    border-radius: 1rem;
+    border-radius: 0.625rem;
     background-color: color-mix(
       in oklch,
       var(--app-surface-elev) calc(var(--app-backdrop-opacity, 1) * 88%),
@@ -182,7 +182,7 @@ html {
   }
 
   .glass-card-hover {
-    border-radius: 1rem;
+    border-radius: 0.625rem;
     background-color: color-mix(
       in oklch,
       var(--app-surface-elev) calc(var(--app-backdrop-opacity, 1) * 88%),
@@ -212,7 +212,7 @@ html {
   }
 
   .glass-panel {
-    border-radius: 0.75rem;
+    border-radius: 0.5rem;
     background-color: color-mix(
       in oklch,
       var(--app-surface) calc(var(--app-backdrop-opacity, 1) * 82%),

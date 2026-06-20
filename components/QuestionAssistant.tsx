@@ -22,9 +22,11 @@ import { Input } from "@/components/ui/input";
 import { formatShortcut, Kbd } from "@/components/ui/Kbd";
 import { LevelMeter } from "@/components/ui/LevelMeter";
 import { useSharedAskChat } from "@/components/AskChatProvider";
+import { useInterviewContext } from "@/hooks/useInterviewContext";
 import { useAskMic } from "@/hooks/useAskMic";
 import { useMicPushToTalk } from "@/hooks/useMicPushToTalk";
 import { dbg } from "@/lib/debug";
+import { hasAttachedContext } from "@/lib/prompt-context";
 import { trackEvent } from "@/lib/session-tracking";
 import { sessionDisplayName, sessionUserTitle } from "@/lib/session-display";
 import { authClient } from "@/lib/auth-client";
@@ -61,6 +63,9 @@ export function QuestionAssistant({
   // Shared Ask AI thread — same conversation in full mode and compact drawer.
   const chat = useSharedAskChat();
   const { messages, isLoading } = chat;
+  const { resumeText, jobDescription, interviewNotes } = useInterviewContext();
+  const contextAttached = hasAttachedContext({ resumeText, jobDescription });
+  const hasNotes = !!interviewNotes.trim();
   // Surface-level error state — used for screenshot capture failures
   // (e.g. user denied screen recording permission, electron API
   // unavailable). Distinct from `chat.error` which is owned by the chat
@@ -425,6 +430,34 @@ export function QuestionAssistant({
             )}
           </div>
 
+          <div className="flex flex-wrap items-center gap-1.5 mb-2">
+            {resumeText?.trim() && (
+              <span className="text-[9px] text-sky-300/90 bg-sky-500/[0.08] px-2 py-0.5 rounded-full border border-sky-500/15">
+                Resume attached
+              </span>
+            )}
+            {jobDescription.trim() && (
+              <span className="text-[9px] text-violet-300/90 bg-violet-500/[0.08] px-2 py-0.5 rounded-full border border-violet-500/15">
+                JD attached
+              </span>
+            )}
+            {hasNotes && !contextAttached && (
+              <span className="text-[9px] text-emerald-500/60 bg-emerald-500/[0.06] px-2 py-0.5 rounded-full border border-emerald-500/10">
+                Notes included
+              </span>
+            )}
+            {!contextAttached && !hasNotes && (
+              <span className="text-[9px] text-neutral-500">
+                No saved context — add resume or JD in Copilot tab
+              </span>
+            )}
+            {messages.length > 0 && (contextAttached || hasNotes) && (
+              <span className="text-[9px] text-neutral-600">
+                · New chat picks up latest context
+              </span>
+            )}
+          </div>
+
           {/* Attached screenshots: horizontal row of thumbnails with a per-thumb
               remove button. Cap is MAX_IMAGES; the small counter on the right
               hints at the remaining slots so the cap isn't surprising. */}
@@ -482,7 +515,7 @@ export function QuestionAssistant({
                     ? "Listening… speak your question"
                     : attachedImages.length > 0
                       ? "Add a question (optional) or press Enter..."
-                      : "Type your question... (K)"
+                      : "Ask the AI anything… (K)"
                 }
                 disabled={isLoading}
                 className={cn(
