@@ -34,8 +34,11 @@ interface UseUsageMeOptions {
 }
 
 export function useUsageMe(options: UseUsageMeOptions = {}) {
-  const { pollMs = 60_000, enabled = true, window: usageWindow = "30d" } =
-    options;
+  const {
+    pollMs = 60_000,
+    enabled = true,
+    window: usageWindow = "30d",
+  } = options;
   const [data, setData] = useState<UsageMeResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

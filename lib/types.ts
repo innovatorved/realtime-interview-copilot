@@ -29,20 +29,12 @@ export interface NotesResponse {
   pagination: PaginationInfo;
 }
 
-export interface InterviewPreset {
-  id: string;
-  name: string;
-  category: string;
-  context: string;
-  description: string | null;
-  icon: string | null;
-  isBuiltIn: boolean | null;
-  userId: string | null;
-  createdAt: string;
-  resumeText?: string | null;
-  resumeFileName?: string | null;
-  jobDescription?: string | null;
-  updatedAt?: string | null;
+export interface UserInterviewContext {
+  interviewNotes: string | null;
+  resumeText: string | null;
+  resumeFileName: string | null;
+  jobDescription: string | null;
+  updatedAt: string | Date | null;
 }
 
 export interface TranscriptionWord {
@@ -68,11 +60,7 @@ export interface TranscriptionSegment {
 
 export type SupportAuthorType = "user" | "admin";
 
-export type SupportThreadStatus =
-  | "open"
-  | "pending"
-  | "resolved"
-  | "reply";
+export type SupportThreadStatus = "open" | "pending" | "resolved" | "reply";
 
 export interface SupportMessage {
   id: string;

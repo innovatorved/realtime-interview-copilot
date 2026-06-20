@@ -5,11 +5,11 @@ import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api
 import {
   account,
   auditEvent,
-  interviewPreset,
   quotaBalance,
   savedNote,
   session,
   user,
+  userInterviewContext,
   userModelParams,
 } from "../../../db/schema";
 import { getUserUsageSummary } from "../../../usage";
@@ -195,7 +195,7 @@ export function userEndpoints(deps: AdminDeps) {
           metadata: { adminEmail },
         });
         await db.delete(savedNote).where(eq(savedNote.userId, userId));
-        await db.delete(interviewPreset).where(eq(interviewPreset.userId, userId));
+        await db.delete(userInterviewContext).where(eq(userInterviewContext.userId, userId));
         await db.delete(session).where(eq(session.userId, userId));
         await db.delete(account).where(eq(account.userId, userId));
         await db.delete(user).where(eq(user.id, userId));
@@ -218,7 +218,7 @@ export function userEndpoints(deps: AdminDeps) {
         const [targetUser] = await db.select().from(user).where(eq(user.id, userId));
         if (!targetUser) throw new APIError("NOT_FOUND", { message: "User not found" });
 
-        const [sessions, notes, presets, recentAudit, modelParamsRow] = await Promise.all([
+        const [sessions, notes, interviewContext, recentAudit, modelParamsRow] = await Promise.all([
           db
             .select({
               id: session.id,
@@ -232,7 +232,7 @@ export function userEndpoints(deps: AdminDeps) {
             .orderBy(desc(session.createdAt))
             .limit(10),
           db.select({ total: count() }).from(savedNote).where(eq(savedNote.userId, userId)),
-          db.select({ total: count() }).from(interviewPreset).where(eq(interviewPreset.userId, userId)),
+          db.select().from(userInterviewContext).where(eq(userInterviewContext.userId, userId)),
           db.select().from(auditEvent).where(eq(auditEvent.userId, userId)).orderBy(desc(auditEvent.createdAt)).limit(20),
           db.select().from(userModelParams).where(eq(userModelParams.userId, userId)),
         ]);
@@ -262,7 +262,7 @@ export function userEndpoints(deps: AdminDeps) {
           user: targetUser,
           sessions,
           notesCount: notes[0]?.total ?? 0,
-          presetsCount: presets[0]?.total ?? 0,
+          hasInterviewContext: !!interviewContext[0],
           recentAuditEvents: recentAudit,
           modelParamsOverride,
           quota: toQuotaSummary(quotaRow, {} as import("../../../env").Env),
@@ -377,7 +377,7 @@ export function userEndpoints(deps: AdminDeps) {
           throw new APIError("BAD_REQUEST", { message: "Cannot delete your own account" });
 
         await db.delete(savedNote).where(inArray(savedNote.userId, userIds));
-        await db.delete(interviewPreset).where(inArray(interviewPreset.userId, userIds));
+        await db.delete(userInterviewContext).where(inArray(userInterviewContext.userId, userIds));
         await db.delete(session).where(inArray(session.userId, userIds));
         await db.delete(account).where(inArray(account.userId, userIds));
         await db.delete(user).where(inArray(user.id, userIds));

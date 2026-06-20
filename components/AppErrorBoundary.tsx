@@ -11,8 +11,12 @@ function Fallback({ error, resetErrorBoundary }: FallbackProps) {
           ⚠️
         </span>
       </div>
-      <h1 className="text-xl font-semibold tracking-tight">Something went wrong</h1>
-      <p className="max-w-md text-center text-sm text-[color:var(--app-muted)]">{msg}</p>
+      <h1 className="text-xl font-semibold tracking-tight">
+        Something went wrong
+      </h1>
+      <p className="max-w-md text-center text-sm text-[color:var(--app-muted)]">
+        {msg}
+      </p>
       <div className="flex gap-3">
         <button
           type="button"

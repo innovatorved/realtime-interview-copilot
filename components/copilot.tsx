@@ -3,14 +3,16 @@
 import dynamic from "next/dynamic";
 import { sendGTMEvent } from "@next/third-parties/google";
 import posthog from "posthog-js";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ContextCard } from "@/components/copilot/ContextCard";
 import { OutputCard } from "@/components/copilot/OutputCard";
 import { TranscriptionCard } from "@/components/copilot/TranscriptionCard";
 import { useTranscription } from "@/components/TranscriptionContext";
 import { useClientReady } from "@/hooks/useClientReady";
 import { useCopilotSubmit } from "@/hooks/useCopilotSubmit";
+import { useInterviewContext } from "@/hooks/useInterviewContext";
 import { authClient } from "@/lib/auth-client";
+import { buildContextBlock } from "@/lib/prompt-context";
 import { trackEvent } from "@/lib/session-tracking";
 import { FLAGS, type HistoryData } from "@/lib/types";
 
@@ -22,33 +24,68 @@ const RecorderTranscriber = dynamic(() => import("@/components/recorder"), {
 interface CopilotProps {
   addInSavedData: (data: HistoryData) => void;
   isActive?: boolean;
-  presetContext?: string;
-  hasContextAttached?: boolean;
 }
 
-export function Copilot({
-  addInSavedData,
-  isActive = false,
-  presetContext = "",
-  hasContextAttached = false,
-}: CopilotProps) {
+export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
   const isClientReady = useClientReady();
   const { data: session } = authClient.useSession();
-  // Transcription state lives in TranscriptionProvider so it survives
-  // toggling between full Copilot and the compact toolbar without
-  // tearing down the live recording session.
+  const {
+    context,
+    isLoading: contextLoading,
+    isSaving,
+    error: contextError,
+    fetchContext,
+    updateContext,
+  } = useInterviewContext();
+
   const { transcribedText, transcriptionSegments, clearTranscription } =
     useTranscription();
   const [flag, setFlag] = useState<FLAGS>(FLAGS.COPILOT);
-  const [bg, setBg] = useState<string>("");
+  const [interviewNotes, setInterviewNotes] = useState("");
+  const [resumeText, setResumeText] = useState<string | null>(null);
+  const [resumeFileName, setResumeFileName] = useState<string | null>(null);
+  const [jobDescription, setJobDescription] = useState("");
+  const [contextHydrated, setContextHydrated] = useState(false);
   const transcriptionBoxRef = useRef<HTMLDivElement>(null);
 
-  const { completion, isLoading, error, submit, stop, regenerate, canRegenerate } =
-    useCopilotSubmit({
-      flag,
-      bg,
-      transcribedText,
-    });
+  const effectiveBg = useMemo(
+    () =>
+      buildContextBlock({
+        existingBg: interviewNotes,
+        resumeText,
+        jobDescription,
+      }),
+    [interviewNotes, resumeText, jobDescription],
+  );
+
+  const {
+    completion,
+    isLoading,
+    error,
+    submit,
+    stop,
+    regenerate,
+    canRegenerate,
+  } = useCopilotSubmit({
+    flag,
+    bg: effectiveBg,
+    transcribedText,
+  });
+
+  useEffect(() => {
+    if (session?.user) {
+      void fetchContext();
+    }
+  }, [session?.user, fetchContext]);
+
+  useEffect(() => {
+    if (contextHydrated || contextLoading) return;
+    setInterviewNotes(context.interviewNotes ?? "");
+    setResumeText(context.resumeText);
+    setResumeFileName(context.resumeFileName);
+    setJobDescription(context.jobDescription ?? "");
+    setContextHydrated(true);
+  }, [context, contextLoading, contextHydrated]);
 
   useEffect(() => {
     if (transcriptionBoxRef.current) {
@@ -56,17 +93,6 @@ export function Copilot({
         transcriptionBoxRef.current.scrollHeight;
     }
   }, [transcriptionSegments]);
-
-  // Preset context (from the active preset) always wins over the cached
-  // value. Hydration below only runs once on mount, so we flip this flag to
-  // skip the storage read whenever the preset already provided context.
-  const bgHydratedRef = useRef(false);
-  useEffect(() => {
-    if (presetContext) {
-      setBg(presetContext);
-      bgHydratedRef.current = true;
-    }
-  }, [presetContext]);
 
   const handleFlag = useCallback((checked: boolean) => {
     if (!checked) {
@@ -135,29 +161,20 @@ export function Copilot({
     };
   }, [handleKeyDown, isActive]);
 
-  // Background context can include resume / JD / PII. Keep it in
-  // sessionStorage so it's cleared when the tab closes rather than surviving
-  // indefinitely in localStorage. Also skip hydration if the preset already
-  // populated the field.
-  useEffect(() => {
-    if (bgHydratedRef.current) return;
-    try {
-      const savedBg = sessionStorage.getItem("bg");
-      if (savedBg) setBg(savedBg);
-    } catch {
-      // sessionStorage unavailable (e.g. disabled storage)
-    }
-    bgHydratedRef.current = true;
-  }, []);
-
-  useEffect(() => {
-    if (!bg) return;
-    try {
-      sessionStorage.setItem("bg", bg);
-    } catch {
-      // Quota or unavailable — non-fatal.
-    }
-  }, [bg]);
+  const handleSaveContext = useCallback(async () => {
+    await updateContext({
+      interviewNotes: interviewNotes.trim() || null,
+      resumeText,
+      resumeFileName,
+      jobDescription: jobDescription.trim() || null,
+    });
+  }, [
+    updateContext,
+    interviewNotes,
+    resumeText,
+    resumeFileName,
+    jobDescription,
+  ]);
 
   const handleSave = () => {
     addInSavedData({
@@ -192,12 +209,14 @@ export function Copilot({
     return <CopilotSkeleton />;
   }
 
+  const displayError = error ?? (contextError ? new Error(contextError) : null);
+
   return (
     <div className="flex flex-col h-full min-h-0 gap-3 px-3 py-3 sm:gap-4 sm:px-4 sm:py-4 overflow-hidden">
-      {error && (
+      {displayError && (
         <div className="fixed top-12 left-1/2 -translate-x-1/2 px-4 py-2 text-center text-xs bg-red-600/95 text-white z-[60] animate-fade-in-scale rounded-xl border border-red-500/35 shadow-xl max-w-md flex items-center gap-3">
-          <span className="flex-1">{error.message}</span>
-          {canRegenerate && (
+          <span className="flex-1">{displayError.message}</span>
+          {canRegenerate && error && (
             <button
               type="button"
               className="shrink-0 underline underline-offset-2 hover:text-red-100"
@@ -209,16 +228,29 @@ export function Copilot({
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 h-[280px] shrink-0">
+      <div className="grid gap-4 md:grid-cols-2 h-[320px] shrink-0">
         <ContextCard
-          bg={bg}
-          onBgChange={setBg}
-          presetContext={presetContext}
-          hasContextAttached={hasContextAttached}
+          interviewNotes={interviewNotes}
+          onInterviewNotesChange={setInterviewNotes}
+          resumeText={resumeText}
+          resumeFileName={resumeFileName}
+          jobDescription={jobDescription}
+          onJobDescriptionChange={setJobDescription}
+          onResumeParsed={(text, fileName) => {
+            setResumeText(text);
+            setResumeFileName(fileName);
+          }}
+          onClearResume={() => {
+            setResumeText(null);
+            setResumeFileName(null);
+          }}
+          onSave={() => void handleSaveContext()}
+          isSaving={isSaving}
+          isLoading={contextLoading}
           recorder={<RecorderTranscriber />}
           formRef={formRef}
           flag={flag}
-          isLoading={isLoading}
+          isLoadingGenerate={isLoading}
           onFlagChange={handleFlag}
           onSubmit={submit}
           onStop={stop}

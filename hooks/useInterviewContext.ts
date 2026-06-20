@@ -1,19 +1,29 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BACKEND_API_URL } from "@/lib/constant";
 import { ricFetch } from "@/lib/ric-fetch";
-import type { InterviewPreset } from "@/lib/types";
+import type { UserInterviewContext } from "@/lib/types";
 
-export interface PresetContextFields {
+export interface InterviewContextFields {
+  interviewNotes?: string | null;
   resumeText?: string | null;
   resumeFileName?: string | null;
   jobDescription?: string | null;
 }
 
-export function usePresets() {
-  const [presets, setPresets] = useState<InterviewPreset[]>([]);
+const EMPTY: UserInterviewContext = {
+  interviewNotes: null,
+  resumeText: null,
+  resumeFileName: null,
+  jobDescription: null,
+  updatedAt: null,
+};
+
+export function useInterviewContext() {
+  const [context, setContext] = useState<UserInterviewContext>(EMPTY);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -23,19 +33,19 @@ export function usePresets() {
     };
   }, []);
 
-  const fetchPresets = useCallback(async () => {
+  const fetchContext = useCallback(async () => {
     abortRef.current?.abort();
     abortRef.current = new AbortController();
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${BACKEND_API_URL}/api/presets`, {
+      const res = await fetch(`${BACKEND_API_URL}/api/interview-context`, {
         credentials: "include",
         signal: abortRef.current.signal,
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = (await res.json()) as { presets: InterviewPreset[] };
-      setPresets(data.presets);
+      const data = (await res.json()) as { context: UserInterviewContext };
+      setContext(data.context ?? EMPTY);
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") return;
       const msg = err instanceof Error ? err.message : String(err);
@@ -45,17 +55,15 @@ export function usePresets() {
     }
   }, []);
 
-  const updatePresetContext = useCallback(
-    async (presetId: string, fields: PresetContextFields): Promise<boolean> => {
+  const updateContext = useCallback(
+    async (fields: InterviewContextFields): Promise<boolean> => {
+      setIsSaving(true);
       setError(null);
       try {
-        const res = await ricFetch(
-          `/api/presets/${encodeURIComponent(presetId)}/context`,
-          {
-            method: "PATCH",
-            body: JSON.stringify(fields),
-          },
-        );
+        const res = await ricFetch("/api/interview-context", {
+          method: "PATCH",
+          body: JSON.stringify(fields),
+        });
         if (!res.ok) {
           let msg = `HTTP ${res.status}`;
           try {
@@ -66,16 +74,28 @@ export function usePresets() {
           }
           throw new Error(msg);
         }
-        await fetchPresets();
+        const data = (await res.json()) as { context: UserInterviewContext };
+        if (data.context) setContext(data.context);
+        else await fetchContext();
         return true;
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         setError(msg);
         return false;
+      } finally {
+        setIsSaving(false);
       }
     },
-    [fetchPresets],
+    [fetchContext],
   );
 
-  return { presets, isLoading, error, fetchPresets, updatePresetContext };
+  return {
+    context,
+    setContext,
+    isLoading,
+    isSaving,
+    error,
+    fetchContext,
+    updateContext,
+  };
 }

@@ -31,7 +31,10 @@ function isQuotaExceededPayload(data: unknown): boolean {
   if (obj.code === "quota_exceeded" || obj.error === "quota_exceeded") {
     return true;
   }
-  if (typeof obj.error === "string" && /quota[_\s-]?exceeded/i.test(obj.error)) {
+  if (
+    typeof obj.error === "string" &&
+    /quota[_\s-]?exceeded/i.test(obj.error)
+  ) {
     return true;
   }
   return false;

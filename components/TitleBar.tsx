@@ -13,7 +13,6 @@ import {
   LogOut,
   Mic,
   MessageSquare,
-  Sparkles,
   Rows3,
   Download,
 } from "lucide-react";
@@ -25,10 +24,7 @@ import { sendGTMEvent } from "@next/third-parties/google";
 import { useTab } from "@/components/TabContext";
 import { useAppBackdrop } from "@/components/AppBackdropContext";
 import { formatShortcut, Kbd } from "@/components/ui/Kbd";
-import {
-  sessionDisplayName,
-  sessionUserTitle,
-} from "@/lib/session-display";
+import { sessionDisplayName, sessionUserTitle } from "@/lib/session-display";
 
 export default function TitleBar() {
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(true);
@@ -60,10 +56,14 @@ export default function TitleBar() {
               setUpdateStatus(`Update ${status.version} available`);
               break;
             case "downloading":
-              setUpdateStatus(`Downloading update (${Math.round(status.percent)}%)`);
+              setUpdateStatus(
+                `Downloading update (${Math.round(status.percent)}%)`,
+              );
               break;
             case "downloaded":
-              setUpdateStatus(`Update ${status.version} ready — restart to install`);
+              setUpdateStatus(
+                `Update ${status.version} ready — restart to install`,
+              );
               break;
             case "not-available":
               setUpdateStatus(`Up to date (${status.version})`);
@@ -182,12 +182,6 @@ export default function TitleBar() {
                 icon: MessageSquare,
                 shortcutKey: "A",
               },
-              {
-                id: "presets" as const,
-                label: "Presets",
-                icon: Sparkles,
-                shortcutKey: "P",
-              },
             ].map((tab) => {
               const Icon = tab.icon;
               return (
@@ -298,7 +292,9 @@ export default function TitleBar() {
           onClick={() => void handleCheckForUpdates()}
           title={
             updateStatus ??
-            (appVersion ? `Check for updates (v${appVersion})` : "Check for updates")
+            (appVersion
+              ? `Check for updates (v${appVersion})`
+              : "Check for updates")
           }
         >
           <Download className="h-3.5 w-3.5" />

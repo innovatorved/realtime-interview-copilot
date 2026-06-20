@@ -12,10 +12,7 @@ import * as path from "path";
 
 import { installSingleInstanceAndDeepLinks } from "./deepLink";
 import { registerAppIpc } from "./ipc/app";
-import {
-  registerCaptureAndAskShortcut,
-  registerScreenIpc,
-} from "./ipc/screen";
+import { registerCaptureAndAskShortcut, registerScreenIpc } from "./ipc/screen";
 import { registerWindowIpc } from "./ipc/window";
 import {
   installCsp,

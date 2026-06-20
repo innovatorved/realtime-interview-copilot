@@ -35,8 +35,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   windowSetIgnoreMouseEvents: (
     ignore: boolean,
     options?: { forward?: boolean },
-  ) =>
-    ipcRenderer.invoke("window-set-ignore-mouse-events", ignore, options),
+  ) => ipcRenderer.invoke("window-set-ignore-mouse-events", ignore, options),
   windowFocus: () => ipcRenderer.invoke("window-focus"),
   appQuit: () => ipcRenderer.invoke("app-quit"),
   appRelaunch: () => ipcRenderer.invoke("app-relaunch"),
@@ -44,8 +43,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   updaterGetStatus: () => ipcRenderer.invoke("updater:get-status"),
   updaterCheck: () => ipcRenderer.invoke("updater:check"),
   onUpdaterStatus: (callback: (status: UpdaterStatusPayload) => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, status: UpdaterStatusPayload) =>
-      callback(status);
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      status: UpdaterStatusPayload,
+    ) => callback(status);
     ipcRenderer.on("updater:status", handler);
     return () => ipcRenderer.removeListener("updater:status", handler);
   },
@@ -89,7 +90,9 @@ export interface ElectronAPI {
   updaterGetVersion: () => Promise<string>;
   updaterGetStatus: () => Promise<UpdaterStatusPayload>;
   updaterCheck: () => Promise<void>;
-  onUpdaterStatus: (callback: (status: UpdaterStatusPayload) => void) => () => void;
+  onUpdaterStatus: (
+    callback: (status: UpdaterStatusPayload) => void,
+  ) => () => void;
   platform: string;
   isElectron: boolean;
   supportsSystemAudio: boolean;

@@ -22,7 +22,6 @@ const ALLOWED_TRACKED_ACTIONS = new Set<string>([
   "question_asked",
   "mode_switched",
   "completion_saved",
-  "preset_loaded",
   "session_resumed",
   "session_paused_by_user",
 ]);

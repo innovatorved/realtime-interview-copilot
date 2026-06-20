@@ -1,4 +1,4 @@
-/** Parse resume files (txt, pdf, docx) into plain text for preset context. */
+/** Parse resume files (txt, pdf, docx) into plain text for interview context. */
 
 const MAX_CHARS = 6000;
 

@@ -19,7 +19,10 @@ import {
   handleDeleteNote,
   handleGetNotes,
 } from "./routes/notes";
-import { handleGetPresets, handlePatchPresetContext } from "./routes/presets";
+import {
+  handleGetInterviewContext,
+  handlePatchInterviewContext,
+} from "./routes/interview-context";
 import { handleExport } from "./routes/export";
 import { handleUsageMe } from "./routes/usage-me";
 import {
@@ -141,21 +144,13 @@ export default {
       return withCors(response, request);
     }
 
-    if (path === "/api/presets" && request.method === "GET") {
-      const response = await handleGetPresets(request, env, ctx);
+    if (path === "/api/interview-context" && request.method === "GET") {
+      const response = await handleGetInterviewContext(request, env, ctx);
       return withCors(response, request);
     }
-    {
-      const presetCtxMatch = path.match(/^\/api\/presets\/([^/]+)\/context$/);
-      if (presetCtxMatch && request.method === "PATCH") {
-        const response = await handlePatchPresetContext(
-          request,
-          env,
-          ctx,
-          presetCtxMatch[1],
-        );
-        return withCors(response, request);
-      }
+    if (path === "/api/interview-context" && request.method === "PATCH") {
+      const response = await handlePatchInterviewContext(request, env, ctx);
+      return withCors(response, request);
     }
 
     if (path === "/api/export" && request.method === "POST") {

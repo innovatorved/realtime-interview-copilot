@@ -424,7 +424,10 @@ export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
             humanized || (err instanceof Error ? err.message : String(err)),
           );
           setError(humanized || "Something went wrong. Please try again.");
-          lastFailedSendRef.current = { text: trimmed, images: hasImages ? images : undefined };
+          lastFailedSendRef.current = {
+            text: trimmed,
+            images: hasImages ? images : undefined,
+          };
           setCanRegenerate(true);
           // Drop the empty placeholder so the thread doesn't render a
           // ghost assistant bubble. The user's message stays — they can

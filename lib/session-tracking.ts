@@ -16,13 +16,10 @@ export type TrackedAction =
   | "question_asked"
   | "mode_switched"
   | "completion_saved"
-  | "preset_loaded"
   | "session_resumed"
   | "session_paused_by_user";
 
 export interface LiveSessionStartOpts {
-  presetId?: string | null;
-  presetName?: string | null;
   surface?: "web" | "electron";
   metadata?: Record<string, unknown>;
 }

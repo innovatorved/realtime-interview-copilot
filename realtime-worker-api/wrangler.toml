@@ -6,6 +6,13 @@ compatibility_flags = ["nodejs_compat"]
 [observability]
 enabled = true
 
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+
 [triggers]
 crons = ["0 * * * *"]
 

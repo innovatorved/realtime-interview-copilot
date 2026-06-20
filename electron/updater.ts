@@ -78,10 +78,10 @@ export function initAutoUpdater(
       ? dialog.showMessageBox(win, dialogOptions)
       : dialog.showMessageBox(dialogOptions);
     void dialogPromise.then(({ response }) => {
-        if (response === 0) {
-          autoUpdater.quitAndInstall(false, true);
-        }
-      });
+      if (response === 0) {
+        autoUpdater.quitAndInstall(false, true);
+      }
+    });
   });
 
   autoUpdater.on("error", (err: Error) => {
@@ -105,12 +105,12 @@ export function initAutoUpdater(
         ? dialog.showMessageBox(win, fallbackOptions)
         : dialog.showMessageBox(fallbackOptions);
       void fallbackPromise.then(({ response }) => {
-          if (response === 0) {
-            shell.openExternal(LATEST_RELEASE_URL).catch(() => {
-              /* best-effort */
-            });
-          }
-        });
+        if (response === 0) {
+          shell.openExternal(LATEST_RELEASE_URL).catch(() => {
+            /* best-effort */
+          });
+        }
+      });
     }
   });
 

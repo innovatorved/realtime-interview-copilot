@@ -58,7 +58,6 @@ export function liveSessionEndpoints(deps: AdminDeps) {
           conditions.push(
             or(
               like(liveSession.userEmail, `%${safeQ}%`),
-              like(liveSession.presetName, `%${safeQ}%`),
               like(liveSession.ipAddress, `%${safeQ}%`),
             )!,
           );
@@ -69,8 +68,6 @@ export function liveSessionEndpoints(deps: AdminDeps) {
           id: liveSession.id,
           userId: liveSession.userId,
           userEmail: liveSession.userEmail,
-          presetId: liveSession.presetId,
-          presetName: liveSession.presetName,
           surface: liveSession.surface,
           ipAddress: liveSession.ipAddress,
           startedAt: liveSession.startedAt,

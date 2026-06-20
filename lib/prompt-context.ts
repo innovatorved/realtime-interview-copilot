@@ -1,4 +1,4 @@
-/** Build the interview background block from preset context + resume/JD. */
+/** Build the interview background block from notes + resume/JD. */
 
 export interface BuildContextBlockArgs {
   resumeText?: string | null;
@@ -28,9 +28,9 @@ export function buildContextBlock({
   return parts.join("");
 }
 
-export function presetHasAttachedContext(preset: {
+export function hasAttachedContext(fields: {
   resumeText?: string | null;
   jobDescription?: string | null;
 }): boolean {
-  return !!(preset.resumeText?.trim() || preset.jobDescription?.trim());
+  return !!(fields.resumeText?.trim() || fields.jobDescription?.trim());
 }

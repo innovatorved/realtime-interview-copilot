@@ -20,7 +20,7 @@ cask "realtime-interview-copilot" do
   end
 
   depends_on arch: :arm64
-  depends_on macos: ">= :big_sur"
+  depends_on macos: :big_sur
 
   app "Realtime Interview Copilot Beta.app"
 

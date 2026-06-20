@@ -26,9 +26,7 @@ export function Modal({
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[110] flex items-center justify-center p-4 animate-in fade-in duration-150 bg-[color:color-mix(in_oklch,var(--app-surface)_72%,transparent)] backdrop-blur-sm"
-    >
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 animate-in fade-in duration-150 bg-[color:color-mix(in_oklch,var(--app-surface)_72%,transparent)] backdrop-blur-sm">
       <div
         className={cn(
           "relative w-full max-w-sm rounded-xl border border-[color:var(--app-border)] bg-[color:color-mix(in_oklch,var(--app-surface-elev)_92%,transparent)] backdrop-blur-lg p-5 shadow-2xl animate-in zoom-in-95 duration-200",

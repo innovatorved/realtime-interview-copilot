@@ -15,7 +15,11 @@ export function ricFetch(
 ): Promise<Response> {
   const method = (init.method ?? "GET").toUpperCase();
   const headers = new Headers(init.headers);
-  if (MUTATING.has(method) && path.startsWith("/api/") && !path.startsWith("/api/auth")) {
+  if (
+    MUTATING.has(method) &&
+    path.startsWith("/api/") &&
+    !path.startsWith("/api/auth")
+  ) {
     headers.set("X-Requested-With", RIC_CLIENT_HEADER);
   }
   if (!headers.has("Content-Type") && init.body !== undefined) {

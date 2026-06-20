@@ -56,10 +56,10 @@ export default function RecorderTranscriber({
       : isReconnecting
         ? "Reconnecting to transcription service…"
         : sessionState === "live"
-        ? "Recording — click to stop"
-        : isBusy
-          ? "Starting transcription…"
-          : "Start transcription";
+          ? "Recording — click to stop"
+          : isBusy
+            ? "Starting transcription…"
+            : "Start transcription";
 
     return (
       <Button

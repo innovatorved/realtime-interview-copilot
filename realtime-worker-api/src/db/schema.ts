@@ -49,49 +49,17 @@ export const savedNote = sqliteTable(
   ],
 );
 
-export const interviewPreset = sqliteTable(
-  "interview_preset",
-  {
-    id: text("id").primaryKey(),
-    name: text("name").notNull(),
-    category: text("category").notNull(),
-    context: text("context").notNull(),
-    description: text("description"),
-    icon: text("icon"),
-    isBuiltIn: integer("isBuiltIn", { mode: "boolean" }).default(true),
-    userId: text("userId").references(() => user.id, { onDelete: "cascade" }),
-    resumeText: text("resumeText"),
-    resumeFileName: text("resumeFileName"),
-    jobDescription: text("jobDescription"),
-    createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
-    updatedAt: integer("updatedAt", { mode: "timestamp" }),
-  },
-  (table) => [
-    index("preset_user_idx").on(table.userId),
-    index("preset_builtin_idx").on(table.isBuiltIn),
-    index("preset_category_idx").on(table.category),
-  ],
-);
-
-export const presetUserContext = sqliteTable(
-  "preset_user_context",
-  {
-    userId: text("userId")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-    presetId: text("presetId")
-      .notNull()
-      .references(() => interviewPreset.id, { onDelete: "cascade" }),
-    resumeText: text("resumeText"),
-    resumeFileName: text("resumeFileName"),
-    jobDescription: text("jobDescription"),
-    updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
-  },
-  (table) => [
-    primaryKey({ columns: [table.userId, table.presetId] }),
-    index("preset_user_context_preset_idx").on(table.presetId),
-  ],
-);
+/** Per-user interview prep: notes, resume text, and job description. */
+export const userInterviewContext = sqliteTable("user_interview_context", {
+  userId: text("userId")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  interviewNotes: text("interviewNotes"),
+  resumeText: text("resumeText"),
+  resumeFileName: text("resumeFileName"),
+  jobDescription: text("jobDescription"),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+});
 
 export const quotaBalance = sqliteTable("quota_balance", {
   userId: text("userId")
@@ -259,7 +227,7 @@ export const userModelParams = sqliteTable("user_model_params", {
  * admin per-user usage breakdowns.
  *
  *  - action:       coarse bucket e.g. "completion", "deepgram_key",
- *                  "note_create", "note_delete", "preset_list",
+ *                  "note_create", "note_delete", "interview_context_fetch",
  *                  "export_markdown", "export_pdf".
  *  - flag:         sub-classification for completions (copilot / summarizer / raw).
  *  - model:        underlying LLM model actually used (when known).
@@ -438,8 +406,6 @@ export const liveSession = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     userEmail: text("userEmail"),
-    presetId: text("presetId"),
-    presetName: text("presetName"),
     surface: text("surface"),
     ipAddress: text("ipAddress"),
     userAgent: text("userAgent"),

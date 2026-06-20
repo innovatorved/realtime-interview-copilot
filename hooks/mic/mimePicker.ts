@@ -49,7 +49,11 @@ export function tryStartMediaRecorder(
         ? new MediaRecorder(media, { mimeType: candidate })
         : new MediaRecorder(media);
       tentative.start(timesliceMs);
-      return { recorder: tentative, mimeTypeLabel: candidateLabel, triedMimeTypes };
+      return {
+        recorder: tentative,
+        mimeTypeLabel: candidateLabel,
+        triedMimeTypes,
+      };
     } catch (err) {
       onChunkFailure(candidate, err);
     }

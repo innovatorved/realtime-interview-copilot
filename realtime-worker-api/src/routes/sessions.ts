@@ -23,8 +23,6 @@ const MAX_CONCURRENT_LIVE_SESSIONS_PER_USER = 2;
 const STALE_LIVE_SESSION_MS = 4 * 60 * 60 * 1000;
 
 interface SessionStartBody {
-  presetId?: unknown;
-  presetName?: unknown;
   surface?: unknown;
   metadata?: unknown;
 }
@@ -67,14 +65,6 @@ export async function handleSessionStart(
   }
   if (body === null || typeof body !== "object") body = {};
 
-  const presetId =
-    typeof body.presetId === "string" && body.presetId.length <= 128
-      ? body.presetId
-      : null;
-  const presetName =
-    typeof body.presetName === "string" && body.presetName.length <= 200
-      ? body.presetName.slice(0, 200)
-      : null;
   const surface =
     typeof body.surface === "string" && body.surface.length <= 50
       ? body.surface
@@ -164,8 +154,6 @@ export async function handleSessionStart(
       id,
       userId: authResult.id,
       userEmail: authResult.email,
-      presetId,
-      presetName,
       surface,
       ipAddress: getClientIp(request),
       userAgent: request.headers.get("user-agent")?.slice(0, 500) ?? null,
@@ -179,7 +167,7 @@ export async function handleSessionStart(
   }
 
   recordUsage(env, ctx, request, authResult, "session_started", {
-    metadata: { sessionId: id, surface, presetId },
+    metadata: { sessionId: id, surface },
   });
 
   return jsonResponse({ sessionId: id, startedAt: now.toISOString() }, 201);

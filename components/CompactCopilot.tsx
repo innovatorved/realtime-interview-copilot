@@ -22,7 +22,9 @@ import {
   useLastFlag,
   useOutputMode,
 } from "./compact/useCompactSession";
+import { useInterviewContext } from "@/hooks/useInterviewContext";
 import { authClient } from "@/lib/auth-client";
+import { buildContextBlock, hasAttachedContext } from "@/lib/prompt-context";
 import { sessionDisplayName } from "@/lib/session-display";
 
 // Hard cap on attached screenshots — mirrors MAX_IMAGES in QuestionAssistant
@@ -39,28 +41,19 @@ const ASK_AI_BACKGROUND =
 
 interface CompactCopilotProps {
   addInSavedData: (data: HistoryData) => void;
-  presetContext?: string;
-  hasContextAttached?: boolean;
   onExitCompact?: () => void;
-  /**
-   * Notifies the parent whenever the compact surface has output to display
-   * (an answer, error or in-flight generation). Used to grow the Electron
-   * window so the panel is actually on-screen.
-   */
   onHasOutputChange?: (hasOutput: boolean) => void;
 }
 
 export function CompactCopilot({
   addInSavedData,
-  presetContext = "",
-  hasContextAttached = false,
   onExitCompact,
   onHasOutputChange,
 }: CompactCopilotProps) {
-  // Transcription state is shared across the compact and full surfaces via
-  // TranscriptionProvider, so an active recording survives toggling.
+  const { context, fetchContext } = useInterviewContext();
   const { transcribedText, clearTranscription } = useTranscription();
-  const [bg, setBg] = useState<string>(presetContext);
+  const [interviewNotes, setInterviewNotes] = useState("");
+  const [contextHydrated, setContextHydrated] = useState(false);
   // Freeform "Ask AI" — user types a question instead of relying on the
   // transcription buffer. Distinct from Copilot/Summarize which both
   // operate on the transcribed text.
@@ -88,7 +81,26 @@ export function CompactCopilot({
   const askInputRef = useRef<HTMLInputElement | null>(null);
   const askFormRef = useRef<HTMLFormElement | null>(null);
 
-  const bgHydratedRef = useRef(false);
+  const effectiveBg = buildContextBlock({
+    existingBg: interviewNotes,
+    resumeText: context.resumeText,
+    jobDescription: context.jobDescription,
+  });
+
+  const contextAttached = hasAttachedContext({
+    resumeText: context.resumeText,
+    jobDescription: context.jobDescription,
+  });
+
+  useEffect(() => {
+    if (session?.user) void fetchContext();
+  }, [session?.user, fetchContext]);
+
+  useEffect(() => {
+    if (contextHydrated) return;
+    setInterviewNotes(context.interviewNotes ?? "");
+    setContextHydrated(true);
+  }, [context, contextHydrated]);
 
   // Captured prefix for mic dictation — see QuestionAssistant for rationale.
   const micPrefixRef = useRef<string>("");
@@ -134,40 +146,12 @@ export function CompactCopilot({
     sendCap: 16,
   });
 
-  // Preset context wins over the cached value, mirroring full Copilot behaviour.
-  useEffect(() => {
-    if (presetContext) {
-      setBg(presetContext);
-      bgHydratedRef.current = true;
-    }
-  }, [presetContext]);
-
-  useEffect(() => {
-    if (bgHydratedRef.current) return;
-    try {
-      const saved = sessionStorage.getItem("bg");
-      if (saved) setBg(saved);
-    } catch {
-      // sessionStorage unavailable
-    }
-    bgHydratedRef.current = true;
-  }, []);
-
-  useEffect(() => {
-    if (!bg) return;
-    try {
-      sessionStorage.setItem("bg", bg);
-    } catch {
-      // quota / unavailable — non-fatal
-    }
-  }, [bg]);
-
   const {
     generate,
     abort: abortGeneration,
     controllerRef: generateControllerRef,
   } = useCompactGenerate({
-    bg,
+    bg: effectiveBg,
     transcribedText,
     attachedImages,
     isLoading,
@@ -425,7 +409,7 @@ export function CompactCopilot({
         isCapturing={isCapturing}
         askMode={askMode}
         showContext={showContext}
-        hasContextAttached={hasContextAttached}
+        hasContextAttached={contextAttached}
         hasOutput={hasOutput}
         outputCollapsed={outputCollapsed}
         completion={completion}
@@ -441,7 +425,13 @@ export function CompactCopilot({
         onExitCompact={onExitCompact}
       />
 
-      {showContext && <CompactContextDrawer bg={bg} onChange={setBg} />}
+      {showContext && (
+        <CompactContextDrawer
+          bg={interviewNotes}
+          onChange={setInterviewNotes}
+          hasSavedResumeOrJd={contextAttached}
+        />
+      )}
 
       {askMode && (
         <AskDrawer

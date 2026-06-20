@@ -40,7 +40,9 @@ const inputStyle: React.CSSProperties = {
 };
 
 function NotionInput(
-  props: React.InputHTMLAttributes<HTMLInputElement> & { "aria-label"?: string },
+  props: React.InputHTMLAttributes<HTMLInputElement> & {
+    "aria-label"?: string;
+  },
 ) {
   return (
     <input
@@ -209,7 +211,11 @@ export function AuthWizard({
 
   const handleSignup = async () => {
     if (!email || !password || !name) {
-      showModal("Missing fields", "Please fill in every field to continue.", "error");
+      showModal(
+        "Missing fields",
+        "Please fill in every field to continue.",
+        "error",
+      );
       return;
     }
     setLoading(true);
@@ -461,8 +467,8 @@ export function AuthWizard({
                     lineHeight: 1.5,
                   }}
                 >
-                  New accounts go through a quick admin approval. You&apos;ll
-                  be able to message the admin from the next screen.
+                  New accounts go through a quick admin approval. You&apos;ll be
+                  able to message the admin from the next screen.
                 </p>
               </div>
             </div>
@@ -618,8 +624,8 @@ export function AuthWizard({
               margin: 0,
             }}
           >
-            By continuing, you agree to our terms and acknowledge that this
-            tool is intended for educational use.
+            By continuing, you agree to our terms and acknowledge that this tool
+            is intended for educational use.
           </p>
         </div>
       </div>

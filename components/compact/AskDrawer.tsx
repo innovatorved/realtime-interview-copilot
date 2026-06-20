@@ -63,10 +63,7 @@ export function AskDrawer({
   setOutputCollapsed,
 }: AskDrawerProps) {
   return (
-    <div
-      data-clickable
-      className="app-toolbar flex flex-col gap-2 px-3 py-2"
-    >
+    <div data-clickable className="app-toolbar flex flex-col gap-2 px-3 py-2">
       {/* Chat header row — turn counter + New chat. Only visible once
           there's a thread; absent on first visit so the empty drawer
           doesn't grow taller for new users. */}
@@ -205,8 +202,7 @@ export function AskDrawer({
               ? ptt.isTapLocked
                 ? "text-red-200 bg-red-500/20 ring-2 ring-red-500/60 shadow-[0_0_14px_-2px] shadow-red-500/70"
                 : "text-red-200 bg-red-500/15 ring-2 ring-red-500/40 shadow-[0_0_12px_-2px] shadow-red-500/50"
-              : askMic.state === "fetching-key" ||
-                  askMic.state === "connecting"
+              : askMic.state === "fetching-key" || askMic.state === "connecting"
                 ? "text-emerald-300 bg-emerald-500/10 animate-pulse border border-emerald-500/25"
                 : "text-neutral-400 hover:text-neutral-100 hover:bg-white/[0.05] border border-transparent",
           )}

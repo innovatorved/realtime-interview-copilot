@@ -77,39 +77,36 @@ export function useSupportMessages(
     }
   }, [enabled]);
 
-  const send = useCallback(
-    async ({ body, subject, parentId }: SendOptions) => {
-      setError(null);
-      try {
-        const res = await ricFetch("/api/support/messages", {
-          method: "POST",
-          body: JSON.stringify({ body, subject, parentId }),
-        });
-        if (!res.ok) {
-          let msg = `HTTP ${res.status}`;
-          try {
-            const data = (await res.json()) as { error?: string };
-            if (data?.error) msg = data.error;
-          } catch {
-            /* ignore */
-          }
-          throw new Error(msg);
+  const send = useCallback(async ({ body, subject, parentId }: SendOptions) => {
+    setError(null);
+    try {
+      const res = await ricFetch("/api/support/messages", {
+        method: "POST",
+        body: JSON.stringify({ body, subject, parentId }),
+      });
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const data = (await res.json()) as { error?: string };
+          if (data?.error) msg = data.error;
+        } catch {
+          /* ignore */
         }
-        const data = (await res.json()) as { message: SupportMessage };
-        if (!parentId) {
-          // New thread: prepend optimistically.
-          setThreads((prev) => [data.message, ...prev]);
-          setTotal((t) => t + 1);
-        }
-        return data.message;
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        setError(msg);
-        return null;
+        throw new Error(msg);
       }
-    },
-    [],
-  );
+      const data = (await res.json()) as { message: SupportMessage };
+      if (!parentId) {
+        // New thread: prepend optimistically.
+        setThreads((prev) => [data.message, ...prev]);
+        setTotal((t) => t + 1);
+      }
+      return data.message;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
+      return null;
+    }
+  }, []);
 
   const fetchThread = useCallback(async (threadId: string) => {
     try {

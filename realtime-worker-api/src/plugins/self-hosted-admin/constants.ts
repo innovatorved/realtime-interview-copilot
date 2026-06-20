@@ -86,7 +86,6 @@ export const IMPORTANT_EVENT_ACTIONS = [
   "question_asked",
   "mode_switched",
   "completion_saved",
-  "preset_loaded",
   "session_started",
   "session_ended",
   "session_resumed",

@@ -145,7 +145,8 @@ html {
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--app-border);
-    box-shadow: 0 1px 2px color-mix(in oklch, var(--app-shadow) 30%, transparent);
+    box-shadow: 0 1px 2px
+      color-mix(in oklch, var(--app-shadow) 30%, transparent);
   }
 
   .glass {
@@ -228,7 +229,8 @@ html {
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
     border: 1px solid var(--app-border);
-    box-shadow: 0 1px 2px color-mix(in oklch, var(--app-shadow) 35%, transparent);
+    box-shadow: 0 1px 2px
+      color-mix(in oklch, var(--app-shadow) 35%, transparent);
   }
 
   .glass-input {
@@ -276,7 +278,11 @@ html {
 
   /* Primary actions: solid diagonal blend, no looping motion (less noisy while coding) */
   .accent-gradient {
-    background: linear-gradient(135deg, oklch(0.55 0.17 152), oklch(0.48 0.14 160));
+    background: linear-gradient(
+      135deg,
+      oklch(0.55 0.17 152),
+      oklch(0.48 0.14 160)
+    );
   }
 
   .accent-glow {
@@ -301,7 +307,6 @@ html {
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background-color: color-mix(in oklch, var(--app-muted) 45%, transparent);
   }
-
 }
 
 .animate-fade-in-scale {

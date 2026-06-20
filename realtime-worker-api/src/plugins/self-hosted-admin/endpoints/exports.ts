@@ -4,11 +4,11 @@ import { count, eq, gte } from "drizzle-orm";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import {
   auditEvent,
-  interviewPreset,
   savedNote,
   securityEvent,
   session,
   user,
+  userInterviewContext,
 } from "../../../db/schema";
 import type { AdminDeps } from "../types";
 
@@ -36,7 +36,7 @@ export function exportsEndpoints(deps: AdminDeps) {
           [{ bannedUsers }],
           [{ activeSessions }],
           [{ totalNotes }],
-          [{ totalPresets }],
+          [{ totalInterviewContexts }],
           [{ totalAuditEvents }],
           [{ securityBlocks24h }],
           [{ securityBlocksWeek }],
@@ -49,7 +49,7 @@ export function exportsEndpoints(deps: AdminDeps) {
           db.select({ bannedUsers: count() }).from(user).where(eq(user.isBanned, true)),
           db.select({ activeSessions: count() }).from(session).where(gte(session.expiresAt, now)),
           db.select({ totalNotes: count() }).from(savedNote),
-          db.select({ totalPresets: count() }).from(interviewPreset),
+          db.select({ totalInterviewContexts: count() }).from(userInterviewContext),
           db.select({ totalAuditEvents: count() }).from(auditEvent),
           db.select({ securityBlocks24h: count() }).from(securityEvent).where(gte(securityEvent.createdAt, dayAgo)),
           db.select({ securityBlocksWeek: count() }).from(securityEvent).where(gte(securityEvent.createdAt, weekAgo)),
@@ -65,7 +65,7 @@ export function exportsEndpoints(deps: AdminDeps) {
           `banned_users,${bannedUsers}`,
           `active_sessions,${activeSessions}`,
           `total_notes,${totalNotes}`,
-          `total_presets,${totalPresets}`,
+          `total_interview_contexts,${totalInterviewContexts}`,
           `total_audit_events,${totalAuditEvents}`,
           `security_blocks_24h,${securityBlocks24h}`,
           `security_blocks_week,${securityBlocksWeek}`,
@@ -82,7 +82,7 @@ export function exportsEndpoints(deps: AdminDeps) {
             bannedUsers,
             activeSessions,
             totalNotes,
-            totalPresets,
+            totalInterviewContexts,
             totalAuditEvents,
             securityBlocks24h,
             securityBlocksWeek,

@@ -8,14 +8,21 @@ import { Textarea } from "@/components/ui/textarea";
 interface CompactContextDrawerProps {
   bg: string;
   onChange: (value: string) => void;
+  hasSavedResumeOrJd?: boolean;
 }
 
 export function CompactContextDrawer({
   bg,
   onChange,
+  hasSavedResumeOrJd = false,
 }: CompactContextDrawerProps) {
   return (
-    <div data-clickable className="app-toolbar px-3 py-2">
+    <div data-clickable className="app-toolbar px-3 py-2 space-y-1">
+      {hasSavedResumeOrJd && (
+        <p className="text-[10px] text-emerald-400/80">
+          Saved resume and job description are included automatically.
+        </p>
+      )}
       <Textarea
         placeholder="Optional: paste JD, resume or topic context for higher-quality answers…"
         className="min-h-[64px] max-h-[120px] resize-none bg-[color:color-mix(in_oklch,var(--app-surface)_65%,transparent)] border border-[color:var(--app-border)] focus-visible:ring-2 focus-visible:ring-[color:var(--app-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--app-surface)] text-[color:var(--app-text)] placeholder:text-[color:var(--app-muted)] text-xs leading-relaxed rounded-lg px-2.5 py-1.5"

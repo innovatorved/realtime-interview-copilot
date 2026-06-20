@@ -1,10 +1,6 @@
 import { app, ipcMain } from "electron";
 
-import {
-  checkForUpdates,
-  getAppVersion,
-  getUpdaterStatus,
-} from "../updater";
+import { checkForUpdates, getAppVersion, getUpdaterStatus } from "../updater";
 
 /** App lifecycle IPC: quit + relaunch + updater.
  *

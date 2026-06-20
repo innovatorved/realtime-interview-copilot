@@ -75,32 +75,6 @@ export const bulkBanSchema = z.object({
 
 export const adminDeleteNoteSchema = z.object({ noteId: safeIdSchema });
 
-export const adminCreatePresetSchema = z.object({
-  name: z.string().min(1).max(200),
-  category: z.string().min(1).max(100),
-  context: z.string().min(1).max(5000),
-  description: z.string().max(500).optional(),
-  icon: z.string().max(50).optional(),
-  isBuiltIn: z.boolean().optional(),
-  resumeText: z.string().max(6000).nullable().optional(),
-  resumeFileName: z.string().max(255).nullable().optional(),
-  jobDescription: z.string().max(4000).nullable().optional(),
-});
-
-export const adminUpdatePresetSchema = z.object({
-  presetId: safeIdSchema,
-  name: z.string().min(1).max(200).optional(),
-  category: z.string().min(1).max(100).optional(),
-  context: z.string().min(1).max(5000).optional(),
-  description: z.string().max(500).optional(),
-  icon: z.string().max(50).optional(),
-  resumeText: z.string().max(6000).nullable().optional(),
-  resumeFileName: z.string().max(255).nullable().optional(),
-  jobDescription: z.string().max(4000).nullable().optional(),
-});
-
-export const adminDeletePresetSchema = z.object({ presetId: safeIdSchema });
-
 export const revealConfigSchema = z.object({ key: configKeyEnum });
 
 export const modelParamsBodySchema = z.object({

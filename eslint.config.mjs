@@ -3,7 +3,13 @@ import nextVitals from "eslint-config-next/core-web-vitals";
 
 export default defineConfig([
   {
-    ignores: [".next/**", "out/**", "dist/**", "node_modules/**", "electron/**/*.js"],
+    ignores: [
+      ".next/**",
+      "out/**",
+      "dist/**",
+      "node_modules/**",
+      "electron/**/*.js",
+    ],
   },
   ...nextVitals,
   {

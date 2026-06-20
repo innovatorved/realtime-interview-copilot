@@ -42,7 +42,9 @@ export function useOutputMode(): [
 
 /** Tracks the most recently active completion flag so "Save" can tag
  *  the saved entry correctly even after `activeFlag` resets to null. */
-export function useLastFlag(activeFlag: FLAGS | null): React.MutableRefObject<FLAGS> {
+export function useLastFlag(
+  activeFlag: FLAGS | null,
+): React.MutableRefObject<FLAGS> {
   const ref = useRef<FLAGS>(
     (readSession(STORAGE_KEYS.lastFlag) as FLAGS) || FLAGS.COPILOT,
   );

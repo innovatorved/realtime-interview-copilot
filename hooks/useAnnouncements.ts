@@ -3,10 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BACKEND_API_URL } from "@/lib/constant";
 import { ricFetch } from "@/lib/ric-fetch";
-import type {
-  ActiveAnnouncementsResponse,
-  AppAnnouncement,
-} from "@/lib/types";
+import type { ActiveAnnouncementsResponse, AppAnnouncement } from "@/lib/types";
 
 const SESSION_DISMISSED_BANNERS_KEY = "interview-copilot-banner-dismissed";
 
@@ -82,13 +79,10 @@ export function useAnnouncements(
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(
-        `${BACKEND_API_URL}/api/announcements/active`,
-        {
-          credentials: "include",
-          signal: abortRef.current.signal,
-        },
-      );
+      const res = await fetch(`${BACKEND_API_URL}/api/announcements/active`, {
+        credentials: "include",
+        signal: abortRef.current.signal,
+      });
       if (res.status === 401 || res.status === 403) {
         setItems([]);
         return;
@@ -108,10 +102,9 @@ export function useAnnouncements(
   const dismiss = useCallback(async (id: string) => {
     setItems((prev) => prev.filter((a) => a.id !== id));
     try {
-      await ricFetch(
-        `/api/announcements/${encodeURIComponent(id)}/dismiss`,
-        { method: "POST" },
-      );
+      await ricFetch(`/api/announcements/${encodeURIComponent(id)}/dismiss`, {
+        method: "POST",
+      });
     } catch {
       /* swallow — UI is already updated */
     }

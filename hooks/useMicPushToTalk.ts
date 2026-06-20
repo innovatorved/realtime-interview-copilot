@@ -175,10 +175,7 @@ export function useMicPushToTalk(
         `release after ${heldMs}ms → TAP (tap-locked, keep recording)`,
       );
       setIsTapLocked(true);
-    } else if (
-      micState === "fetching-key" ||
-      micState === "connecting"
-    ) {
+    } else if (micState === "fetching-key" || micState === "connecting") {
       // The mic hasn't finished connecting yet (slow network / cold
       // key endpoint). Committing now would tear down the in-flight
       // session before any audio is captured. Promote to tap-toggle
@@ -320,8 +317,7 @@ export function useMicPushToTalk(
         return;
       // Only respond if we initiated a press (otherwise spurious
       // Ctrl/Space releases from unrelated shortcuts would re-trigger).
-      if (pressStartedAtRef.current === null && !isTapLockedRef.current)
-        return;
+      if (pressStartedAtRef.current === null && !isTapLockedRef.current) return;
       e.preventDefault();
       onPressUp();
     };

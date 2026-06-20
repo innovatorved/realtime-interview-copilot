@@ -278,7 +278,9 @@ export function ScreenRecordingOnboard() {
               <StatusDot status={status} />
               <span>
                 Current status:{" "}
-                <span className="text-[color:color-mix(in_oklch,var(--app-text)_75%,transparent)] font-mono">{status}</span>
+                <span className="text-[color:color-mix(in_oklch,var(--app-text)_75%,transparent)] font-mono">
+                  {status}
+                </span>
               </span>
             </div>
           </div>
@@ -414,7 +416,11 @@ function StatusDot({
         : "bg-sky-500";
   return (
     <span
-      className={cn("inline-block w-1.5 h-1.5 rounded-full shrink-0", color, className)}
+      className={cn(
+        "inline-block w-1.5 h-1.5 rounded-full shrink-0",
+        color,
+        className,
+      )}
       aria-hidden
     />
   );

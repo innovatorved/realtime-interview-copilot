@@ -6,7 +6,11 @@
 
 import posthog from "posthog-js";
 import { useCallback, useRef } from "react";
-import { humanizeError, humanizeHttpStatus, parseApiErrorResponse } from "@/lib/api-errors";
+import {
+  humanizeError,
+  humanizeHttpStatus,
+  parseApiErrorResponse,
+} from "@/lib/api-errors";
 import { ricFetch } from "@/lib/ric-fetch";
 import { dbg } from "@/lib/debug";
 import { parseSseStream } from "@/lib/sse";

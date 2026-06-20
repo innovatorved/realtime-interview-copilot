@@ -60,7 +60,7 @@ import { exportsEndpoints } from "./endpoints/exports";
 import { importantEventsEndpoints } from "./endpoints/important-events";
 import { liveSessionEndpoints } from "./endpoints/live-sessions";
 import { modelParamsEndpoints } from "./endpoints/model-params";
-import { notesPresetsEndpoints } from "./endpoints/notes-presets";
+import { notesEndpoints } from "./endpoints/notes";
 import { sessionEndpoints } from "./endpoints/sessions";
 import { supportEndpoints } from "./endpoints/support";
 import { usageEndpoints } from "./endpoints/usage";
@@ -312,7 +312,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
       ...sessionEndpoints(deps),
       ...auditEndpoints(deps),
       ...configEndpoints(deps),
-      ...notesPresetsEndpoints(deps),
+      ...notesEndpoints(deps),
       ...exportsEndpoints(deps),
       ...usageEndpoints(deps),
       ...aiGatewayEndpoints(deps),

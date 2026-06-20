@@ -4,7 +4,6 @@ import { Copilot } from "@/components/copilot";
 import { CompactCopilot } from "@/components/CompactCopilot";
 import History from "@/components/History";
 import { QuestionAssistant } from "@/components/QuestionAssistant";
-import { InterviewPresets } from "@/components/InterviewPresets";
 import { ScreenRecordingOnboard } from "@/components/ScreenRecordingOnboard";
 import { AppBackdrop } from "@/components/AppBackdropContext";
 import { useCaptureAndAsk } from "@/hooks/useCaptureAndAsk";
@@ -12,16 +11,10 @@ import { useClickThrough } from "@/hooks/useClickThrough";
 import { useCompactWindowSize } from "@/hooks/useCompactWindowSize";
 import { useNotes } from "@/hooks/useNotes";
 import { useNotesSidebar } from "@/hooks/useNotesSidebar";
-import { usePresets } from "@/hooks/usePresets";
 import { useExport } from "@/hooks/useExport";
-import { presetHasAttachedContext } from "@/lib/prompt-context";
 import { cn } from "@/lib/utils";
-import type { InterviewPreset } from "@/lib/types";
 import { authClient } from "@/lib/auth-client";
-import {
-  sessionDisplayName,
-  sessionUserTitle,
-} from "@/lib/session-display";
+import { sessionDisplayName, sessionUserTitle } from "@/lib/session-display";
 import { useEffect, useState, useCallback, useLayoutEffect } from "react";
 import { useTab } from "@/components/TabContext";
 import {
@@ -31,7 +24,6 @@ import {
   MessageSquare,
   Mic,
   Minimize2,
-  Sparkles,
 } from "lucide-react";
 import { formatShortcut, Kbd } from "@/components/ui/Kbd";
 import { sendGTMEvent } from "@next/third-parties/google";
@@ -39,9 +31,6 @@ import { sendGTMEvent } from "@next/third-parties/google";
 export default function MainPage() {
   const { activeTab, setActiveTab, compactMode, setCompactMode } = useTab();
   const { data: session } = authClient.useSession();
-  const [presetContext, setPresetContext] = useState("");
-  const [activePresetId, setActivePresetId] = useState<string | null>(null);
-  const [hasContextAttached, setHasContextAttached] = useState(false);
   const [isElectron, setIsElectron] = useState(false);
   const {
     open: notesSidebarOpen,
@@ -62,13 +51,10 @@ export default function MainPage() {
     deleteNote,
   } = useNotes({ initialLimit: 8 });
 
-  const { presets, error: presetsError, fetchPresets, updatePresetContext } =
-    usePresets();
   const { isExporting, error: exportError, exportNotes } = useExport();
   const [saveNoteError, setSaveNoteError] = useState<string | null>(null);
   const [dismissedError, setDismissedError] = useState(false);
-  const topError =
-    saveNoteError ?? notesError ?? presetsError ?? exportError ?? null;
+  const topError = saveNoteError ?? notesError ?? exportError ?? null;
   useEffect(() => {
     if (topError) setDismissedError(false);
   }, [topError]);
@@ -100,8 +86,7 @@ export default function MainPage() {
 
   useEffect(() => {
     fetchNotes(1);
-    fetchPresets();
-  }, [fetchNotes, fetchPresets]);
+  }, [fetchNotes]);
 
   const handleSaveNote = useCallback(
     async (content: string, tag: string) => {
@@ -113,22 +98,6 @@ export default function MainPage() {
     },
     [createNote],
   );
-
-  const handleApplyPreset = useCallback(
-    (context: string, preset: InterviewPreset) => {
-      setPresetContext(context);
-      setActivePresetId(preset.id);
-      setHasContextAttached(presetHasAttachedContext(preset));
-      setActiveTab("copilot");
-    },
-    [setActiveTab],
-  );
-
-  const handleClearPreset = useCallback(() => {
-    setPresetContext("");
-    setActivePresetId(null);
-    setHasContextAttached(false);
-  }, []);
 
   const handleLogout = useCallback(async () => {
     try {
@@ -161,22 +130,13 @@ export default function MainPage() {
       description: "Chat with context and screenshots",
       shortcutKey: "A",
     },
-    {
-      id: "presets" as const,
-      label: "Presets",
-      icon: Sparkles,
-      description: "Saved system prompts and role context",
-      shortcutKey: "P",
-    },
   ];
 
   return (
     <div
       className={cn(
         "flex flex-col h-screen overflow-hidden",
-        isElectron
-          ? "bg-transparent"
-          : "app-page-bg",
+        isElectron ? "bg-transparent" : "app-page-bg",
       )}
     >
       {/* Window backdrop. In compact mode navbar dimming comes from
@@ -280,14 +240,6 @@ export default function MainPage() {
                   </button>
                 </div>
               )}
-              {presetContext && (
-                <div className="hidden items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/[0.07] px-2.5 py-1 text-[10px] font-medium text-emerald-300/90 md:flex">
-                  <Sparkles className="h-3 w-3 shrink-0" aria-hidden />
-                  <span className="max-w-[10rem] truncate">
-                    {hasContextAttached ? "Context attached" : "Preset"}
-                  </span>
-                </div>
-              )}
               <button
                 type="button"
                 onClick={() => setCompactMode(true)}
@@ -323,8 +275,6 @@ export default function MainPage() {
           {compactMode ? (
             <CompactCopilot
               addInSavedData={({ data, tag }) => handleSaveNote(data, tag)}
-              presetContext={presetContext}
-              hasContextAttached={hasContextAttached}
               onExitCompact={() => setCompactMode(false)}
               onHasOutputChange={setCompactHasOutput}
             />
@@ -347,8 +297,6 @@ export default function MainPage() {
                       handleSaveNote(data, tag)
                     }
                     isActive={activeTab === "copilot"}
-                    presetContext={presetContext}
-                    hasContextAttached={hasContextAttached}
                   />
                 </div>
 
@@ -442,27 +390,6 @@ export default function MainPage() {
                 )}
               >
                 <QuestionAssistant isActive={activeTab === "ask-ai"} />
-              </div>
-
-              <div
-                id="panel-presets"
-                role="tabpanel"
-                aria-labelledby="tab-presets"
-                className={cn(
-                  "h-full overflow-y-auto custom-scrollbar transition-opacity duration-200",
-                  activeTab === "presets"
-                    ? "block opacity-100"
-                    : "hidden opacity-0",
-                )}
-              >
-                <InterviewPresets
-                  presets={presets}
-                  onApply={handleApplyPreset}
-                  activeContext={presetContext}
-                  activePresetId={activePresetId}
-                  onClear={handleClearPreset}
-                  onSaveContext={updatePresetContext}
-                />
               </div>
             </>
           )}

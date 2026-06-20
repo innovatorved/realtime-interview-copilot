@@ -13,11 +13,7 @@ import { fetchAskMicKey } from "./mic/keyFetch";
 import { createLevelMeter, type LevelMeterHandle } from "./mic/levelMeter";
 import { tryStartMediaRecorder } from "./mic/mimePicker";
 import { createStatsFlusher, type StatsFlusher } from "./mic/statsFlush";
-import {
-  type AskMicState,
-  type AskMicStats,
-  EMPTY_STATS,
-} from "./mic/types";
+import { type AskMicState, type AskMicStats, EMPTY_STATS } from "./mic/types";
 
 export type { AskMicState, AskMicStats } from "./mic/types";
 
@@ -377,14 +373,18 @@ export function useAskMic(options: UseAskMicOptions = {}): UseAskMicReturn {
       //    inherit whatever the browser felt like today (Safari, in
       //    particular, picks formats Deepgram can't sniff). 250ms
       //    timeslice = ~4 chunks/sec, low-latency without flooding.
-      const startResult = tryStartMediaRecorder(media, 250, (candidate, err) => {
-        console.warn(
-          "[useAskMic] MediaRecorder rejected mimeType",
-          candidate ?? "(default)",
-          "—",
-          err instanceof Error ? err.message : err,
-        );
-      });
+      const startResult = tryStartMediaRecorder(
+        media,
+        250,
+        (candidate, err) => {
+          console.warn(
+            "[useAskMic] MediaRecorder rejected mimeType",
+            candidate ?? "(default)",
+            "—",
+            err instanceof Error ? err.message : err,
+          );
+        },
+      );
       if (!startResult) {
         console.error(
           "[useAskMic] no MediaRecorder mimeType worked, last error not retained",
@@ -474,12 +474,13 @@ export function useAskMic(options: UseAskMicOptions = {}): UseAskMicReturn {
       }
 
       const words = Array.isArray(alt.words) ? alt.words : [];
-      const caption = words.length > 0
-        ? words
-            .map((w) => w.punctuated_word ?? w.word)
-            .join(" ")
-            .trim()
-        : (alt.transcript ?? "").trim();
+      const caption =
+        words.length > 0
+          ? words
+              .map((w) => w.punctuated_word ?? w.word)
+              .join(" ")
+              .trim()
+          : (alt.transcript ?? "").trim();
       if (!caption) return;
       captionedEventsRef.current++;
       lastCaptionRef.current = caption;

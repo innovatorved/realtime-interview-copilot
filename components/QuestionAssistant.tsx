@@ -26,10 +26,7 @@ import { useAskMic } from "@/hooks/useAskMic";
 import { useMicPushToTalk } from "@/hooks/useMicPushToTalk";
 import { dbg } from "@/lib/debug";
 import { trackEvent } from "@/lib/session-tracking";
-import {
-  sessionDisplayName,
-  sessionUserTitle,
-} from "@/lib/session-display";
+import { sessionDisplayName, sessionUserTitle } from "@/lib/session-display";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import {
@@ -397,7 +394,10 @@ export function QuestionAssistant({
             <div className="min-w-0 flex-1">
               <h2 className="text-[12px] font-semibold text-white flex items-center gap-1.5 leading-none">
                 Ask AI
-                <span className="relative flex h-1.5 w-1.5 shrink-0" aria-hidden>
+                <span
+                  className="relative flex h-1.5 w-1.5 shrink-0"
+                  aria-hidden
+                >
                   <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400/35" />
                   <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500 ring-1 ring-emerald-500/30" />
                 </span>
@@ -580,11 +580,11 @@ export function QuestionAssistant({
                     }`}
                   >
                     <Camera className="w-3.5 h-3.5" />
-                      <Kbd
-                        keys={["Mod", "Shift", "1"]}
-                        size="xs"
-                        className="hidden xl:inline-flex ml-0.5 text-emerald-300/90"
-                      />
+                    <Kbd
+                      keys={["Mod", "Shift", "1"]}
+                      size="xs"
+                      className="hidden xl:inline-flex ml-0.5 text-emerald-300/90"
+                    />
                   </button>
                 )}
                 {!isLoading &&
@@ -663,9 +663,7 @@ export function QuestionAssistant({
                 messages={messages}
                 density="compact"
                 userLabel={
-                  session?.user
-                    ? sessionDisplayName(session.user)
-                    : undefined
+                  session?.user ? sessionDisplayName(session.user) : undefined
                 }
               />
             )}
