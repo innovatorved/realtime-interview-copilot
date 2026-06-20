@@ -274,15 +274,22 @@ export default function TitleBar() {
           size="sm"
           variant="ghost"
           className={cn(
-            "h-7 w-7 p-0 hover:bg-neutral-700/50",
+            "h-7 px-2 gap-1 hover:bg-neutral-700/50",
             compactMode
               ? "text-emerald-400 hover:text-emerald-300"
               : "text-neutral-300 hover:text-neutral-200",
           )}
           onClick={() => setCompactMode(!compactMode)}
-          title={compactMode ? "Exit compact mode" : "Enter compact mode"}
+          title={compactMode ? "Exit compact mode (full layout)" : "Enter compact mode"}
         >
-          <Rows3 className="h-3.5 w-3.5" />
+          {compactMode ? (
+            <>
+              <Maximize2 className="h-3.5 w-3.5" />
+              <span className="text-[10px] font-medium">Full</span>
+            </>
+          ) : (
+            <Rows3 className="h-3.5 w-3.5" />
+          )}
         </Button>
 
         <Button

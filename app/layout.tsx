@@ -6,6 +6,7 @@ import { AppBackdropProvider } from "@/components/AppBackdropContext";
 import { GoogleTagManager } from "@next/third-parties/google";
 import { TabProvider } from "@/components/TabContext";
 import { TranscriptionProvider } from "@/components/TranscriptionContext";
+import { InterviewContextProvider } from "@/components/InterviewContextProvider";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
 import { PostHogProvider } from "@/components/PostHogProvider";
 
@@ -81,8 +82,10 @@ export default function RootLayout({
             <AppBackdropProvider>
               <TabProvider>
                 <TranscriptionProvider>
-                  <TitleBar />
-                  {children}
+                  <InterviewContextProvider>
+                    <TitleBar />
+                    {children}
+                  </InterviewContextProvider>
                 </TranscriptionProvider>
               </TabProvider>
             </AppBackdropProvider>

@@ -397,10 +397,11 @@ export function CompactToolbar({
           variant="ghost"
           size="sm"
           onClick={onExitCompact}
-          title="Exit compact mode"
-          className="h-7 w-7 p-0 rounded-lg text-neutral-400 hover:text-neutral-100 hover:bg-white/[0.05]"
+          title="Exit compact mode (full layout)"
+          className="h-7 px-2 gap-1 rounded-lg text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/[0.08]"
         >
           <Maximize2 className="w-3.5 h-3.5" />
+          <span className="text-[10px] font-medium">Full</span>
         </Button>
       )}
     </div>

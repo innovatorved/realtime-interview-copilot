@@ -50,13 +50,13 @@ export function CompactCopilot({
   onExitCompact,
   onHasOutputChange,
 }: CompactCopilotProps) {
-  const { context, fetchContext } = useInterviewContext();
+  const {
+    interviewNotes,
+    resumeText,
+    jobDescription,
+    setInterviewNotes,
+  } = useInterviewContext();
   const { transcribedText, clearTranscription } = useTranscription();
-  const [interviewNotes, setInterviewNotes] = useState("");
-  const [contextHydrated, setContextHydrated] = useState(false);
-  // Freeform "Ask AI" — user types a question instead of relying on the
-  // transcription buffer. Distinct from Copilot/Summarize which both
-  // operate on the transcribed text.
   const [askMode, setAskMode] = useState<boolean>(false);
   const [askInput, setAskInput] = useState<string>("");
   // Completion is per-surface and reflects the LAST single-shot output
@@ -83,24 +83,14 @@ export function CompactCopilot({
 
   const effectiveBg = buildContextBlock({
     existingBg: interviewNotes,
-    resumeText: context.resumeText,
-    jobDescription: context.jobDescription,
+    resumeText,
+    jobDescription,
   });
 
   const contextAttached = hasAttachedContext({
-    resumeText: context.resumeText,
-    jobDescription: context.jobDescription,
+    resumeText,
+    jobDescription,
   });
-
-  useEffect(() => {
-    if (session?.user) void fetchContext();
-  }, [session?.user, fetchContext]);
-
-  useEffect(() => {
-    if (contextHydrated) return;
-    setInterviewNotes(context.interviewNotes ?? "");
-    setContextHydrated(true);
-  }, [context, contextHydrated]);
 
   // Captured prefix for mic dictation — see QuestionAssistant for rationale.
   const micPrefixRef = useRef<string>("");

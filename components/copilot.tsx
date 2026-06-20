@@ -30,22 +30,23 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
   const isClientReady = useClientReady();
   const { data: session } = authClient.useSession();
   const {
-    context,
+    interviewNotes,
+    resumeText,
+    resumeFileName,
+    jobDescription,
+    setInterviewNotes,
+    setJobDescription,
+    setResumeParsed,
+    clearResume,
     isLoading: contextLoading,
     isSaving,
     error: contextError,
-    fetchContext,
-    updateContext,
+    saveContext,
   } = useInterviewContext();
 
   const { transcribedText, transcriptionSegments, clearTranscription } =
     useTranscription();
   const [flag, setFlag] = useState<FLAGS>(FLAGS.COPILOT);
-  const [interviewNotes, setInterviewNotes] = useState("");
-  const [resumeText, setResumeText] = useState<string | null>(null);
-  const [resumeFileName, setResumeFileName] = useState<string | null>(null);
-  const [jobDescription, setJobDescription] = useState("");
-  const [contextHydrated, setContextHydrated] = useState(false);
   const transcriptionBoxRef = useRef<HTMLDivElement>(null);
 
   const effectiveBg = useMemo(
@@ -71,21 +72,6 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
     bg: effectiveBg,
     transcribedText,
   });
-
-  useEffect(() => {
-    if (session?.user) {
-      void fetchContext();
-    }
-  }, [session?.user, fetchContext]);
-
-  useEffect(() => {
-    if (contextHydrated || contextLoading) return;
-    setInterviewNotes(context.interviewNotes ?? "");
-    setResumeText(context.resumeText);
-    setResumeFileName(context.resumeFileName);
-    setJobDescription(context.jobDescription ?? "");
-    setContextHydrated(true);
-  }, [context, contextLoading, contextHydrated]);
 
   useEffect(() => {
     if (transcriptionBoxRef.current) {
@@ -162,19 +148,8 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
   }, [handleKeyDown, isActive]);
 
   const handleSaveContext = useCallback(async () => {
-    await updateContext({
-      interviewNotes: interviewNotes.trim() || null,
-      resumeText,
-      resumeFileName,
-      jobDescription: jobDescription.trim() || null,
-    });
-  }, [
-    updateContext,
-    interviewNotes,
-    resumeText,
-    resumeFileName,
-    jobDescription,
-  ]);
+    await saveContext();
+  }, [saveContext]);
 
   const handleSave = () => {
     addInSavedData({
@@ -236,14 +211,8 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
           resumeFileName={resumeFileName}
           jobDescription={jobDescription}
           onJobDescriptionChange={setJobDescription}
-          onResumeParsed={(text, fileName) => {
-            setResumeText(text);
-            setResumeFileName(fileName);
-          }}
-          onClearResume={() => {
-            setResumeText(null);
-            setResumeFileName(null);
-          }}
+          onResumeParsed={setResumeParsed}
+          onClearResume={clearResume}
           onSave={() => void handleSaveContext()}
           isSaving={isSaving}
           isLoading={contextLoading}
