@@ -36,8 +36,25 @@ import {
   handleDismissAnnouncement,
 } from "./routes/announcements";
 import type { Env } from "./env";
+import { runScheduledMaintenance } from "./lib/maintenance";
 
 export default {
+  async scheduled(
+    _controller: ScheduledController,
+    env: Env,
+    _ctx: ExecutionContext,
+  ) {
+    try {
+      const result = await runScheduledMaintenance(env);
+      console.log("[Worker] Scheduled maintenance complete:", result.cleanedAt);
+    } catch (e) {
+      console.error(
+        "[Worker] Scheduled maintenance failed:",
+        e instanceof Error ? e.message : "unknown",
+      );
+    }
+  },
+
   async fetch(
     request: Request,
     env: Env,

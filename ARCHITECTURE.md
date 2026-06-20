@@ -274,6 +274,18 @@ Key points:
 - Trusted browser origins are explicitly allowlisted.
 - Cookies use `SameSite=None` and `Secure` because the desktop app and worker are not same-site in the normal browser sense.
 - The admin plugin controls approval, banning, and administrative configuration.
+
+### 3.1 Admin dashboard (separate repo)
+
+The Salesforce-style admin console lives in a sibling repo, `interview-copilot-admin/` on the developer machine (not inside this monorepo). It deploys to Cloudflare Workers via OpenNext:
+
+- Production: `https://interview-copilot-admin.vedgupta.in`
+- Worker name: `interview-copilot-admin`
+- API target: `NEXT_PUBLIC_API_URL` → worker `/api/auth/self-hosted-admin/*`
+- Deep-linked routes: `/overview`, `/users`, `/users/[userId]`, `/inbox`, `/live-sessions`, etc.
+- Deploy: `NEXT_PUBLIC_API_URL=https://realtime-worker-api-prod.vedgupta.in bun run deploy`
+
+The worker trusts the admin origin in `realtime-worker-api/src/auth.ts`. A daily Cron Trigger (`0 3 * * * UTC`) runs DB maintenance (expired sessions, stale live sessions) via `src/lib/maintenance.ts`.
 - Disposable-email blocking and rate limits are enforced at the auth layer.
 
 ### 7.3 Config and secrets
