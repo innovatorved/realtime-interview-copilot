@@ -2,8 +2,8 @@
 
 import { TRUSTED_ORIGINS as AUTH_TRUSTED_ORIGINS } from "../auth";
 
-const ALLOWED_METHODS = "GET,POST,PUT,DELETE,OPTIONS";
-const ALLOWED_HEADERS = "Content-Type,Authorization";
+const ALLOWED_METHODS = "GET,POST,PUT,PATCH,DELETE,OPTIONS";
+const ALLOWED_HEADERS = "Content-Type,Authorization,X-Requested-With";
 const CORS_MAX_AGE = "86400";
 
 /** Single source of truth for allowed origins, re-exported to Better Auth so
