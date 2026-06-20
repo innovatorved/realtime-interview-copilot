@@ -23,6 +23,7 @@ import { sendGTMEvent } from "@next/third-parties/google";
 
 import { useTab } from "@/components/TabContext";
 import { useAppBackdrop } from "@/components/AppBackdropContext";
+import { useInterviewContext } from "@/hooks/useInterviewContext";
 import { formatShortcut, Kbd } from "@/components/ui/Kbd";
 import { sessionDisplayName, sessionUserTitle } from "@/lib/session-display";
 
@@ -36,6 +37,7 @@ export default function TitleBar() {
   const { data: session } = authClient.useSession();
   const router = useRouter();
   const { activeTab, setActiveTab, compactMode, setCompactMode } = useTab();
+  const { saveContext } = useInterviewContext();
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.electronAPI) {
@@ -135,6 +137,10 @@ export default function TitleBar() {
       console.error("Sign out failed", error);
       window.dispatchEvent(new Event("auth:logout"));
     }
+  };
+
+  const toggleCompactMode = () => {
+    void saveContext().finally(() => setCompactMode(!compactMode));
   };
 
   // Don't render in browser mode
@@ -279,7 +285,7 @@ export default function TitleBar() {
               ? "text-emerald-400 hover:text-emerald-300"
               : "text-neutral-300 hover:text-neutral-200",
           )}
-          onClick={() => setCompactMode(!compactMode)}
+          onClick={toggleCompactMode}
           title={compactMode ? "Exit compact mode (full layout)" : "Enter compact mode"}
         >
           {compactMode ? (

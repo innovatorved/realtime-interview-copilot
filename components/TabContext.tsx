@@ -52,13 +52,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (compactMode) {
-        if (e.altKey && e.shiftKey && e.code === "KeyF") {
-          e.preventDefault();
-          setCompactMode(false);
-        }
-        return;
-      }
+      if (compactMode) return;
 
       if (e.altKey && e.code === "KeyC") {
         e.preventDefault();

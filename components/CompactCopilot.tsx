@@ -5,7 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAskScreenshotBridge } from "@/components/ask/useAskScreenshotBridge";
 import { useAskKeyboard } from "@/components/ask/useAskKeyboard";
 import { useTranscription } from "@/components/TranscriptionContext";
-import { useAskChat } from "@/hooks/useAskChat";
+import { useSharedAskChat } from "@/components/AskChatProvider";
+import { useCopilotSession } from "@/components/CopilotSessionProvider";
 import { useAskMic } from "@/hooks/useAskMic";
 import { useMicPushToTalk } from "@/hooks/useMicPushToTalk";
 import { dbg } from "@/lib/debug";
@@ -15,13 +16,7 @@ import { AskDrawer } from "./compact/AskDrawer";
 import { CompactContextDrawer } from "./compact/CompactContextDrawer";
 import { CompactToolbar } from "./compact/CompactToolbar";
 import { OutputPanel } from "./compact/OutputPanel";
-import { STORAGE_KEYS, writeSession } from "./compact/storage";
 import { useCompactGenerate } from "./compact/useCompactGenerate";
-import {
-  useCompletionState,
-  useLastFlag,
-  useOutputMode,
-} from "./compact/useCompactSession";
 import { useInterviewContext } from "@/hooks/useInterviewContext";
 import { authClient } from "@/lib/auth-client";
 import { buildContextBlock, hasAttachedContext } from "@/lib/prompt-context";
@@ -31,13 +26,6 @@ import { sessionDisplayName } from "@/lib/session-display";
 // and MAX_IMAGES_PER_REQUEST on the worker. Keeps payload bounded and the UX
 // consistent between the full Ask AI tab and this compact drawer.
 const MAX_IMAGES = 4;
-
-// Background / system instructions for the Ask AI chat. Mirrors the
-// QuestionAssistant surface so behaviour matches whichever surface the
-// user is on. The bg field is appended only to the FIRST user turn by
-// the worker, so it doesn't grow the prompt as the conversation goes on.
-const ASK_AI_BACKGROUND =
-  "You are a professional interview coach. Provide detailed, comprehensive, interview-ready answers. When the user follows up with a clarifying question, treat it as a continuation of the same conversation and reference your earlier answers when relevant.";
 
 interface CompactCopilotProps {
   addInSavedData: (data: HistoryData) => void;
@@ -57,18 +45,16 @@ export function CompactCopilot({
     setInterviewNotes,
   } = useInterviewContext();
   const { transcribedText, clearTranscription } = useTranscription();
+  const {
+    completion,
+    setCompletion,
+    flag: sessionFlag,
+    setFlag: setSessionFlag,
+    outputMode,
+    setOutputMode,
+  } = useCopilotSession();
   const [askMode, setAskMode] = useState<boolean>(false);
   const [askInput, setAskInput] = useState<string>("");
-  // Completion is per-surface and reflects the LAST single-shot output
-  // (Copilot transcript-driven or Summarizer). Persisted across compact
-  // remounts so the user doesn't lose the answer when toggling to full
-  // mode. The Ask AI chat lives separately in `chat.messages`.
-  const [completion, setCompletion] = useCompletionState();
-  // Which output surface to render in the bottom panel:
-  //   - "transcript" → the single `completion` blob (Copilot / Summarizer)
-  //   - "chat"       → the multi-turn `chat.messages` thread (Ask AI)
-  // Persisted so a reload restores the right view.
-  const [outputMode, setOutputMode] = useOutputMode();
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [activeFlag, setActiveFlag] = useState<FLAGS | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -130,11 +116,15 @@ export function CompactCopilot({
   // conversation visible (matches the existing `completion` UX for the
   // transcript-driven flows). Distinct from `completion` so a Copilot/
   // Summarizer run doesn't blow away the chat thread.
-  const chat = useAskChat({
-    storageKey: STORAGE_KEYS.chatMessages,
-    background: ASK_AI_BACKGROUND,
-    sendCap: 16,
-  });
+  const chat = useSharedAskChat();
+
+  const syncActiveFlag = useCallback(
+    (f: FLAGS | null) => {
+      setActiveFlag(f);
+      if (f !== null) setSessionFlag(f);
+    },
+    [setSessionFlag],
+  );
 
   const {
     generate,
@@ -148,7 +138,7 @@ export function CompactCopilot({
     setError,
     setCompletion,
     setIsLoading,
-    setActiveFlag,
+    setActiveFlag: syncActiveFlag,
     setOutputCollapsed,
     setOutputMode,
   });
@@ -337,12 +327,10 @@ export function CompactCopilot({
     transcribedText,
   ]);
 
-  const lastFlagRef = useLastFlag(activeFlag);
-
   const handleSave = useCallback(() => {
     if (!completion.trim()) return;
-    const tag =
-      lastFlagRef.current === FLAGS.SUMMARIZER ? "Summarizer" : "Copilot";
+    const modeFlag = activeFlag ?? sessionFlag;
+    const tag = modeFlag === FLAGS.SUMMARIZER ? "Summarizer" : "Copilot";
     addInSavedData({
       createdAt: new Date().toISOString(),
       data: completion,
@@ -353,7 +341,7 @@ export function CompactCopilot({
       completion_length: completion.length,
       surface: "compact",
     });
-  }, [addInSavedData, completion, lastFlagRef]);
+  }, [activeFlag, addInSavedData, completion, sessionFlag]);
 
   const clearAll = useCallback(() => {
     clearTranscription();
@@ -361,8 +349,8 @@ export function CompactCopilot({
     setError(null);
     chat.reset();
     setOutputMode("transcript");
-    writeSession(STORAGE_KEYS.completion, "");
-  }, [chat.reset, clearTranscription, setCompletion, setOutputMode]);
+    setSessionFlag(FLAGS.COPILOT);
+  }, [chat, clearTranscription, setCompletion, setOutputMode, setSessionFlag]);
 
   // hasOutput drives both the visibility of the output panel and the
   // parent's "needs expanded window" signal. We treat ANY pending state

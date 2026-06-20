@@ -17,6 +17,11 @@ import {
 } from "react";
 import { authClient } from "@/lib/auth-client";
 import { BACKEND_API_URL } from "@/lib/constant";
+import {
+  APP_SESSION_KEYS,
+  readAppSession,
+  writeAppSession,
+} from "@/lib/app-session-storage";
 import { ricFetch } from "@/lib/ric-fetch";
 import type { UserInterviewContext } from "@/lib/types";
 
@@ -126,7 +131,48 @@ export function InterviewContextProvider({ children }: { children: ReactNode }) 
   }, [syncDraftFromServer]);
 
   useEffect(() => {
+    if (!isHydrated) return;
+    try {
+      writeAppSession(
+        APP_SESSION_KEYS.interviewDraft,
+        JSON.stringify({
+          interviewNotes,
+          resumeText,
+          resumeFileName,
+          jobDescription,
+        }),
+      );
+    } catch {
+      /* non-fatal */
+    }
+  }, [
+    interviewNotes,
+    resumeText,
+    resumeFileName,
+    jobDescription,
+    isHydrated,
+  ]);
+
+  useEffect(() => {
     if (session?.user) {
+      const raw = readAppSession(APP_SESSION_KEYS.interviewDraft);
+      if (raw) {
+        try {
+          const draft = JSON.parse(raw) as InterviewContextFields;
+          if (typeof draft.interviewNotes === "string") {
+            setInterviewNotes(draft.interviewNotes);
+          }
+          if (draft.resumeText !== undefined) setResumeText(draft.resumeText);
+          if (draft.resumeFileName !== undefined) {
+            setResumeFileName(draft.resumeFileName);
+          }
+          if (typeof draft.jobDescription === "string") {
+            setJobDescription(draft.jobDescription);
+          }
+        } catch {
+          /* ignore corrupt draft */
+        }
+      }
       setIsHydrated(false);
       void fetchContext();
     } else {
@@ -138,6 +184,7 @@ export function InterviewContextProvider({ children }: { children: ReactNode }) 
       setJobDescription("");
       setIsHydrated(false);
       setError(null);
+      writeAppSession(APP_SESSION_KEYS.interviewDraft, "");
     }
   }, [session?.user?.id, fetchContext]);
 

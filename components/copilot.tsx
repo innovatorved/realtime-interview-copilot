@@ -11,6 +11,8 @@ import { useTranscription } from "@/components/TranscriptionContext";
 import { useClientReady } from "@/hooks/useClientReady";
 import { useCopilotSubmit } from "@/hooks/useCopilotSubmit";
 import { useInterviewContext } from "@/hooks/useInterviewContext";
+import { useCopilotSession } from "@/components/CopilotSessionProvider";
+import { useTab } from "@/components/TabContext";
 import { authClient } from "@/lib/auth-client";
 import { buildContextBlock } from "@/lib/prompt-context";
 import { trackEvent } from "@/lib/session-tracking";
@@ -29,6 +31,7 @@ interface CopilotProps {
 export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
   const isClientReady = useClientReady();
   const { data: session } = authClient.useSession();
+  const { compactMode } = useTab();
   const {
     interviewNotes,
     resumeText,
@@ -46,7 +49,7 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
 
   const { transcribedText, transcriptionSegments, clearTranscription } =
     useTranscription();
-  const [flag, setFlag] = useState<FLAGS>(FLAGS.COPILOT);
+  const { flag, setFlag } = useCopilotSession();
   const transcriptionBoxRef = useRef<HTMLDivElement>(null);
 
   const effectiveBg = useMemo(
@@ -174,11 +177,11 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
   };
 
   useEffect(() => {
-    if (!isActive) return;
+    if (!isActive || compactMode) return;
     if (typeof window !== "undefined" && window.electronAPI && session) {
       window.electronAPI.windowSetSize(1180, 640);
     }
-  }, [session, isActive]);
+  }, [session, isActive, compactMode]);
 
   if (!isClientReady) {
     return <CopilotSkeleton />;

@@ -17,6 +17,7 @@ import { authClient } from "@/lib/auth-client";
 import { sessionDisplayName, sessionUserTitle } from "@/lib/session-display";
 import { useEffect, useState, useCallback, useLayoutEffect } from "react";
 import { useTab } from "@/components/TabContext";
+import { useInterviewContext } from "@/hooks/useInterviewContext";
 import {
   BookOpen,
   ChevronDown,
@@ -30,6 +31,7 @@ import { sendGTMEvent } from "@next/third-parties/google";
 
 export default function MainPage() {
   const { activeTab, setActiveTab, compactMode, setCompactMode } = useTab();
+  const { saveContext } = useInterviewContext();
   const { data: session } = authClient.useSession();
   const [isElectron, setIsElectron] = useState(false);
   const {
@@ -83,6 +85,25 @@ export default function MainPage() {
 
   // Compact-mode click-through tracking.
   useClickThrough(compactMode, isElectron);
+
+  const setCompactModePersisted = useCallback(
+    (next: boolean) => {
+      void saveContext().finally(() => setCompactMode(next));
+    },
+    [saveContext, setCompactMode],
+  );
+
+  useEffect(() => {
+    const onExitCompactHotkey = (e: KeyboardEvent) => {
+      if (!compactMode) return;
+      if (e.altKey && e.shiftKey && e.code === "KeyF") {
+        e.preventDefault();
+        setCompactModePersisted(false);
+      }
+    };
+    window.addEventListener("keydown", onExitCompactHotkey);
+    return () => window.removeEventListener("keydown", onExitCompactHotkey);
+  }, [compactMode, setCompactModePersisted]);
 
   useEffect(() => {
     fetchNotes(1);
@@ -242,7 +263,7 @@ export default function MainPage() {
               )}
               <button
                 type="button"
-                onClick={() => setCompactMode(true)}
+                onClick={() => setCompactModePersisted(true)}
                 title="Compact layout (picture-in-picture style)"
                 aria-label="Switch to compact mode"
                 className="flex items-center gap-1.5 rounded-full border border-[color:var(--app-border)] bg-white/[0.03] px-2.5 py-2 text-xs font-medium text-[color:var(--app-muted)] transition-colors hover:bg-white/[0.06] hover:text-[color:var(--app-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--app-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--app-surface)] md:px-3"
@@ -272,13 +293,11 @@ export default function MainPage() {
       )}
       <main className="flex-1 overflow-hidden min-h-0">
         <div className={cn("h-full min-h-0", isElectron ? "pt-8" : "")}>
-          {compactMode ? (
-            <CompactCopilot
-              addInSavedData={({ data, tag }) => handleSaveNote(data, tag)}
-              onExitCompact={() => setCompactMode(false)}
-              onHasOutputChange={setCompactHasOutput}
-            />
-          ) : (
+          {/* Full layout stays mounted so Copilot / Ask AI state survives compact toggles. */}
+          <div
+            className={cn("h-full min-h-0 flex flex-col", compactMode && "hidden")}
+            aria-hidden={compactMode}
+          >
             <>
               <div
                 id="panel-copilot"
@@ -296,7 +315,7 @@ export default function MainPage() {
                     addInSavedData={({ data, tag }) =>
                       handleSaveNote(data, tag)
                     }
-                    isActive={activeTab === "copilot"}
+                    isActive={activeTab === "copilot" && !compactMode}
                   />
                 </div>
 
@@ -389,10 +408,21 @@ export default function MainPage() {
                     : "hidden opacity-0",
                 )}
               >
-                <QuestionAssistant isActive={activeTab === "ask-ai"} />
+                <QuestionAssistant isActive={activeTab === "ask-ai" && !compactMode} />
               </div>
             </>
-          )}
+          </div>
+
+          <div
+            className={cn("h-full min-h-0 flex flex-col", !compactMode && "hidden")}
+            aria-hidden={!compactMode}
+          >
+            <CompactCopilot
+              addInSavedData={({ data, tag }) => handleSaveNote(data, tag)}
+              onExitCompact={() => setCompactModePersisted(false)}
+              onHasOutputChange={setCompactHasOutput}
+            />
+          </div>
         </div>
       </main>
 

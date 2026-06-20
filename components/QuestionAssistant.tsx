@@ -21,7 +21,7 @@ import { ChatThread } from "@/components/ui/ChatThread";
 import { Input } from "@/components/ui/input";
 import { formatShortcut, Kbd } from "@/components/ui/Kbd";
 import { LevelMeter } from "@/components/ui/LevelMeter";
-import { useAskChat } from "@/hooks/useAskChat";
+import { useSharedAskChat } from "@/components/AskChatProvider";
 import { useAskMic } from "@/hooks/useAskMic";
 import { useMicPushToTalk } from "@/hooks/useMicPushToTalk";
 import { dbg } from "@/lib/debug";
@@ -44,12 +44,6 @@ interface QuestionAssistantProps {
 // renderer might send.
 const MAX_IMAGES = 4;
 
-// Background / system instructions sent with the first user turn. Kept in
-// sync with the original single-shot copy so model behaviour for a fresh
-// chat matches the pre-chat experience.
-const ASK_AI_BACKGROUND =
-  "You are a professional interview coach. Provide detailed, comprehensive, interview-ready answers. When the user follows up with a clarifying question, treat it as a continuation of the same conversation and reference your earlier answers when relevant.";
-
 export function QuestionAssistant({
   isActive = false,
 }: QuestionAssistantProps) {
@@ -64,16 +58,8 @@ export function QuestionAssistant({
   const [showScrollDown, setShowScrollDown] = useState(false);
   const stickToBottomRef = useRef(true);
 
-  // Multi-turn chat state. The thread persists in memory only — switching
-  // tabs keeps it (component stays mounted in the parent layout), a
-  // window reload clears it. The Compact surface persists via
-  // sessionStorage; we deliberately don't here, because the dedicated
-  // Ask AI tab is mostly used for one focused topic at a time and a
-  // stale thread on relaunch felt confusing during dogfooding.
-  const chat = useAskChat({
-    background: ASK_AI_BACKGROUND,
-    sendCap: 16,
-  });
+  // Shared Ask AI thread — same conversation in full mode and compact drawer.
+  const chat = useSharedAskChat();
   const { messages, isLoading } = chat;
   // Surface-level error state — used for screenshot capture failures
   // (e.g. user denied screen recording permission, electron API

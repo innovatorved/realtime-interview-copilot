@@ -18,6 +18,7 @@ import {
 import { ricFetch } from "@/lib/ric-fetch";
 import { parseSseStream } from "@/lib/sse";
 import { FLAGS } from "@/lib/types";
+import { useCopilotSession } from "@/components/CopilotSessionProvider";
 
 interface UseCopilotSubmitArgs {
   flag: FLAGS;
@@ -42,7 +43,7 @@ export function useCopilotSubmit({
   bg,
   transcribedText,
 }: UseCopilotSubmitArgs): CopilotSubmitHandle {
-  const [completion, setCompletion] = useState<string>("");
+  const { completion, setCompletion } = useCopilotSession();
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
   const [canRegenerate, setCanRegenerate] = useState(false);
@@ -66,9 +67,8 @@ export function useCopilotSubmit({
     }
   }, []);
 
-  // Abort any in-flight completion stream on unmount. Without this the SSE
-  // reader keeps running and attempts setCompletion on an unmounted tree
-  // when the user toggles compact mode mid-generation.
+  // Abort in-flight streams only when the app unmounts (providers stay
+  // mounted across compact ↔ full toggles).
   useEffect(() => {
     return () => {
       if (controller.current) {

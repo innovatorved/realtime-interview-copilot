@@ -7,6 +7,8 @@ import { GoogleTagManager } from "@next/third-parties/google";
 import { TabProvider } from "@/components/TabContext";
 import { TranscriptionProvider } from "@/components/TranscriptionContext";
 import { InterviewContextProvider } from "@/components/InterviewContextProvider";
+import { CopilotSessionProvider } from "@/components/CopilotSessionProvider";
+import { AskChatProvider } from "@/components/AskChatProvider";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
 import { PostHogProvider } from "@/components/PostHogProvider";
 
@@ -83,8 +85,12 @@ export default function RootLayout({
               <TabProvider>
                 <TranscriptionProvider>
                   <InterviewContextProvider>
-                    <TitleBar />
-                    {children}
+                    <CopilotSessionProvider>
+                      <AskChatProvider>
+                        <TitleBar />
+                        {children}
+                      </AskChatProvider>
+                    </CopilotSessionProvider>
                   </InterviewContextProvider>
                 </TranscriptionProvider>
               </TabProvider>
