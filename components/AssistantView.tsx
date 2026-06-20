@@ -69,7 +69,7 @@ export function AssistantView() {
         className="w-full max-w-[min(100%,72ch)] space-y-4"
       >
         {context && (
-          <div className="glass-card p-6 border-emerald-500/15 animate-in fade-in slide-in-from-top-4 duration-500">
+          <div className="surface-panel border-accent/15 p-6 animate-fade-in-up">
             <h2 className="text-[10px] font-semibold text-emerald-400/90 mb-2 uppercase tracking-widest">
               Interview context
             </h2>
@@ -82,7 +82,7 @@ export function AssistantView() {
         {history.map((item) => (
           <div
             key={item.id}
-            className="glass-card p-5 animate-in fade-in slide-in-from-bottom-4 duration-500"
+            className="surface-panel p-5 animate-fade-in-up"
           >
             <div className="text-sm text-[color:color-mix(in_oklch,var(--app-text)_88%,transparent)] leading-relaxed prose prose-invert prose-sm max-w-none">
               <SafeMarkdown>{item.text}</SafeMarkdown>
@@ -91,7 +91,7 @@ export function AssistantView() {
         ))}
 
         {currentResponse && (
-          <div className="glass-card p-5 border-emerald-500/20 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="surface-panel border-accent/20 p-5 animate-fade-in-scale">
             <div className="flex items-center gap-2 mb-2">
               <span className="relative flex h-2 w-2" aria-hidden>
                 <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400/35" />

@@ -12,11 +12,16 @@ import { useMicPushToTalk } from "@/hooks/useMicPushToTalk";
 import { dbg } from "@/lib/debug";
 import { FLAGS, type HistoryData } from "@/lib/types";
 import { isVisionScreenshotDataUrl } from "@/lib/vision-screenshot";
-import { AskDrawer } from "./compact/AskDrawer";
+import { CompactAskComposer } from "./compact/CompactAskComposer";
 import { CompactContextDrawer } from "./compact/CompactContextDrawer";
+import { CompactLiveTranscript } from "./compact/CompactLiveTranscript";
 import { CompactToolbar } from "./compact/CompactToolbar";
 import { OutputPanel } from "./compact/OutputPanel";
 import { useCompactGenerate } from "./compact/useCompactGenerate";
+import {
+  resolveCompactHeight,
+  type CompactLayoutState,
+} from "@/hooks/useCompactWindowSize";
 import { useInterviewContext } from "@/hooks/useInterviewContext";
 import { authClient } from "@/lib/auth-client";
 import { buildContextBlock, hasAttachedContext } from "@/lib/prompt-context";
@@ -30,13 +35,13 @@ const MAX_IMAGES = 4;
 interface CompactCopilotProps {
   addInSavedData: (data: HistoryData) => void;
   onExitCompact?: () => void;
-  onHasOutputChange?: (hasOutput: boolean) => void;
+  onCompactHeightChange?: (height: number) => void;
 }
 
 export function CompactCopilot({
   addInSavedData,
   onExitCompact,
-  onHasOutputChange,
+  onCompactHeightChange,
 }: CompactCopilotProps) {
   const { interviewNotes, resumeText, jobDescription, setInterviewNotes } =
     useInterviewContext();
@@ -141,6 +146,14 @@ export function CompactCopilot({
 
   const stop = abortGeneration;
 
+  const handleGenerate = useCallback(
+    (flag: FLAGS) => {
+      setAskMode(false);
+      void generate(flag);
+    },
+    [generate],
+  );
+
   const handleCaptureScreen = useCallback(async () => {
     if (!window.electronAPI?.screen) return;
     if (attachedImages.length >= MAX_IMAGES) {
@@ -231,7 +244,7 @@ export function CompactCopilot({
     disabled: isLoading,
   });
 
-  const toggleAskDrawer = useCallback(() => {
+  const toggleAskComposer = useCallback(() => {
     if (askMode) {
       clearAttachedImages();
       setAskMode(false);
@@ -302,14 +315,14 @@ export function CompactCopilot({
             ? "Mod+Shift+Enter → Summarize"
             : "Mod+Enter → Ask (Copilot)",
         );
-        void generate(wantFlag);
+        void handleGenerate(wantFlag);
         return;
       }
 
       if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === "KeyA") {
         e.preventDefault();
-        dbg("ask-ui", "Alt+A → toggle Ask AI drawer");
-        toggleAskDrawer();
+        dbg("ask-ui", "Alt+A → toggle Ask input");
+        toggleAskComposer();
       }
     };
     window.addEventListener("keydown", handler);
@@ -317,9 +330,9 @@ export function CompactCopilot({
   }, [
     abortGeneration,
     activeFlag,
-    generate,
+    handleGenerate,
     isLoading,
-    toggleAskDrawer,
+    toggleAskComposer,
     transcribedText,
   ]);
 
@@ -360,14 +373,25 @@ export function CompactCopilot({
     error !== null ||
     chat.error !== null;
   const hasVisibleOutput = hasOutput && !outputCollapsed;
-  // Anything that requires more vertical space than the bare navbar:
-  // a visible answer panel OR an open context/ask drawer. We forward
-  // this to the parent so it can grow the Electron window accordingly.
-  const needsExpandedWindow = hasVisibleOutput || showContext || askMode;
+
+  const showLiveTranscript =
+    transcribedText.trim().length > 0 &&
+    !askMode &&
+    !hasVisibleOutput &&
+    !showContext;
+
+  const compactLayout: CompactLayoutState = {
+    showContext,
+    askMode,
+    hasVisibleOutput,
+    hasTranscript: showLiveTranscript,
+    hasAttachedImages: attachedImages.length > 0,
+  };
+  const compactHeight = resolveCompactHeight(compactLayout);
 
   useEffect(() => {
-    onHasOutputChange?.(needsExpandedWindow);
-  }, [needsExpandedWindow, onHasOutputChange]);
+    onCompactHeightChange?.(compactHeight);
+  }, [compactHeight, onCompactHeightChange]);
 
   return (
     <div className="flex flex-col h-full min-h-0 bg-transparent">
@@ -387,10 +411,10 @@ export function CompactCopilot({
         hasOutput={hasOutput}
         outputCollapsed={outputCollapsed}
         completion={completion}
-        onGenerate={(f) => void generate(f)}
+        onGenerate={(f) => handleGenerate(f)}
         onStop={stop}
         onCaptureScreen={() => void handleCaptureScreen()}
-        onToggleAskMode={toggleAskDrawer}
+        onToggleAskMode={toggleAskComposer}
         onToggleContext={() => setShowContext((s) => !s)}
         onToggleOutputCollapsed={() => setOutputCollapsed((c) => !c)}
         onSave={handleSave}
@@ -398,6 +422,10 @@ export function CompactCopilot({
         onClearAll={clearAll}
         onExitCompact={onExitCompact}
       />
+
+      {showLiveTranscript && (
+        <CompactLiveTranscript text={transcribedText} />
+      )}
 
       {showContext && (
         <CompactContextDrawer
@@ -408,7 +436,7 @@ export function CompactCopilot({
       )}
 
       {askMode && (
-        <AskDrawer
+        <CompactAskComposer
           askInput={askInput}
           setAskInput={setAskInput}
           askInputRef={askInputRef}
@@ -421,9 +449,6 @@ export function CompactCopilot({
           askMic={askMic}
           ptt={ptt}
           isLoading={isLoading}
-          isCapturing={isCapturing}
-          isElectron={isElectron}
-          onCaptureScreen={() => void handleCaptureScreen()}
           setOutputMode={setOutputMode}
           setOutputCollapsed={setOutputCollapsed}
         />

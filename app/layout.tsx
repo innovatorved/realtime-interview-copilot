@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import TitleBar from "@/components/TitleBar";
 import { AppBackdropProvider } from "@/components/AppBackdropContext";
@@ -11,8 +10,6 @@ import { CopilotSessionProvider } from "@/components/CopilotSessionProvider";
 import { AskChatProvider } from "@/components/AskChatProvider";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
 import { PostHogProvider } from "@/components/PostHogProvider";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Realtime Interview Copilot",
@@ -26,7 +23,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0f172a",
+  themeColor: "#1c1917",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -75,9 +72,7 @@ export default function RootLayout({
         <meta httpEquiv="X-Content-Type-Options" content="nosniff" />
         <meta name="referrer" content="strict-origin-when-cross-origin" />
       </head>
-      <body
-        className={`${inter.className} bg-transparent text-white antialiased`}
-      >
+      <body className="font-sans bg-transparent text-text-primary antialiased">
         <GoogleTagManager gtmId="GTM-TD6DHJZZ" />
         <AppErrorBoundary>
           <PostHogProvider>

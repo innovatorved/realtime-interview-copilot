@@ -12,14 +12,17 @@ exports.isTrustedOrigin = isTrustedOrigin;
  *  rejected so a hijacked link in the renderer cannot navigate the main
  *  window to a third-party origin or request privileged Electron APIs. */
 function isTrustedOrigin(originUrl) {
-  try {
-    const u = new URL(originUrl);
-    if (u.protocol === "file:") return true;
-    if (u.protocol === "http:" || u.protocol === "https:") {
-      if (u.hostname === "localhost" || u.hostname === "127.0.0.1") return true;
+    try {
+        const u = new URL(originUrl);
+        if (u.protocol === "file:")
+            return true;
+        if (u.protocol === "http:" || u.protocol === "https:") {
+            if (u.hostname === "localhost" || u.hostname === "127.0.0.1")
+                return true;
+        }
+        return false;
     }
-    return false;
-  } catch {
-    return false;
-  }
+    catch {
+        return false;
+    }
 }

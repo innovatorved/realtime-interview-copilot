@@ -1,17 +1,9 @@
 "use client";
 
-/** Shared "Listening…" banner shown while the mic is fetching a key,
- *  connecting, or actively recording.
- *
- *  Same content across QuestionAssistant and CompactCopilot's
- *  AskDrawer — only the chrome differs (full surface gets a larger
- *  pulsing dot + 6 meter bars, compact gets 5). Picking via the
- *  `density` prop keeps both call sites byte-identical to the
- *  pre-extraction markup. */
-
 import type { useAskMic } from "@/hooks/useAskMic";
 import type { useMicPushToTalk } from "@/hooks/useMicPushToTalk";
 import { LevelMeter } from "@/components/ui/LevelMeter";
+import { cn } from "@/lib/utils";
 
 interface AskListeningBannerProps {
   askMic: ReturnType<typeof useAskMic>;
@@ -32,63 +24,49 @@ export function AskListeningBanner({
     return null;
   }
 
-  if (density === "compact") {
-    return (
-      <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-red-500/[0.08] border border-red-500/20">
-        <span className="relative flex h-1.5 w-1.5 shrink-0">
-          <span className="absolute inset-0 inline-flex h-full w-full rounded-full bg-red-400 opacity-75 animate-ping" />
-          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-500" />
-        </span>
-        <span className="text-[10px] font-medium text-red-200">
-          {askMic.state === "recording"
-            ? ptt.isTapLocked
-              ? "Listening… tap mic or Space again to send"
-              : "Listening… release to send"
-            : askMic.state === "connecting"
-              ? "Connecting…"
-              : "Requesting mic…"}
-        </span>
-        {askMic.state === "recording" && (
-          <LevelMeter
-            level={askMic.level}
-            bars={5}
-            activeClassName="bg-red-300"
-            inactiveClassName="bg-red-500/15"
-            className="h-3"
-          />
-        )}
-        <span className="ml-auto text-[9px] text-red-300/70 truncate max-w-[40%]">
-          {askMic.transcript || "say something…"}
-        </span>
-      </div>
-    );
-  }
+  const message =
+    askMic.state === "recording"
+      ? ptt.isTapLocked
+        ? "Listening… tap mic or Space again to send"
+        : "Listening… release to send"
+      : askMic.state === "connecting"
+        ? "Connecting…"
+        : "Requesting mic…";
 
   return (
-    <div className="mb-2 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-500/[0.08] border border-red-500/20 animate-fade-in-scale">
-      <span className="relative flex h-2 w-2 shrink-0">
-        <span className="absolute inset-0 inline-flex h-full w-full rounded-full bg-red-400 opacity-75 animate-ping" />
-        <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+    <div
+      className={cn(
+        "flex items-center gap-2 rounded-md border border-destructive/25 bg-destructive-muted",
+        density === "compact" ? "px-2 py-1" : "mb-2 px-3 py-1.5 animate-fade-in-scale",
+      )}
+    >
+      <span className="relative flex h-1.5 w-1.5 shrink-0 md:h-2 md:w-2">
+        <span className="absolute inline-flex h-full w-full animate-recording-pulse rounded-full bg-destructive opacity-60" />
+        <span className="relative inline-flex h-full w-full rounded-full bg-destructive" />
       </span>
-      <span className="text-[11px] font-medium text-red-200">
-        {askMic.state === "recording"
-          ? ptt.isTapLocked
-            ? "Listening… tap mic or Space again to send"
-            : "Listening… release to send"
-          : askMic.state === "connecting"
-            ? "Connecting…"
-            : "Requesting mic…"}
+      <span
+        className={cn(
+          "font-medium text-destructive",
+          density === "compact" ? "text-[10px]" : "text-[11px]",
+        )}
+      >
+        {message}
       </span>
       {askMic.state === "recording" && (
         <LevelMeter
           level={askMic.level}
-          bars={6}
-          activeClassName="bg-red-300"
-          inactiveClassName="bg-red-500/15"
+          bars={density === "compact" ? 5 : 6}
+          activeClassName="bg-destructive"
+          inactiveClassName="bg-destructive/20"
           className="h-3"
         />
       )}
-      <span className="ml-auto text-[10px] text-red-300/70 truncate max-w-[40%]">
+      <span
+        className={cn(
+          "ml-auto max-w-[40%] truncate text-destructive/80",
+          density === "compact" ? "text-[9px]" : "text-[10px]",
+        )}
+      >
         {askMic.transcript || "say something…"}
       </span>
     </div>

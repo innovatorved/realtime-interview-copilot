@@ -146,7 +146,7 @@ export function Kbd({
             ) : null}
             <kbd
               className={cn(
-                "inline-flex items-center justify-center rounded border border-[color:var(--app-border)] bg-[color:color-mix(in_oklch,oklch(1_0_0)_6%,transparent)] text-current font-mono leading-none shadow-sm",
+                "inline-flex items-center justify-center rounded border border-border-subtle bg-surface-overlay text-current font-mono leading-none",
                 sizeClasses[size],
                 widePad && "px-1.5",
               )}

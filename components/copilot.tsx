@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { ContextCard } from "@/components/copilot/ContextCard";
 import { OutputCard } from "@/components/copilot/OutputCard";
 import { TranscriptionCard } from "@/components/copilot/TranscriptionCard";
+import { AlertBanner } from "@/components/shell/AlertBanner";
 import { useTranscription } from "@/components/TranscriptionContext";
 import { useClientReady } from "@/hooks/useClientReady";
 import { useCopilotSubmit } from "@/hooks/useCopilotSubmit";
@@ -98,49 +99,46 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
         metadata: { mode: "copilot", previous_mode: "summarizer" },
       });
     }
-  }, []);
+  }, [setFlag]);
 
   const formRef = useRef<HTMLFormElement>(null);
 
-  const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    const target = event.target as HTMLElement;
-    const isTypingInInput =
-      target.tagName === "INPUT" || target.tagName === "TEXTAREA";
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      const isTypingInInput =
+        target.tagName === "INPUT" || target.tagName === "TEXTAREA";
 
-    switch (event.key.toLowerCase()) {
-      case "enter":
-        if (!isTypingInInput) {
-          event.preventDefault();
-          if (formRef.current) {
-            const submitEvent = new Event("submit", {
-              cancelable: true,
-              bubbles: true,
-            });
-            formRef.current.dispatchEvent(submitEvent);
+      switch (event.key.toLowerCase()) {
+        case "enter":
+          if (!isTypingInInput) {
+            event.preventDefault();
+            formRef.current?.dispatchEvent(
+              new Event("submit", { cancelable: true, bubbles: true }),
+            );
           }
-        }
-        break;
-      case "s":
-        if (!isTypingInInput) {
-          event.preventDefault();
-          setFlag(FLAGS.SUMMARIZER);
-        }
-        break;
-      case "c":
-        if (!isTypingInInput) {
-          event.preventDefault();
-          setFlag(FLAGS.COPILOT);
-        }
-        break;
-    }
-  }, []);
+          break;
+        case "s":
+          if (!isTypingInInput) {
+            event.preventDefault();
+            setFlag(FLAGS.SUMMARIZER);
+          }
+          break;
+        case "c":
+          if (!isTypingInInput) {
+            event.preventDefault();
+            setFlag(FLAGS.COPILOT);
+          }
+          break;
+      }
+    },
+    [setFlag],
+  );
 
   useEffect(() => {
     if (!isActive) return;
     window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown, isActive]);
 
   const handleSave = () => {
@@ -179,69 +177,73 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
   const displayError = error ?? (contextError ? new Error(contextError) : null);
 
   return (
-    <div className="flex flex-col h-full min-h-0 w-full gap-3 px-3 py-3 sm:gap-4 sm:px-4 sm:py-4 overflow-hidden">
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden px-3 py-3 sm:px-4 sm:py-4">
       {displayError && (
-        <div className="fixed top-12 left-1/2 -translate-x-1/2 px-4 py-2 text-center text-xs bg-red-600/95 text-white z-[60] animate-fade-in-scale rounded-xl border border-red-500/35 shadow-xl max-w-md flex items-center gap-3">
-          <span className="flex-1">{displayError.message}</span>
-          {canRegenerate && error && (
-            <button
-              type="button"
-              className="shrink-0 underline underline-offset-2 hover:text-red-100"
-              onClick={() => void regenerate()}
-            >
-              Retry
-            </button>
-          )}
-        </div>
+        <AlertBanner
+          message={displayError.message}
+          className="fixed left-1/2 top-12 z-[60] max-w-md -translate-x-1/2 rounded-md animate-fade-in-scale"
+          action={
+            canRegenerate && error ? (
+              <button
+                type="button"
+                className="underline underline-offset-2"
+                onClick={() => void regenerate()}
+              >
+                Retry
+              </button>
+            ) : undefined
+          }
+        />
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 h-[320px] shrink-0 min-h-0 w-full [&>*]:min-w-0 [&>*]:min-h-0">
-        <ContextCard
-          interviewNotes={interviewNotes}
-          onInterviewNotesChange={setInterviewNotes}
-          resumeText={resumeText}
-          resumeFileName={resumeFileName}
-          jobDescription={jobDescription}
-          onJobDescriptionChange={setJobDescription}
-          onResumeParsed={setResumeParsed}
-          onClearResume={clearResume}
-          isSaving={isSaving}
-          isLoading={contextLoading}
-          formRef={formRef}
-          flag={flag}
-          isLoadingGenerate={isLoading}
-          onFlagChange={handleFlag}
-          onSubmit={submit}
-          onStop={stop}
-        />
-        <TranscriptionCard
-          transcriptionBoxRef={transcriptionBoxRef}
-          segments={transcriptionSegments}
-          onClear={clearTranscription}
-        />
-      </div>
+      <ContextCard
+        interviewNotes={interviewNotes}
+        onInterviewNotesChange={setInterviewNotes}
+        resumeText={resumeText}
+        resumeFileName={resumeFileName}
+        jobDescription={jobDescription}
+        onJobDescriptionChange={setJobDescription}
+        onResumeParsed={setResumeParsed}
+        onClearResume={clearResume}
+        isSaving={isSaving}
+        isLoading={contextLoading}
+        formRef={formRef}
+        flag={flag}
+        isLoadingGenerate={isLoading}
+        onFlagChange={handleFlag}
+        onSubmit={submit}
+        onStop={stop}
+      />
 
-      <OutputCard completion={completion} onSave={handleSave} />
+      <div className="mt-3 flex min-h-0 flex-1 flex-col gap-0 overflow-hidden rounded-lg border border-border-subtle/40 bg-transparent md:flex-row">
+        <div className="flex min-h-[200px] min-w-0 flex-1 flex-col border-border-subtle/40 md:max-w-[45%] md:border-r">
+          <TranscriptionCard
+            transcriptionBoxRef={transcriptionBoxRef}
+            segments={transcriptionSegments}
+            onClear={clearTranscription}
+          />
+        </div>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <OutputCard completion={completion} onSave={handleSave} />
+        </div>
+      </div>
     </div>
   );
 }
 
 function CopilotSkeleton() {
   return (
-    <div className="p-4 space-y-4 animate-pulse">
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="glass-card p-5 space-y-3">
-          <div className="h-3 w-28 bg-white/[0.04] rounded-md" />
-          <div className="h-[120px] bg-white/[0.03] rounded-xl" />
-          <div className="h-9 bg-white/[0.03] rounded-xl" />
+    <div className="space-y-3 p-4">
+      <div className="surface-panel h-24 animate-skeleton" />
+      <div className="mt-3 flex min-h-[320px] gap-0 overflow-hidden rounded-lg border border-border-subtle/40 bg-transparent">
+        <div className="min-h-0 flex-1 border-r border-border-subtle/40 p-4">
+          <div className="mb-3 h-3 w-32 animate-skeleton rounded" />
+          <div className="h-full min-h-[200px] animate-skeleton rounded-md" />
         </div>
-        <div className="glass-card p-5 space-y-3">
-          <div className="h-3 w-32 bg-white/[0.04] rounded-md" />
-          <div className="h-[160px] bg-white/[0.03] rounded-xl" />
+        <div className="min-h-0 flex-1 p-4">
+          <div className="mb-3 h-3 w-20 animate-skeleton rounded" />
+          <div className="h-full min-h-[200px] animate-skeleton rounded-md" />
         </div>
-      </div>
-      <div className="glass-card p-6 h-40">
-        <div className="h-3 w-48 bg-white/[0.04] rounded-md mx-auto" />
       </div>
     </div>
   );

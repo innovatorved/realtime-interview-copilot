@@ -27,11 +27,12 @@ import { LevelMeter } from "@/components/ui/LevelMeter";
 import { FLAGS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { LoadingDots } from "./LoadingDots";
+import { overlayTextShadow } from "@/components/compact/compactTextStyles";
 
 const RecorderTranscriber = dynamic(() => import("@/components/recorder"), {
   ssr: false,
   loading: () => (
-    <div className="inline-flex h-7 w-20 rounded-lg border border-[color:var(--app-border)] bg-[color:color-mix(in_oklch,var(--app-surface)_60%,transparent)]" />
+    <div className="inline-flex h-7 w-20 rounded-md border border-border-subtle bg-surface-inset animate-skeleton" />
   ),
 });
 
@@ -118,11 +119,14 @@ export function CompactToolbar({
               : "Start transcription first"
         }
         className={cn(
-          "h-7 px-2.5 gap-1 text-[11px] font-medium rounded-lg transition-all",
+          "h-7 gap-1 rounded-md px-2.5 text-[11px] font-medium",
           isLoading && activeFlag === FLAGS.COPILOT
-            ? "bg-sky-500/15 text-sky-300 border border-sky-500/25 hover:bg-sky-500/25"
-            : "accent-gradient text-white shadow-sm hover:shadow-emerald-500/20 disabled:opacity-40 disabled:cursor-not-allowed",
+            ? "border border-info/25 bg-info/10 text-info hover:bg-info/15"
+            : "",
         )}
+        variant={
+          isLoading && activeFlag === FLAGS.COPILOT ? "secondary" : "default"
+        }
       >
         {isLoading && activeFlag === FLAGS.COPILOT ? (
           <LoadingDots color="bg-sky-300" />
@@ -159,11 +163,12 @@ export function CompactToolbar({
               : "Start transcription first"
         }
         className={cn(
-          "h-7 px-2.5 gap-1 text-[11px] font-medium rounded-lg border transition-all",
+          "h-7 gap-1 rounded-md border px-2.5 text-[11px] font-medium",
           isLoading && activeFlag === FLAGS.SUMMARIZER
-            ? "bg-sky-500/15 text-sky-300 border-sky-500/25 hover:bg-sky-500/25"
-            : "bg-blue-500/15 text-blue-300 border-blue-500/25 hover:bg-blue-500/25 disabled:opacity-40 disabled:cursor-not-allowed",
+            ? "border-info/25 bg-info/10 text-info hover:bg-info/15"
+            : "border-border-subtle bg-surface-overlay text-text-secondary hover:bg-surface-raised disabled:opacity-40",
         )}
+        variant="secondary"
       >
         {isLoading && activeFlag === FLAGS.SUMMARIZER ? (
           <LoadingDots color="bg-sky-300" />
@@ -187,14 +192,14 @@ export function CompactToolbar({
         onClick={onToggleAskMode}
         title={
           askMode
-            ? `Hide Ask AI input (${formatShortcut(["Alt", "A"])})`
-            : `Ask AI (${formatShortcut(["Alt", "A"])})`
+            ? `Hide Ask input (${formatShortcut(["Alt", "A"])})`
+            : `Show Ask input (${formatShortcut(["Alt", "A"])})`
         }
         className={cn(
-          "h-7 px-2 gap-1 text-[11px] font-medium rounded-lg transition-colors",
+          "h-7 gap-1 rounded-md border px-2 text-[11px] font-medium",
           askMode
-            ? "bg-emerald-500/12 text-emerald-200 border border-emerald-500/25"
-            : "text-neutral-400 hover:text-emerald-200 hover:bg-emerald-500/[0.08] border border-transparent",
+            ? "border-accent/30 bg-accent-muted text-accent-text"
+            : "border-transparent text-text-tertiary hover:border-border-subtle hover:bg-surface-overlay hover:text-text-primary",
         )}
       >
         <MessageSquare className="w-3 h-3" />
@@ -229,18 +234,18 @@ export function CompactToolbar({
           "relative h-7 px-1.5 rounded-lg transition-all shrink-0 flex items-center gap-1 select-none touch-none",
           askMic.state === "recording"
             ? ptt.isTapLocked
-              ? "text-red-200 bg-red-500/20 ring-2 ring-red-500/60 shadow-[0_0_16px_-2px] shadow-red-500/70"
-              : "text-red-200 bg-red-500/15 ring-2 ring-red-500/40 shadow-[0_0_14px_-2px] shadow-red-500/50"
+              ? "bg-destructive-muted text-destructive ring-2 ring-destructive/40"
+              : "bg-destructive-muted text-destructive ring-2 ring-destructive/25"
             : askMic.state === "fetching-key" || askMic.state === "connecting"
-              ? "text-emerald-300 bg-emerald-500/10 animate-pulse border border-emerald-500/25"
-              : "text-neutral-400 hover:text-neutral-100 hover:bg-white/[0.05] border border-transparent",
+              ? "animate-recording-pulse border border-accent/25 bg-accent-muted text-accent-text"
+              : "border border-transparent text-text-tertiary hover:bg-surface-overlay hover:text-text-primary",
         )}
       >
         <Mic className="w-3.5 h-3.5" />
         <Kbd
           keys="Space"
           size="xs"
-          className="hidden sm:inline-flex ml-0.5 text-neutral-300"
+          className="ml-0.5 hidden text-text-secondary sm:inline-flex"
         />
         {askMic.state === "recording" && (
           <LevelMeter
@@ -269,12 +274,12 @@ export function CompactToolbar({
               : `Screenshot for Ask AI (${formatShortcut(["Mod", "Shift", "1"])})${attachedImages.length > 0 ? ` — ${attachedImages.length}/${maxImages}` : ""}`
           }
           className={cn(
-            "h-7 w-7 p-0 rounded-lg transition-colors shrink-0 relative",
+            "relative h-7 w-7 shrink-0 rounded-md p-0",
             isCapturing
-              ? "text-emerald-400 animate-pulse"
+              ? "animate-recording-pulse text-accent-text"
               : attachedImages.length > 0
-                ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20"
-                : "text-neutral-400 hover:text-neutral-100 hover:bg-white/[0.05] border border-transparent",
+                ? "border border-accent/25 bg-accent-muted text-accent-text"
+                : "text-text-tertiary hover:bg-surface-overlay hover:text-text-primary",
           )}
         >
           <Camera className="w-3.5 h-3.5" />
@@ -284,7 +289,7 @@ export function CompactToolbar({
             className="hidden xl:inline-flex ml-0.5 text-emerald-300/90"
           />
           {attachedImages.length > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-0.5 rounded-full bg-emerald-500 text-[9px] font-bold text-neutral-950 flex items-center justify-center">
+            <span className="absolute -right-1 -top-1 flex h-[14px] min-w-[14px] items-center justify-center rounded-full bg-accent px-0.5 text-[9px] font-bold text-accent-foreground">
               {attachedImages.length}
             </span>
           )}
@@ -298,7 +303,7 @@ export function CompactToolbar({
         onClick={onSave}
         disabled={!completion.trim()}
         title="Save answer to notes"
-        className="h-7 w-7 p-0 rounded-lg text-neutral-400 hover:text-emerald-300 hover:bg-emerald-500/[0.08] disabled:opacity-30"
+        className="h-7 w-7 rounded-md p-0 text-text-tertiary hover:bg-accent-muted hover:text-accent-text disabled:opacity-30"
       >
         <BookmarkPlus className="w-3.5 h-3.5" />
       </Button>
@@ -310,23 +315,23 @@ export function CompactToolbar({
         onClick={onToggleContext}
         title={showContext ? "Hide context" : "Edit context"}
         className={cn(
-          "h-7 w-7 p-0 rounded-lg transition-colors relative",
+          "relative h-7 w-7 rounded-md p-0",
           showContext
-            ? "text-emerald-300 bg-emerald-500/[0.08]"
-            : "text-neutral-400 hover:text-neutral-100 hover:bg-white/[0.05]",
+            ? "bg-accent-muted text-accent-text"
+            : "text-text-tertiary hover:bg-surface-overlay hover:text-text-primary",
         )}
       >
         <Settings2 className="w-3.5 h-3.5" />
         {hasContextAttached && (
           <span
-            className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-sky-400 ring-2 ring-[color:var(--app-surface)]"
+            className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-info ring-2 ring-surface-raised"
             aria-label="Context attached"
           />
         )}
       </Button>
 
       {hasContextAttached && (
-        <span className="hidden md:inline text-[9px] text-sky-300/90 bg-sky-500/[0.08] px-2 py-0.5 rounded-full border border-sky-500/15">
+        <span className="hidden rounded-full border border-info/20 bg-info/10 px-2 py-0.5 text-[9px] text-info md:inline">
           Context attached
         </span>
       )}
@@ -335,7 +340,7 @@ export function CompactToolbar({
 
       {transcribedText.trim() && !hasOutput && (
         <span
-          className="text-[10px] text-neutral-500 truncate max-w-[32ch] hidden sm:inline italic"
+          className={`hidden max-w-[32ch] truncate text-[10px] italic text-text-tertiary sm:inline ${overlayTextShadow}`}
           title={transcribedText}
         >
           {transcribedText.replace(/\s+/g, " ").trim().length > 40
@@ -355,7 +360,7 @@ export function CompactToolbar({
           onClick={onClearTranscription}
           title="Clear transcription"
           aria-label="Clear transcription"
-          className="h-7 w-7 p-0 rounded-lg text-neutral-500 hover:text-sky-300 hover:bg-sky-500/[0.06]"
+          className="h-7 w-7 rounded-md p-0 text-text-tertiary hover:bg-info/10 hover:text-info"
         >
           <Eraser className="w-3.5 h-3.5" />
         </Button>
@@ -368,7 +373,7 @@ export function CompactToolbar({
           size="sm"
           onClick={onToggleOutputCollapsed}
           title={outputCollapsed ? "Show answer" : "Hide answer"}
-          className="h-7 w-7 p-0 rounded-lg text-neutral-400 hover:text-neutral-100 hover:bg-white/[0.05]"
+          className="h-7 w-7 rounded-md p-0 text-text-tertiary hover:bg-surface-overlay hover:text-text-primary"
         >
           {outputCollapsed ? (
             <ChevronDown className="w-3.5 h-3.5" />
@@ -385,7 +390,7 @@ export function CompactToolbar({
           size="sm"
           onClick={onClearAll}
           title="Clear transcription & answer"
-          className="h-7 w-7 p-0 rounded-lg text-neutral-500 hover:text-red-300 hover:bg-red-500/[0.06]"
+          className="h-7 w-7 rounded-md p-0 text-text-tertiary hover:bg-destructive-muted hover:text-destructive"
         >
           <X className="w-3.5 h-3.5" />
         </Button>
@@ -398,7 +403,7 @@ export function CompactToolbar({
           size="sm"
           onClick={onExitCompact}
           title="Exit compact mode (full layout)"
-          className="h-7 px-2 gap-1 rounded-lg text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/[0.08]"
+          className="h-7 gap-1 rounded-md px-2 text-accent-text hover:bg-accent-muted"
         >
           <Maximize2 className="w-3.5 h-3.5" />
           <span className="text-[10px] font-medium">Full</span>

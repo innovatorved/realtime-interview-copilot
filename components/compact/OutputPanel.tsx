@@ -8,15 +8,19 @@
  *    - the rendered markdown for a transcript-driven completion
  *    - a "generating…" indicator with the appropriate copy
  *
- *  The outer wrapper is intentionally NOT `data-clickable` so empty
- *  space around the answer still passes clicks through to the app
- *  behind. Only the inner content blocks are flagged clickable so
- *  the user can select/copy or dismiss errors. */
+ *  The outer wrapper is `data-clickable` with a minimum height so
+ *  generated answers stay visible and interactive in the Electron overlay. */
 
 import { X } from "lucide-react";
 import SafeMarkdown from "@/components/SafeMarkdown";
 import { ChatThread } from "@/components/ui/ChatThread";
 import type { ChatMessage } from "@/hooks/useAskChat";
+import {
+  compactTextShadow,
+  compactTextSurface,
+  overlayErrorBlock,
+  overlayTextShadow,
+} from "@/components/compact/compactTextStyles";
 import { FLAGS } from "@/lib/types";
 
 export type CompactOutputMode = "transcript" | "chat";
@@ -40,13 +44,6 @@ interface OutputPanelProps {
   chatUserLabel?: string;
 }
 
-const compactTextShadow =
-  "[text-shadow:0_1px_3px_rgba(0,0,0,0.85),0_0_8px_rgba(0,0,0,0.4)]";
-
-/** Very subtle inline halo — only behind text blocks, not the whole panel. */
-const compactTextSurface =
-  "rounded-md px-2 py-1 bg-black/20 backdrop-blur-[2px]";
-
 export function OutputPanel({
   outputMode,
   chatMessages,
@@ -59,13 +56,16 @@ export function OutputPanel({
   chatUserLabel,
 }: OutputPanelProps) {
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-3 py-2">
+    <div
+      data-clickable
+      className="custom-scrollbar min-h-[96px] flex-1 overflow-y-auto border-t border-border-subtle/40 px-3 py-2"
+    >
       {outputMode === "chat" ? (
         <div data-clickable className="flex flex-col gap-2">
           {(chatError || error) && (
             <div
               role="alert"
-              className="flex items-start justify-between gap-2 px-2 py-1.5 rounded-md bg-red-500/[0.08] border border-red-500/20 text-[11px] text-red-300"
+              className={`flex items-start justify-between gap-2 px-2 py-1.5 text-[11px] text-red-300 ${overlayErrorBlock}`}
             >
               <span className="flex-1 min-w-0 break-words">
                 {chatError ?? error}
@@ -91,11 +91,10 @@ export function OutputPanel({
             />
           ) : chatIsStreaming ? (
             <div
-              className={`inline-flex items-center gap-2 text-xs text-[color:var(--app-text)] ${compactTextSurface} ${compactTextShadow}`}
+              className={`inline-flex items-center gap-2 text-xs text-text-primary ${compactTextSurface} ${compactTextShadow}`}
             >
               <span className="relative flex h-2 w-2" aria-hidden>
-                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400/35" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/25" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
               </span>
               Generating answer…
             </div>
@@ -105,7 +104,7 @@ export function OutputPanel({
         <div
           data-clickable
           role="alert"
-          className="flex items-start justify-between gap-2 px-2 py-1.5 rounded-md bg-red-500/[0.08] border border-red-500/20 text-[11px] text-red-300"
+          className={`flex items-start justify-between gap-2 px-2 py-1.5 text-[11px] text-red-300 ${overlayErrorBlock}`}
         >
           <span className="flex-1 min-w-0 break-words">{error}</span>
           {onDismissError && (
@@ -123,18 +122,17 @@ export function OutputPanel({
       ) : completion ? (
         <div
           data-clickable
-          className={`prose prose-invert prose-xs max-w-none text-[color:var(--app-text)] text-xs leading-relaxed font-medium ${compactTextSurface} ${compactTextShadow}`}
+          className={`prose prose-invert prose-xs max-w-none text-sm leading-relaxed text-text-primary ${compactTextSurface} ${overlayTextShadow}`}
         >
           <SafeMarkdown>{completion}</SafeMarkdown>
         </div>
       ) : (
         <div
           data-clickable
-          className={`inline-flex items-center gap-2 text-xs text-[color:var(--app-text)] ${compactTextSurface} ${compactTextShadow}`}
+          className={`inline-flex items-center gap-2 text-xs text-text-primary ${compactTextSurface} ${compactTextShadow}`}
         >
           <span className="relative flex h-2 w-2" aria-hidden>
-            <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400/35" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/25" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
           </span>
           {activeFlag === FLAGS.SUMMARIZER
             ? "Generating summary…"

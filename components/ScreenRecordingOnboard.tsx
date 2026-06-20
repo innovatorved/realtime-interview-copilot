@@ -244,7 +244,8 @@ export function ScreenRecordingOnboard() {
             <div className="flex items-center gap-2">
               <Button
                 onClick={handleEnable}
-                className="flex-1 h-11 accent-gradient text-white font-medium text-sm rounded-xl shadow-lg hover:shadow-emerald-500/20"
+                className="flex-1 h-11 font-medium text-sm rounded-lg"
+                variant="default"
               >
                 <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
                 Enable Screen Recording

@@ -3,7 +3,9 @@
 /** Optional context drawer for the Compact surface. Pure presentational
  *  — the parent owns the `bg` state and the visibility flag. */
 
+import { overlayInput } from "@/components/compact/compactTextStyles";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 interface CompactContextDrawerProps {
   bg: string;
@@ -17,15 +19,18 @@ export function CompactContextDrawer({
   hasSavedResumeOrJd = false,
 }: CompactContextDrawerProps) {
   return (
-    <div data-clickable className="app-toolbar px-3 py-2 space-y-1">
+    <div data-clickable className="app-toolbar space-y-1 border-t border-border-subtle px-3 py-2">
       {hasSavedResumeOrJd && (
-        <p className="text-[10px] text-emerald-400/80">
+        <p className="text-[10px] text-accent-text">
           Saved resume and job description are included automatically.
         </p>
       )}
       <Textarea
         placeholder="Optional: paste JD, resume or topic context for higher-quality answers…"
-        className="min-h-[64px] max-h-[120px] resize-none bg-[color:color-mix(in_oklch,var(--app-surface)_65%,transparent)] border border-[color:var(--app-border)] focus-visible:ring-2 focus-visible:ring-[color:var(--app-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--app-surface)] text-[color:var(--app-text)] placeholder:text-[color:var(--app-muted)] text-xs leading-relaxed rounded-lg px-2.5 py-1.5"
+        className={cn(
+          "max-h-[120px] min-h-[64px] resize-none text-xs leading-relaxed",
+          overlayInput,
+        )}
         value={bg}
         onChange={(e) => onChange(e.target.value)}
       />

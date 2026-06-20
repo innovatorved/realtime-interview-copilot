@@ -99,8 +99,8 @@ export default function History({
   };
 
   const tagColors: Record<string, string> = {
-    Copilot: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-    Summarizer: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+    Copilot: "bg-accent-muted text-accent-text border-accent/20",
+    Summarizer: "bg-info/10 text-info border-info/20",
   };
 
   const tags = ["Copilot", "Summarizer"];
@@ -111,7 +111,7 @@ export default function History({
         "animate-fade-in-up",
         isSidebar
           ? "flex flex-col h-full min-h-0 space-y-2 px-3 py-2 md:px-3 md:py-3"
-          : "max-w-4xl mx-auto px-4 py-6 space-y-5",
+          : "mx-auto max-w-4xl space-y-0 px-4 py-4",
       )}
     >
       <div
@@ -139,27 +139,27 @@ export default function History({
           )}
           <div
             className={cn(
-              "rounded-2xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/10 shrink-0",
-              isSidebar ? "w-8 h-8" : "w-10 h-10",
+              "flex shrink-0 items-center justify-center rounded-md border border-border-subtle bg-accent-muted",
+              isSidebar ? "h-8 w-8" : "h-9 w-9",
             )}
           >
             <BookOpen
               className={cn(
-                "text-emerald-400",
-                isSidebar ? "w-4 h-4" : "w-5 h-5",
+                "text-accent-text",
+                isSidebar ? "h-4 w-4" : "h-4 w-4",
               )}
             />
           </div>
           <div className="min-w-0">
             <h2
               className={cn(
-                "font-semibold text-white leading-tight",
-                isSidebar ? "text-xs" : "text-lg",
+                "font-semibold leading-tight text-text-primary",
+                isSidebar ? "text-xs" : "text-base",
               )}
             >
               Saved notes
             </h2>
-            <p className="text-[10px] text-neutral-500 truncate">
+            <p className="truncate text-[10px] text-text-tertiary">
               {pagination.total} saved
             </p>
           </div>
@@ -172,10 +172,10 @@ export default function History({
             </span>
           )}
           <Button
-            variant="ghost"
+            variant="secondary"
             size="sm"
             className={cn(
-              "glass-button text-xs gap-1.5",
+              "gap-1.5 text-xs",
               isSidebar ? "h-7 w-7 p-0" : "h-8 px-3",
             )}
             onClick={() => handleExport("markdown")}
@@ -186,10 +186,10 @@ export default function History({
             {!isSidebar && <span className="hidden sm:inline">Markdown</span>}
           </Button>
           <Button
-            variant="ghost"
+            variant="secondary"
             size="sm"
             className={cn(
-              "glass-button text-xs gap-1.5",
+              "gap-1.5 text-xs",
               isSidebar ? "h-7 w-7 p-0" : "h-8 px-3",
             )}
             onClick={() => handleExport("pdf")}
@@ -202,7 +202,13 @@ export default function History({
         </div>
       </div>
 
-      <div className={cn("flex gap-2 shrink-0", isSidebar && "flex-col")}>
+      <div
+        className={cn(
+          "sticky top-0 z-10 shrink-0 gap-2 bg-surface-base pb-3",
+          isSidebar ? "flex flex-col" : "flex flex-col space-y-2 border-b border-border-subtle",
+        )}
+      >
+        <div className={cn("flex gap-2", isSidebar && "flex-col")}>
         <div className="relative flex-1 min-w-0">
           <Search
             className={cn(
@@ -215,12 +221,11 @@ export default function History({
             onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="Search…"
             className={cn(
-              "glass-input border-0",
-              isSidebar ? "pl-8 h-8 text-[11px]" : "pl-9 h-9 text-sm",
+              isSidebar ? "h-8 pl-8 text-[11px]" : "h-9 pl-9 text-sm",
             )}
           />
         </div>
-        <div className="flex items-center gap-1 flex-wrap">
+        <div className="flex flex-wrap items-center gap-1">
           {tags.map((tag) => (
             <button
               key={tag}
@@ -238,12 +243,13 @@ export default function History({
                 activeTag === tag
                   ? (tagColors[tag] ??
                       "bg-neutral-500/10 text-neutral-400 border-neutral-500/20")
-                  : "text-neutral-500 border-transparent hover:bg-white/[0.03]",
+                  : "border-transparent text-text-tertiary hover:bg-surface-overlay",
               )}
             >
               {tag}
             </button>
           ))}
+        </div>
         </div>
       </div>
 
@@ -260,7 +266,7 @@ export default function History({
               <div
                 key={i}
                 className={cn(
-                  "glass-card animate-pulse",
+                  "surface-panel animate-skeleton",
                   isSidebar ? "p-2.5 space-y-2" : "p-4 space-y-3",
                 )}
               >
@@ -278,32 +284,22 @@ export default function History({
           </div>
         ) : notes.length === 0 ? (
           <div
-            className={cn("glass-card text-center", isSidebar ? "p-4" : "p-12")}
+            className={cn(
+              "surface-panel border-dashed text-center",
+              isSidebar ? "p-4" : "p-10",
+            )}
           >
-            <div
-              className={cn(
-                "rounded-2xl bg-white/[0.03] flex items-center justify-center mx-auto mb-2",
-                isSidebar ? "w-10 h-10 mb-2" : "w-16 h-16 mb-4",
-              )}
-            >
-              <FileText
-                className={cn(
-                  "text-neutral-600",
-                  isSidebar ? "w-5 h-5" : "w-7 h-7",
-                )}
-              />
-            </div>
             <p
               className={cn(
-                "text-neutral-400 font-medium",
+                "font-medium text-text-secondary",
                 isSidebar ? "text-[11px]" : "text-sm",
               )}
             >
               No notes yet
             </p>
             {!isSidebar && (
-              <p className="text-neutral-600 text-xs mt-1">
-                Save answers from the Copilot to see them here
+              <p className="mt-1 text-xs text-text-tertiary">
+                Save answers from Copilot or Ask AI to see them here
               </p>
             )}
           </div>
@@ -316,11 +312,9 @@ export default function History({
               <div
                 key={note.id}
                 className={cn(
-                  "glass-card-hover cursor-pointer group transition-all",
-                  isSidebar ? "p-2.5" : "p-4",
-                  isSelected
-                    ? "border-emerald-500/20 bg-emerald-500/[0.03]"
-                    : "",
+                  "group cursor-pointer border-b border-border-subtle transition-colors hover:bg-surface-overlay",
+                  isSidebar ? "px-1 py-2.5" : "px-2 py-3",
+                  isSelected && "bg-accent-muted/50",
                 )}
                 style={{ animationDelay: `${idx * 40}ms` }}
                 onClick={() => setExpandedNote(isExpanded ? null : note.id)}
@@ -346,7 +340,7 @@ export default function History({
                     </span>
                     <span
                       className={cn(
-                        "text-neutral-600",
+                        "text-text-tertiary",
                         isSidebar ? "text-[9px]" : "text-[10px]",
                       )}
                     >
@@ -392,7 +386,7 @@ export default function History({
 
                 <div
                   className={cn(
-                    "text-neutral-300 leading-relaxed transition-all",
+                    "text-text-primary leading-relaxed transition-all",
                     isSidebar ? "text-[11px]" : "text-sm",
                     isExpanded
                       ? ""
@@ -421,7 +415,7 @@ export default function History({
                 {note.content.length > previewLen && (
                   <button
                     type="button"
-                    className="text-[10px] text-emerald-500/70 hover:text-emerald-400 mt-1.5 font-medium transition-colors"
+                    className="mt-1.5 text-[10px] font-medium text-accent-text transition-colors hover:text-accent"
                   >
                     {isExpanded ? "Show less" : "Show more"}
                   </button>
@@ -440,9 +434,9 @@ export default function History({
           )}
         >
           <Button
-            variant="ghost"
+            variant="secondary"
             size="sm"
-            className="glass-button h-8 w-8 p-0"
+            className="h-8 w-8 p-0"
             disabled={pagination.page <= 1}
             onClick={() => onPageChange(pagination.page - 1)}
           >
@@ -466,10 +460,10 @@ export default function History({
                   <button
                     key={page}
                     onClick={() => onPageChange(page)}
-                    className={`w-8 h-8 rounded-lg text-xs font-medium transition-all ${
+                    className={`h-8 w-8 rounded-md text-xs font-medium transition-all ${
                       page === pagination.page
-                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                        : "text-neutral-500 hover:bg-white/[0.04] hover:text-neutral-300"
+                        ? "border border-accent/20 bg-accent-muted text-accent-text"
+                        : "text-text-tertiary hover:bg-surface-overlay hover:text-text-secondary"
                     }`}
                   >
                     {page}
@@ -479,9 +473,9 @@ export default function History({
             )}
           </div>
           <Button
-            variant="ghost"
+            variant="secondary"
             size="sm"
-            className="glass-button h-8 w-8 p-0"
+            className="h-8 w-8 p-0"
             disabled={pagination.page >= pagination.totalPages}
             onClick={() => onPageChange(pagination.page + 1)}
           >

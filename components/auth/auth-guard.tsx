@@ -9,24 +9,7 @@ import { AppAnnouncements } from "@/components/announcements/AppAnnouncements";
 import { AlertTriangle, Ban, Loader2 } from "lucide-react";
 import posthog from "posthog-js";
 
-// Dark / glass tokens — mirrors the rest of the app (neutral-950 + emerald
-// accent, Notion-style geometry). Kept inline so the auth chrome is
-// self-contained and matches the auth screens visually.
-const TOKEN = {
-  pageBg: "rgba(9, 9, 11, 0.55)",
-  cardBg: "rgba(24, 24, 27, 0.72)",
-  cardBorder: "rgba(255, 255, 255, 0.06)",
-  hairlineStrong: "rgba(255, 255, 255, 0.10)",
-  ink: "#fafafa",
-  charcoal: "#e4e4e7",
-  slate: "#a1a1aa",
-  steel: "#71717a",
-  accent: "#10b981",
-  accentHover: "#059669",
-  errSoft: "rgba(248, 113, 113, 0.12)",
-  errBorder: "rgba(248, 113, 113, 0.30)",
-  err: "#f87171",
-} as const;
+import { TOKEN } from "./_shared/tokens";
 
 function AuthLoadingShell() {
   return (

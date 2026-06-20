@@ -32,6 +32,11 @@ import { sessionDisplayName, sessionUserTitle } from "@/lib/session-display";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import {
+  overlayErrorBlock,
+  overlayInput,
+  overlayTextShadow,
+} from "@/components/compact/compactTextStyles";
+import {
   isVisionScreenshotDataUrl,
   VISION_FALLBACK_PROMPT,
 } from "@/lib/vision-screenshot";
@@ -379,21 +384,17 @@ export function QuestionAssistant({
       <div className="shrink-0 app-toolbar">
         <div className="w-full max-w-3xl mx-auto px-3 pt-2.5 pb-2.5">
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-6 h-6 rounded-lg bg-emerald-500/10 flex items-center justify-center border border-emerald-500/10 shrink-0">
-              <MessageSquare className="w-3 h-3 text-emerald-400" />
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-accent-muted">
+              <MessageSquare className="h-3 w-3 text-accent-text" />
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="text-[12px] font-semibold text-white flex items-center gap-1.5 leading-none">
+              <h2 className="flex items-center gap-1.5 text-[12px] font-semibold leading-none text-text-primary">
                 Ask AI
-                <span
-                  className="relative flex h-1.5 w-1.5 shrink-0"
-                  aria-hidden
-                >
-                  <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400/35" />
-                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500 ring-1 ring-emerald-500/30" />
+                <span className="relative flex h-1.5 w-1.5 shrink-0" aria-hidden>
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-accent" />
                 </span>
                 {messages.length > 0 && (
-                  <span className="text-[10px] font-normal text-[color:var(--app-muted)] tabular-nums">
+                  <span className="text-[10px] font-normal tabular-nums text-text-tertiary">
                     · {Math.ceil(messages.length / 2)} turn
                     {messages.length > 2 ? "s" : ""}
                   </span>
@@ -401,7 +402,7 @@ export function QuestionAssistant({
               </h2>
               {session?.user && (
                 <p
-                  className="mt-1 truncate text-[10px] text-[color:var(--app-muted)]"
+                  className="mt-1 truncate text-[10px] text-text-tertiary"
                   title={sessionUserTitle(session.user)}
                 >
                   {sessionDisplayName(session.user)}
@@ -417,7 +418,7 @@ export function QuestionAssistant({
                 onClick={handleNewChat}
                 aria-label="Start a new chat"
                 title={`Start a new chat (${formatShortcut(["Mod", "Shift", "N"])})`}
-                className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] text-neutral-400 hover:text-emerald-300 hover:bg-emerald-500/10 border border-[color:var(--app-border)] hover:border-emerald-500/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--app-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--app-surface)]"
+                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border-subtle px-2 py-1 text-[10px] text-text-tertiary transition-colors hover:border-accent/30 hover:bg-accent-muted hover:text-accent-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Plus className="w-2.5 h-2.5" />
                 <span>New chat</span>
@@ -504,8 +505,12 @@ export function QuestionAssistant({
               looks identical to "I just haven't talked yet". */}
           <AskListeningBanner askMic={askMic} ptt={ptt} density="default" />
 
-          <form ref={formRef} onSubmit={handleSubmit} className="flex gap-1.5">
-            <div className="relative flex-1 min-w-0">
+          <form
+            ref={formRef}
+            onSubmit={handleSubmit}
+            className="flex items-center gap-1.5 rounded-lg border border-border-subtle/50 bg-transparent p-1.5"
+          >
+            <div className="relative min-w-0 flex-1">
               <Input
                 ref={inputRef}
                 value={question}
@@ -519,9 +524,7 @@ export function QuestionAssistant({
                 }
                 disabled={isLoading}
                 className={cn(
-                  "glass-input h-9 text-xs border-0 pl-3",
-                  // Reserve more right padding because we now host two icon
-                  // buttons (mic + camera) + the kbd hint.
+                  "h-9 border-0 bg-transparent pl-3 text-xs shadow-none focus-visible:ring-0 focus-visible:ring-offset-0",
                   isElectron ? "pr-24" : "pr-16",
                 )}
               />
@@ -619,11 +622,11 @@ export function QuestionAssistant({
               }
               onClick={isLoading ? handleStop : undefined}
               title={isLoading ? "Stop (Esc)" : "Ask (Enter)"}
-              className={`h-9 px-3 rounded-lg font-medium transition-all text-xs shrink-0 ${
-                isLoading
-                  ? "bg-red-500/80 hover:bg-red-500 text-white"
-                  : "accent-gradient text-white shadow-lg hover:shadow-emerald-500/20"
-              }`}
+              className={cn(
+                "h-9 shrink-0 px-3 text-xs",
+                isLoading && "bg-destructive hover:bg-destructive/90",
+              )}
+              variant={isLoading ? "destructive" : "default"}
             >
               {isLoading ? (
                 <span className="flex items-center gap-1">
@@ -668,7 +671,9 @@ export function QuestionAssistant({
         >
           <div className="w-full max-w-3xl mx-auto px-3 py-3 pb-8">
             {error && (
-              <div className="p-2 glass-card border-red-500/10 text-red-300 text-xs rounded-lg mb-2 animate-fade-in-scale">
+              <div
+                className={`mb-2 p-2 text-xs text-destructive animate-fade-in-scale ${overlayErrorBlock}`}
+              >
                 {error}
               </div>
             )}
@@ -699,7 +704,7 @@ export function QuestionAssistant({
                     <button
                       key={suggestion}
                       onClick={() => setQuestion(suggestion)}
-                      className="glass-card-hover p-2 text-left text-[11px] text-neutral-400 hover:text-neutral-200 transition-colors"
+                      className={`rounded-md border border-border-subtle/50 p-2 text-left text-[11px] text-text-secondary transition-colors hover:text-text-primary ${overlayInput} ${overlayTextShadow}`}
                     >
                       {suggestion}
                     </button>

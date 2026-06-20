@@ -9,35 +9,17 @@ import { sendGTMEvent } from "@next/third-parties/google";
 import posthog from "posthog-js";
 
 import { TOKEN as SHARED_TOKEN } from "./_shared/tokens";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface AuthWizardProps {
   initialStep?: "welcome" | "signup" | "signin";
   onSuccess?: () => void;
 }
 
-// Wizard-specific token overrides — the shared module unifies the
-// auth chrome palette; this screen historically used a slightly
-// brighter `accentSoft` (0.12 alpha vs 0.10) so we keep that variant
-// for byte-equivalent visuals.
-const TOKEN = {
-  ...SHARED_TOKEN,
-  accentSoft: "rgba(34, 197, 94, 0.12)",
-} as const;
-
-const inputStyle: React.CSSProperties = {
-  backgroundColor: TOKEN.inputBg,
-  color: TOKEN.ink,
-  border: `1px solid ${TOKEN.hairlineStrong}`,
-  borderRadius: 7,
-  height: 36,
-  padding: "8px 12px",
-  fontSize: 13,
-  lineHeight: 1.4,
-  width: "100%",
-  outline: "none",
-  transition: "border-color 150ms ease, box-shadow 150ms ease",
-  backdropFilter: "blur(8px)",
-};
+const TOKEN = SHARED_TOKEN;
 
 function NotionInput(
   props: React.InputHTMLAttributes<HTMLInputElement> & {
@@ -45,19 +27,9 @@ function NotionInput(
   },
 ) {
   return (
-    <input
+    <Input
       {...props}
-      style={{ ...inputStyle, ...(props.style ?? {}) }}
-      onFocus={(e) => {
-        e.currentTarget.style.border = `1px solid ${TOKEN.accentBorder}`;
-        e.currentTarget.style.boxShadow = `0 0 0 3px ${TOKEN.accentRing}`;
-        props.onFocus?.(e);
-      }}
-      onBlur={(e) => {
-        e.currentTarget.style.border = `1px solid ${TOKEN.hairlineStrong}`;
-        e.currentTarget.style.boxShadow = "none";
-        props.onBlur?.(e);
-      }}
+      className={cn("h-9 text-[13px]", props.className)}
     />
   );
 }
@@ -70,17 +42,9 @@ function NotionLabel({
   children: React.ReactNode;
 }) {
   return (
-    <label
-      htmlFor={htmlFor}
-      style={{
-        color: TOKEN.charcoal,
-        fontSize: 12,
-        fontWeight: 500,
-        letterSpacing: 0,
-      }}
-    >
+    <Label htmlFor={htmlFor} className="text-xs">
       {children}
-    </label>
+    </Label>
   );
 }
 
@@ -88,84 +52,34 @@ function NotionPrimaryButton({
   children,
   loading,
   disabled,
+  className,
   ...rest
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { loading?: boolean }) {
-  const isOff = disabled || loading;
   return (
-    <button
+    <Button
       {...rest}
-      disabled={isOff}
-      style={{
-        backgroundColor: isOff ? "rgba(255,255,255,0.06)" : TOKEN.accent,
-        color: isOff ? TOKEN.stone : "#ffffff",
-        border: "none",
-        height: 34,
-        padding: "0 14px",
-        borderRadius: 7,
-        fontSize: 12.5,
-        fontWeight: 600,
-        lineHeight: 1.3,
-        width: "100%",
-        cursor: isOff ? "not-allowed" : "pointer",
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        transition: "background-color 150ms ease, box-shadow 150ms ease",
-        boxShadow: isOff
-          ? "none"
-          : "0 1px 2px rgba(0,0,0,0.4), 0 0 0 1px rgba(34, 197, 94, 0.30), 0 0 24px rgba(34, 197, 94, 0.18)",
-        ...(rest.style ?? {}),
-      }}
-      onMouseEnter={(e) => {
-        if (!isOff) e.currentTarget.style.backgroundColor = TOKEN.accentHover;
-        rest.onMouseEnter?.(e);
-      }}
-      onMouseLeave={(e) => {
-        if (!isOff) e.currentTarget.style.backgroundColor = TOKEN.accent;
-        rest.onMouseLeave?.(e);
-      }}
+      disabled={disabled || loading}
+      className={cn("h-9 w-full gap-2 text-[13px] font-semibold", className)}
     >
       {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
       {children}
-    </button>
+    </Button>
   );
 }
 
 function NotionSecondaryButton({
   children,
+  className,
   ...rest
 }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
-    <button
+    <Button
       {...rest}
-      style={{
-        backgroundColor: "rgba(255,255,255,0.04)",
-        color: TOKEN.ink,
-        border: `1px solid ${TOKEN.hairlineStrong}`,
-        height: 34,
-        padding: "0 14px",
-        borderRadius: 7,
-        fontSize: 12.5,
-        fontWeight: 500,
-        lineHeight: 1.3,
-        width: "100%",
-        cursor: "pointer",
-        transition: "background-color 150ms ease, border-color 150ms ease",
-        backdropFilter: "blur(8px)",
-        ...(rest.style ?? {}),
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)";
-        rest.onMouseEnter?.(e);
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)";
-        rest.onMouseLeave?.(e);
-      }}
+      variant="secondary"
+      className={cn("h-9 w-full text-[13px] font-medium", className)}
     >
       {children}
-    </button>
+    </Button>
   );
 }
 
