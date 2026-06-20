@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BACKEND_API_URL } from "@/lib/constant";
+import { ricFetch } from "@/lib/ric-fetch";
 import type {
   ActiveAnnouncementsResponse,
   AppAnnouncement,
@@ -107,9 +108,9 @@ export function useAnnouncements(
   const dismiss = useCallback(async (id: string) => {
     setItems((prev) => prev.filter((a) => a.id !== id));
     try {
-      await fetch(
-        `${BACKEND_API_URL}/api/announcements/${encodeURIComponent(id)}/dismiss`,
-        { method: "POST", credentials: "include" },
+      await ricFetch(
+        `/api/announcements/${encodeURIComponent(id)}/dismiss`,
+        { method: "POST" },
       );
     } catch {
       /* swallow — UI is already updated */
@@ -127,10 +128,9 @@ export function useAnnouncements(
 
   const ack = useCallback(async (id: string) => {
     try {
-      await fetch(
-        `${BACKEND_API_URL}/api/announcements/${encodeURIComponent(id)}/ack`,
-        { method: "POST", credentials: "include" },
-      );
+      await ricFetch(`/api/announcements/${encodeURIComponent(id)}/ack`, {
+        method: "POST",
+      });
     } catch {
       /* analytics call — never fail */
     }

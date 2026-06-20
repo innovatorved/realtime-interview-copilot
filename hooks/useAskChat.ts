@@ -2,8 +2,12 @@
 
 import posthog from "posthog-js";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { humanizeError, humanizeHttpStatus } from "@/lib/api-errors";
-import { BACKEND_API_URL } from "@/lib/constant";
+import {
+  humanizeError,
+  humanizeHttpStatus,
+  parseApiErrorResponse,
+} from "@/lib/api-errors";
+import { ricFetch } from "@/lib/ric-fetch";
 import { dbg } from "@/lib/debug";
 import { parseSseStream } from "@/lib/sse";
 import { FLAGS } from "@/lib/types";
@@ -80,6 +84,9 @@ export interface UseAskChatHandle {
    * linger over a successful follow-up turn.
    */
   clearError: () => void;
+  /** Retry the last failed send (same user message). */
+  regenerate: () => Promise<void>;
+  canRegenerate: boolean;
 }
 
 const DEFAULT_SEND_CAP = 16;
@@ -151,9 +158,13 @@ export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
   );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [canRegenerate, setCanRegenerate] = useState(false);
 
   // In-flight request handle so callers can abort the SSE stream.
   const controllerRef = useRef<AbortController | null>(null);
+  const lastFailedSendRef = useRef<{ text: string; images?: string[] } | null>(
+    null,
+  );
   // Snapshot of state for the memoized `send` to read from without
   // triggering a re-create of the callback every render.
   const messagesRef = useRef<ChatMessage[]>(messages);
@@ -200,6 +211,8 @@ export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
     setMessages([]);
     setError(null);
     setIsLoading(false);
+    setCanRegenerate(false);
+    lastFailedSendRef.current = null;
     const key = optsRef.current.storageKey;
     if (key && typeof window !== "undefined") {
       try {
@@ -254,6 +267,7 @@ export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
       // assistant placeholder so the user sees instant feedback.
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
       setError(null);
+      setCanRegenerate(false);
       setIsLoading(true);
 
       const trimmedHistory = trimForServer(historyForWire, cap);
@@ -304,12 +318,10 @@ export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
       );
 
       try {
-        const res = await fetch(`${BACKEND_API_URL}/api/completion`, {
+        const res = await ricFetch("/api/completion", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
           signal: controller.signal,
-          credentials: "include",
         });
         dbg(
           "ask-chat",
@@ -320,7 +332,7 @@ export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
           "ms",
         );
         if (!res.ok) {
-          throw new Error(humanizeHttpStatus(res.status, { kind: "ask-ai" }));
+          throw new Error(await parseApiErrorResponse(res));
         }
 
         // Shared SSE parser. Behavior matches the previous inline loop:
@@ -379,6 +391,8 @@ export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
             msg.id === assistantMsg.id ? { ...msg, pending: false } : msg,
           ),
         );
+        lastFailedSendRef.current = null;
+        setCanRegenerate(false);
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") {
           dbg(
@@ -410,6 +424,8 @@ export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
             humanized || (err instanceof Error ? err.message : String(err)),
           );
           setError(humanized || "Something went wrong. Please try again.");
+          lastFailedSendRef.current = { text: trimmed, images: hasImages ? images : undefined };
+          setCanRegenerate(true);
           // Drop the empty placeholder so the thread doesn't render a
           // ghost assistant bubble. The user's message stays — they can
           // retry by hitting Send again.
@@ -428,6 +444,12 @@ export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
     [],
   );
 
+  const regenerate = useCallback(async () => {
+    const last = lastFailedSendRef.current;
+    if (!last || controllerRef.current) return;
+    await send(last);
+  }, [send]);
+
   return {
     messages,
     isLoading,
@@ -437,5 +459,7 @@ export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
     abort,
     reset,
     clearError,
+    regenerate,
+    canRegenerate,
   };
 }

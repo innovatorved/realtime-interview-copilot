@@ -1,4 +1,4 @@
-import { BACKEND_API_URL } from "@/lib/constant";
+import { ricFetch } from "@/lib/ric-fetch";
 
 /**
  * Allow-list of action names recognised by the worker's
@@ -45,10 +45,8 @@ export async function startLiveSession(
   opts: LiveSessionStartOpts = {},
 ): Promise<LiveSessionStartResult | null> {
   const post = (): Promise<Response> =>
-    fetch(`${BACKEND_API_URL}/api/sessions/start`, {
+    ricFetch("/api/sessions/start", {
       method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(opts),
     });
 
@@ -77,10 +75,8 @@ export async function endLiveSession(
   reason: string = "user_stopped",
 ): Promise<void> {
   try {
-    await fetch(`${BACKEND_API_URL}/api/sessions/end`, {
+    await ricFetch("/api/sessions/end", {
       method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionId, reason }),
       keepalive: true,
     });
@@ -105,10 +101,8 @@ export async function endAllLiveSessions(
   reason: string = "client_cleanup",
 ): Promise<number | null> {
   try {
-    const res = await fetch(`${BACKEND_API_URL}/api/sessions/end-all`, {
+    const res = await ricFetch("/api/sessions/end-all", {
       method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reason }),
       keepalive: true,
     });
@@ -141,10 +135,8 @@ export function trackEvent(
     sessionId: options.sessionId ?? undefined,
     metadata: options.metadata ?? {},
   });
-  void fetch(`${BACKEND_API_URL}/api/events/track`, {
+  void ricFetch("/api/events/track", {
     method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
     body,
     keepalive: true,
   }).catch(() => {

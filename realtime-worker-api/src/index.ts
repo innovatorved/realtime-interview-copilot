@@ -7,8 +7,11 @@
 
 import { auth } from "./auth";
 import { handleOptions, withCors } from "./middleware/cors";
-import { originIsTrusted } from "./middleware/csrf";
+import { csrfCheck } from "./middleware/csrf";
 import { jsonResponse } from "./lib/http";
+import { getDb } from "./db";
+import { recordSecurityEvent } from "./lib/security-log";
+import { handleHealth } from "./routes/health";
 import { handleDeepgram, handleDeepgramAsk } from "./routes/deepgram";
 import { handleCompletion } from "./routes/completion";
 import {
@@ -16,7 +19,7 @@ import {
   handleDeleteNote,
   handleGetNotes,
 } from "./routes/notes";
-import { handleGetPresets } from "./routes/presets";
+import { handleGetPresets, handlePatchPresetContext } from "./routes/presets";
 import { handleExport } from "./routes/export";
 import { handleUsageMe } from "./routes/usage-me";
 import {
@@ -67,11 +70,33 @@ export default {
       return handleOptions(request);
     }
 
-    if (!originIsTrusted(request)) {
+    const csrfFailure = csrfCheck(request);
+    if (csrfFailure) {
+      ctx.waitUntil(
+        recordSecurityEvent(getDb(env), {
+          eventType: "csrf_blocked",
+          action: csrfFailure,
+          ipAddress: request.headers.get("CF-Connecting-IP"),
+          metadata: { path, method: request.method },
+        }),
+      );
       return withCors(
-        jsonResponse({ error: "Forbidden origin" }, 403),
+        jsonResponse(
+          {
+            error:
+              csrfFailure === "missing_client_header"
+                ? "Missing client header"
+                : "Forbidden origin",
+          },
+          403,
+        ),
         request,
       );
+    }
+
+    if (path === "/api/health" && request.method === "GET") {
+      const response = await handleHealth(request, env);
+      return withCors(response, request);
     }
 
     if (
@@ -119,6 +144,18 @@ export default {
     if (path === "/api/presets" && request.method === "GET") {
       const response = await handleGetPresets(request, env, ctx);
       return withCors(response, request);
+    }
+    {
+      const presetCtxMatch = path.match(/^\/api\/presets\/([^/]+)\/context$/);
+      if (presetCtxMatch && request.method === "PATCH") {
+        const response = await handlePatchPresetContext(
+          request,
+          env,
+          ctx,
+          presetCtxMatch[1],
+        );
+        return withCors(response, request);
+      }
     }
 
     if (path === "/api/export" && request.method === "POST") {

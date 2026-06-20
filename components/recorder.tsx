@@ -34,6 +34,7 @@ export default function RecorderTranscriber({
     isClientReady,
     isActive,
     isBusy,
+    isReconnecting,
     startSession,
     stopSession,
   } = useTranscription();
@@ -43,10 +44,18 @@ export default function RecorderTranscriber({
     // — they're indistinguishable to the user. State machine the user
     // sees: Start → Starting → Stop.
     const label =
-      sessionState === "live" ? "Stop" : isBusy ? "Starting" : "Start";
+      sessionState === "live"
+        ? "Stop"
+        : isReconnecting
+          ? "Reconnecting"
+          : isBusy
+            ? "Starting"
+            : "Start";
     const tooltip = errorMessage
       ? errorMessage
-      : sessionState === "live"
+      : isReconnecting
+        ? "Reconnecting to transcription service…"
+        : sessionState === "live"
         ? "Recording — click to stop"
         : isBusy
           ? "Starting transcription…"
@@ -95,7 +104,9 @@ export default function RecorderTranscriber({
               <span>
                 {sessionState === "fetching-key"
                   ? "Fetching API key…"
-                  : "Connecting…"}
+                  : isReconnecting
+                    ? "Reconnecting…"
+                    : "Connecting…"}
               </span>
             </div>
           ) : (
@@ -151,9 +162,11 @@ export default function RecorderTranscriber({
             <span className="text-[10px] text-neutral-500 font-medium uppercase tracking-wider">
               {sessionState === "live"
                 ? "Live & Connected"
-                : sessionState === "idle"
-                  ? "Ready"
-                  : "Connecting..."}
+                : isReconnecting
+                  ? "Reconnecting"
+                  : sessionState === "idle"
+                    ? "Ready"
+                    : "Connecting..."}
             </span>
           </div>
           {sessionState === "live" && (

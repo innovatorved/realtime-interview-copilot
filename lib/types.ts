@@ -39,6 +39,10 @@ export interface InterviewPreset {
   isBuiltIn: boolean | null;
   userId: string | null;
   createdAt: string;
+  resumeText?: string | null;
+  resumeFileName?: string | null;
+  jobDescription?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface TranscriptionWord {

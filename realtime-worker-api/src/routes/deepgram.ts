@@ -16,8 +16,11 @@ import {
   isAuthed,
 } from "../middleware/auth";
 import { jsonHeaders, jsonResponse } from "../lib/http";
+import { getClientIp } from "../lib/ip";
+import { limitByIp } from "../lib/ip-rate-limit";
 import { SAFE_SESSION_ID_RE } from "../lib/ids";
 import { recordUsage, startUsage } from "../usage";
+import { consumeQuota } from "../services/quota.service";
 import type { Env } from "../env";
 
 const DEEPGRAM_TIMEOUT_MS = 10_000;
@@ -68,6 +71,18 @@ export async function handleDeepgram(
   // closed when the binding throws (except when the binding itself is absent
   // in local dev — there we intentionally fall open so the loopback works).
   if (env.COMPLETION_LIMITER) {
+    const ip = getClientIp(request);
+    const ipLimit = await limitByIp(env, "deepgram", ip);
+    if (!ipLimit.ok) {
+      recordUsage(env, ctx, request, authResult, "deepgram_key", {
+        status: "rate_limited",
+        errorCode: String(ipLimit.status),
+      });
+      return jsonResponse(
+        { error: "Rate limit exceeded. Try again in a minute." },
+        ipLimit.status,
+      );
+    }
     const key = `deepgram:${authResult.id}`;
     try {
       const { success } = await env.COMPLETION_LIMITER.limit({ key });
@@ -172,6 +187,14 @@ export async function handleDeepgram(
       status: createResponse.ok ? "ok" : "error",
       errorCode: createResponse.ok ? null : String(createResponse.status),
     });
+
+    if (createResponse.ok) {
+      ctx.waitUntil(
+        consumeQuota(getDb(env), env, authResult.id, "deepgram_seconds", {
+          seconds: 60,
+        }),
+      );
+    }
 
     if (
       createResponse.ok &&
@@ -332,6 +355,14 @@ export async function handleDeepgramAsk(
       status: createResponse.ok ? "ok" : "error",
       errorCode: createResponse.ok ? null : String(createResponse.status),
     });
+
+    if (createResponse.ok) {
+      ctx.waitUntil(
+        consumeQuota(getDb(env), env, authResult.id, "deepgram_seconds", {
+          seconds: 60,
+        }),
+      );
+    }
 
     return new Response(JSON.stringify(createBody), {
       status: createResponse.ok ? 200 : createResponse.status,

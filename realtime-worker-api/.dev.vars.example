@@ -14,3 +14,7 @@ ADMIN_EMAILS=you@example.com
 CF_ACCOUNT_ID=
 CF_GATEWAY_ID=
 CF_API_TOKEN=
+
+# Quota (dry-run consumption ON; enforcement OFF until billing is ready)
+QUOTA_ENFORCEMENT=false
+QUOTA_RECORD_CONSUMPTION=true

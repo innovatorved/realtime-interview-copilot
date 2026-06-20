@@ -1,449 +1,920 @@
-# Realtime Interview Copilot Architecture
+# Realtime Interview Copilot — System Architecture
 
-This document explains how the desktop app, worker API, and database fit together.
-It focuses on runtime boundaries, data flow, security, build, and release behavior.
+This document is the single source of truth for how the desktop app, worker API, database, and external services fit together. It covers runtime boundaries, data flows, API surface, security, build, and release behavior.
 
-## 1. System overview
+---
 
-Realtime Interview Copilot is a desktop assistant for live interviews. It captures system audio, transcribes speech in real time, supports Ask AI with screenshots, and keeps the app protected from normal screen sharing paths.
+## 1. Executive summary
 
-The system has three main parts:
+**Realtime Interview Copilot** is a desktop assistant for live interviews. It captures system audio from video calls (Zoom, Meet, Teams, etc.), transcribes speech in real time via Deepgram, and generates AI answers through Copilot, Summarizer, and Ask AI modes — including screenshot and microphone input. The app runs as an Electron desktop client with a transparent, always-on-top overlay so it stays usable during interviews while remaining hard to capture through normal screen-sharing paths.
+
+The system has four cooperating parts:
 
 | Part | Runtime | Responsibility |
-|---|---|---|
-| Desktop app | Electron 41, Next.js 16, React 19 | Window management, audio capture, transcription UI, screenshots, hotkeys, and worker communication |
-| Worker API | Cloudflare Workers | Authentication, token minting, completions, notes, presets, sessions, support, announcements, and usage tracking |
-| Database | Cloudflare D1 with Drizzle ORM | Users, sessions, config, notes, presets, support threads, announcements, audit data, and usage records |
+|------|---------|----------------|
+| Desktop app | Electron 42, Next.js 16, React 19 | Window management, audio capture, transcription UI, screenshots, hotkeys, worker communication |
+| Worker API | Cloudflare Workers | Authentication, token minting, completions, notes, presets, sessions, support, announcements, usage tracking |
+| Database | Cloudflare D1 (SQLite) + Drizzle ORM | Users, sessions, config, notes, presets, support threads, announcements, audit data, usage records |
+| Admin dashboard | External repo (`interview-copilot-admin/`) on Cloudflare Workers | User approval, config, live sessions, support inbox, usage analytics |
 
-The desktop app does not hold long-lived model or Deepgram secrets. Those stay in the worker.
+The desktop app never holds long-lived model or Deepgram secrets. Those stay in the worker and are exposed only as short-lived credentials or streamed responses.
 
-## 2. Desktop runtime
+### High-level system diagram
 
-### 2.1 Process split
+```mermaid
+flowchart TB
+  subgraph Desktop["Desktop App (Electron + Next.js)"]
+    Main["electron/main.ts"]
+    Preload["electron/preload.ts"]
+    Renderer["app/ + components/"]
+    Main --> Preload --> Renderer
+  end
 
-The Electron app follows the normal main, preload, and renderer separation:
+  subgraph Worker["Cloudflare Worker API"]
+    Index["src/index.ts"]
+    Auth["Better Auth + selfHostedAdmin"]
+    Routes["routes/*"]
+    D1["D1 SQLite"]
+    KV["CONFIG_KV"]
+    RL["COMPLETION_LIMITER"]
+    Index --> Auth
+    Index --> Routes
+    Routes --> D1
+    Routes --> KV
+    Routes --> RL
+  end
 
-- `electron/main.ts` owns the `BrowserWindow`, security setup, hotkeys, and IPC handlers.
-- `electron/preload.ts` exposes a limited `window.electronAPI` bridge through `contextBridge`.
-- The renderer is the Next.js app in `app/` and `components/`.
+  subgraph External["External Services"]
+    DG["Deepgram API + WebSocket"]
+    Gemini["Google Gemini via AI Gateway"]
+    CustomLLM["OpenAI-compatible endpoint"]
+    PH["PostHog + GTM"]
+    AdminUI["interview-copilot-admin"]
+  end
 
-The window is frameless, transparent, always on top, sandboxed, and isolated from Node in the renderer. The UI only gets the capabilities exported by preload.
+  Renderer -->|"HTTPS REST + SSE + cookies"| Index
+  Renderer -->|"WebSocket (client-direct)"| DG
+  Routes --> Gemini
+  Routes --> CustomLLM
+  Routes --> DG
+  Renderer --> PH
+  AdminUI -->|"self-hosted-admin/*"| Auth
+```
 
-### 2.2 UI composition
+**What this system does not use:** Durable Objects, R2 object storage, or worker-owned WebSockets. Real-time transcription uses a **client-direct WebSocket to Deepgram**; AI output uses **HTTP SSE** from the worker.
 
-`components/main.tsx` orchestrates the main app shell:
+---
 
-- It switches between Copilot, Ask AI, and Presets.
-- It manages compact mode and click-through overlay behavior.
-- It wires in saved notes, preset loading, and export.
-- It listens for the global capture-and-ask shortcut and opens Ask AI with the screenshot attached.
+## 2. Repository and package layout
 
-Important UI surfaces include:
+This repository contains **two independent packages** (not a formal npm/Bun workspaces monorepo). A third system — the admin dashboard — lives in a sibling repository.
 
-- `components/copilot.tsx` for live interview copilot and summarizer flows.
-- `components/QuestionAssistant.tsx` for Ask AI with screenshot support.
-- `components/recorder.tsx` for live audio capture and transcription controls.
-- `components/TranscriptionContext.tsx` and `components/TranscriptionDisplay.tsx` for transcript state and rendering.
-- `components/CompactCopilot.tsx` for compact overlay mode.
-- `components/InterviewPresets.tsx`, `hooks/usePresets.ts`, `hooks/useNotes.ts`, and `hooks/useExport.ts` for saved workflows.
+### Packages in this repo
 
-### 2.3 Compact overlay mode
+| Package | Path | Version | Type |
+|---------|------|---------|------|
+| Desktop app | `/` (root) | `0.12.0-beta` | Electron + Next.js static export |
+| Worker API | `realtime-worker-api/` | `0.1.0` | Cloudflare Worker |
 
-Compact mode (`components/CompactCopilot.tsx`, toggled from the Title bar) resizes the Electron window to a thin toolbar strip (expanding when an answer or drawer is open). Most of the window is transparent so the user can see and click through to apps behind the interview.
+**Package manager:** Bun `1.3.10` (root). Production API URL is hardcoded in `lib/constant.ts`:
 
-Click-through is implemented in `hooks/useClickThrough.ts`:
+```
+https://realtime-worker-api-prod.vedgupta.in
+```
 
-- The main process calls `setIgnoreMouseEvents(true, { forward: true })` so mousemove still reaches the renderer.
-- Interactive regions (`.titlebar-chrome`, `.app-toolbar`, `[data-clickable]`, form controls, buttons) disable ignore so clicks and window drag work on the chrome.
-- `pointerdown` syncs ignore state before drag so the title bar can be grabbed without a prior mousemove.
-- Entering an interactive region calls `window-focus` IPC so keyboard shortcuts work immediately after hover.
+### External system
 
-Compact-only keyboard handling lives in `CompactCopilot.tsx` (Mod+Enter generate, Alt+A Ask drawer) with shared Esc / Mod+Shift+N from `components/ask/useAskKeyboard.ts`. Tab shortcuts in `TabContext.tsx` are disabled while compact mode is active so Alt+A does not also switch hidden tabs.
+| System | Location | Deploy target |
+|--------|----------|---------------|
+| Admin dashboard | Sibling repo `interview-copilot-admin/` | `https://interview-copilot-admin.vedgupta.in` (OpenNext on Cloudflare Workers) |
 
-### 2.4 Backdrop opacity
+### Directory map
 
-The Title bar **− / +** control adjusts `backdropOpacity` in `components/AppBackdropContext.tsx` (persisted in `localStorage` on Electron). The value is published as CSS variable `--app-backdrop-opacity` on `document.documentElement`.
+| Path | Purpose |
+|------|---------|
+| `app/` | Next.js App Router pages (static export for Electron) |
+| `components/` | React UI: copilot, Ask AI, compact overlay, auth, shadcn-style `ui/` |
+| `electron/` | Electron main process, preload bridge, IPC, security, auto-updater |
+| `hooks/` | Client hooks: transcription, mic, notes, presets, export, click-through |
+| `lib/` | Shared client utilities: auth client, SSE, Deepgram session, vision |
+| `public/` | Icons, service worker (`sw.js`), static `_headers` |
+| `build/` | macOS Electron Builder entitlements plists |
+| `scripts/` | Electron compile, Homebrew cask updater, Windows icon generator |
+| `realtime-worker-api/` | Cloudflare Worker backend (D1, KV, rate limiting, Better Auth) |
+| `homebrew/` | Homebrew cask template synced to `innovatorved/homebrew-tap` by CI |
+| `.github/workflows/` | Release CI (Electron builds + GitHub Release + Homebrew tap) |
+
+**Placeholder directories** (admin moved to external repo): `app/admin/`, `components/admin/`, `components/analytics/`, `winget/`.
+
+---
+
+## 3. Runtime architecture
+
+### 3.1 Desktop (Electron + Next.js static export)
+
+#### Process split
+
+The Electron app follows the standard main / preload / renderer separation:
+
+| Layer | File | Role |
+|-------|------|------|
+| Main process | `electron/main.ts` | `BrowserWindow`, security, hotkeys, IPC handlers |
+| Preload | `electron/preload.ts` | `contextBridge` → limited `window.electronAPI` |
+| Renderer | `app/`, `components/` | Next.js static-export React UI |
+
+The window is frameless, transparent, always on top, sandboxed, and isolated from Node in the renderer. The UI only gets capabilities exported by preload.
+
+#### Provider tree
+
+`app/layout.tsx` wraps the entire app:
+
+```
+AppErrorBoundary
+  → PostHogProvider
+    → AppBackdropProvider
+      → TabProvider
+        → TranscriptionProvider
+          → TitleBar + {children}
+```
+
+#### Main shell
+
+`components/main.tsx` orchestrates the app shell:
+
+- Switches between **Copilot**, **Ask AI**, and **Presets** tabs (Alt+C / Alt+A / Alt+P).
+- Manages **compact mode** and click-through overlay behavior.
+- Wires saved notes, preset loading, and export.
+- Listens for the global capture-and-ask shortcut (`Cmd/Ctrl+Shift+1`).
+
+Key UI surfaces:
+
+| Component | Purpose |
+|-----------|---------|
+| `components/copilot.tsx` | Live interview Copilot and Summarizer |
+| `components/QuestionAssistant.tsx` | Ask AI with screenshot and mic support |
+| `components/recorder.tsx` | Live audio capture and transcription controls |
+| `components/TranscriptionContext.tsx` | Transcript state and session lifecycle |
+| `components/CompactCopilot.tsx` | Compact overlay toolbar mode |
+| `components/InterviewPresets.tsx` | Preset templates and background context |
+| `components/auth/auth-guard.tsx` | Auth, approval, and ban gate |
+
+#### Build model
+
+- **Production:** `next.config.mjs` sets `output: "export"` → static files in `out/` bundled into Electron.
+- **Development:** `bun run electron:dev` — Next.js on port 3000 + Electron loading the dev server.
+- **No Next.js server in production** — all backend logic lives in `realtime-worker-api/`.
+
+### 3.2 Worker API
+
+Single HTTP dispatcher at `realtime-worker-api/src/index.ts`:
+
+1. CORS preflight (`OPTIONS`)
+2. CSRF origin gate (`originIsTrusted`)
+3. Route to handler in `routes/`
+4. Fallthrough to Better Auth at `/api/auth/*`
+
+#### Cloudflare bindings (`wrangler.toml`)
+
+| Binding | Type | Purpose |
+|---------|------|---------|
+| `DB` | D1 (`realtime-interview-copilot-db`) | Primary datastore; Drizzle migrations in `drizzle/` |
+| `CONFIG_KV` | KV namespace | Admin config cache, per-user activity throttle |
+| `COMPLETION_LIMITER` | Rate limiter | 30 requests / 60 seconds |
+
+#### Scheduled maintenance
+
+Cron trigger `0 3 * * *` (daily 03:00 UTC) runs `runScheduledMaintenance` in `src/lib/maintenance.ts`:
+
+- Deletes expired auth `session` rows and `rate_limit` entries
+- Ends stale `live_session` rows (`endedAt IS NULL` and `lastSeenAt` older than 5 minutes)
+
+### 3.3 External services
+
+| Service | Role | Connection |
+|---------|------|------------|
+| **Deepgram** | Live speech-to-text | Worker mints 60s keys; client opens WebSocket directly |
+| **Google Gemini** | Default LLM | Worker streams via Cloudflare AI Gateway |
+| **OpenAI-compatible API** | Optional custom LLM | Admin-configured HTTPS endpoint (SSRF-guarded) |
+| **PostHog + GTM** | Product analytics | Client-side from renderer |
+| **Admin dashboard** | Operations console | Calls `/api/auth/self-hosted-admin/*` on the worker |
+
+---
+
+## 4. Authentication and authorization
+
+### Stack
+
+| Layer | File | Technology |
+|-------|------|------------|
+| Worker auth | `realtime-worker-api/src/auth.ts` | Better Auth + Drizzle SQLite adapter on D1 |
+| Session gate | `realtime-worker-api/src/middleware/auth.ts` | Approval / ban checks per endpoint |
+| Client | `lib/auth-client.ts` | `createAuthClient({ baseURL: .../api/auth })` |
+| UI gate | `components/auth/auth-guard.tsx` | Loading → login → pending → banned → approved |
+
+### Password handling
+
+Passwords are hashed and verified in worker code (`realtime-worker-api/src/crypto.ts`) using PBKDF2-SHA256 with 100,000 iterations and constant-time comparison.
+
+### Cookie configuration
+
+Cookies use `SameSite=None` and `Secure=true` because the Electron renderer (`file://` or `localhost`) and the Cloudflare Worker are not same-site in the normal browser sense. All API fetches use `credentials: "include"`.
+
+### Approval gate
+
+Users have `isApproved` (default `false`) and `isBanned` (default `false`) on the `user` table. Two auth helpers enforce different policies:
+
+| Function | Approval required | Banned rejected | Used for |
+|----------|-------------------|-----------------|----------|
+| `getAuthenticatedUser` | Yes | Yes | Billable/sensitive routes (completions, Deepgram, notes, sessions) |
+| `getAuthenticatedUserAllowPending` | No | Yes | Support messages, announcements (pending users can contact admins) |
+
+`authErrorResponse` returns HTTP 401 (unauthorized), 403 with `pending_approval`, or 403 with `banned`.
+
+### Auth onboarding flow
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant App as Desktop App
+  participant Worker as Worker API
+  participant D1 as D1
+  participant Admin as Admin Dashboard
+
+  User->>App: Sign up (email/password)
+  App->>Worker: POST /api/auth/sign-up/email
+  Worker->>D1: Insert user (isApproved=false)
+  Worker-->>App: Session cookie
+  App->>App: AuthGuard → WaitingForApproval
+
+  User->>App: Can use support + announcements only
+  App->>Worker: POST /api/support/messages
+
+  Admin->>Worker: POST /api/auth/self-hosted-admin/bulk-approve
+  Worker->>D1: Set isApproved=true
+
+  User->>App: Sign in again (or refresh session)
+  App->>App: AuthGuard → full app access
+  App->>Worker: POST /api/completion, GET /api/deepgram, etc.
+```
+
+### Cross-cutting security on every request
+
+- **CSRF:** `originIsTrusted` in `middleware/csrf.ts` blocks state-changing requests from untrusted origins.
+- **CORS:** `middleware/cors.ts` shares `TRUSTED_ORIGINS` with Better Auth.
+- **Auth plugin hooks:** Disposable email blocking, IP rate limits on signup/login, ban enforcement, audit logging (`self-hosted-admin` plugin).
+
+---
+
+## 5. Core user flows
+
+### 5.1 Interview Copilot flow
+
+The primary loop: system audio → live transcript → AI answer.
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant UI as Copilot UI
+  participant Tx as TranscriptionContext
+  participant Worker as Worker API
+  participant DG as Deepgram WebSocket
+  participant LLM as Gemini / Custom LLM
+
+  User->>UI: Start Listening
+  UI->>Tx: startSession()
+  Tx->>Tx: getDisplayMedia (loopback audio)
+  Tx->>Worker: POST /api/sessions/start
+  Worker-->>Tx: sessionId
+  Tx->>Worker: GET /api/deepgram?sessionId=
+  Worker-->>Tx: 60s temp API key
+  Tx->>DG: WebSocket connect (nova-2)
+  DG-->>Tx: interim + final transcripts
+  Tx->>UI: Update TranscriptionCard
+
+  User->>UI: Generate (Copilot or Summarizer)
+  UI->>Worker: POST /api/completion (SSE)
+  Worker->>LLM: streamGenerateContent / chat/completions
+  LLM-->>Worker: token stream
+  Worker-->>UI: SSE {text} chunks
+  UI->>UI: Render OutputCard
+
+  opt Save note
+    User->>UI: Save
+    UI->>Worker: POST /api/notes
+  end
+
+  User->>UI: Stop Listening
+  UI->>Worker: POST /api/sessions/end
+```
+
+**Step detail:**
+
+1. `AuthGuard` passes → user is on Copilot tab (`components/copilot.tsx`).
+2. `RecorderTranscriber` (`components/recorder.tsx`) calls `useTranscription().startSession()`.
+3. `lib/transcription/deepgramSession.ts` captures system audio, registers a live session, mints a Deepgram key, opens a WebSocket.
+4. `MediaRecorder` emits 500 ms audio chunks to Deepgram once the WebSocket is open.
+5. User toggles Copilot vs Summarizer (`FLAGS` in `lib/types.ts`) and hits Generate.
+6. `hooks/useCopilotSubmit.ts` POSTs to `/api/completion`; `lib/sse.ts` parses the stream.
+7. Optional: Save → `POST /api/notes` via `hooks/useNotes.ts`.
+
+`TranscriptionProvider` is mounted at the layout root so the WebSocket survives compact ↔ full mode switches.
+
+### 5.2 Ask AI flow
+
+Multi-turn chat with optional screenshots and microphone dictation.
+
+| Feature | Client module | Backend |
+|---------|---------------|---------|
+| Chat | `hooks/useAskChat.ts` | `POST /api/completion` with `messages[]` + optional `image` |
+| Screenshot | `hooks/useCaptureAndAsk.ts` + `electron/ipc/screen.ts` | Multimodal completion (Gemini `inlineData` or OpenAI `image_url`) |
+| Mic dictation | `hooks/useAskMic.ts` + `hooks/useMicPushToTalk.ts` | `GET /api/deepgram/ask` → separate WebSocket (250 ms chunks) |
+
+**Screenshot hotkey flow:**
+
+1. Main process captures primary display (`desktopCapturer`), downsizes, returns PNG data URL.
+2. Renderer receives `screen:capture-and-ask` IPC event.
+3. `QuestionAssistant.tsx` or `CompactCopilot.tsx` attaches the image to the next completion request.
+4. Worker validates image MIME/size (`lib/vision-screenshot.ts` mirrors server rules).
+
+Ask AI carries a front-end background instruction `ASK_AI_BACKGROUND` sent on the first turn only; screenshot-only requests use `VISION_FALLBACK_PROMPT`.
+
+### 5.3 Compact overlay mode
+
+`components/CompactCopilot.tsx` replaces the full tab layout with a thin toolbar strip:
+
+- **Click-through:** `hooks/useClickThrough.ts` calls `setIgnoreMouseEvents(true, { forward: true })` on the main process. Interactive regions (`.titlebar-chrome`, `.app-toolbar`, `[data-clickable]`) disable ignore so chrome remains grabbable.
+- **Window resize:** `hooks/useCompactWindowSize.ts` grows the window when an answer panel or Ask drawer opens.
+- **Shared transcription:** Same `TranscriptionProvider` instance — recording does not stop when toggling compact mode.
+- **Keyboard:** Mod+Enter generate, Alt+A Ask drawer; tab shortcuts disabled in compact mode (`TabContext.tsx`).
+
+### 5.4 Presets and notes
+
+- **Presets:** `GET /api/presets` via `hooks/usePresets.ts`. Applying a preset sets `presetContext` in `main.tsx` and switches to Copilot.
+- **Notes:** CRUD via `hooks/useNotes.ts`. History sidebar in full mode.
+- **Export:** `POST /api/export` via `hooks/useExport.ts` (markdown/HTML).
+
+### 5.5 Backdrop opacity
+
+Title bar **− / +** adjusts `backdropOpacity` in `components/AppBackdropContext.tsx` (persisted in `localStorage` on Electron). Published as CSS variable `--app-backdrop-opacity`.
 
 | Surface | Full mode | Compact mode |
 |---------|-----------|--------------|
 | Full-window fill | `AppBackdrop` rgba layer follows slider | No full-window layer |
-| Title bar / toolbars | `.titlebar-chrome`, `.app-toolbar` (minimum opacity floor so chrome stays grabbable) | Same — only navbar strip dims |
-| Content cards | `.glass-card` mix scales with slider | Output area stays transparent; text uses light inline halos only |
+| Title bar / toolbars | Minimum opacity floor so chrome stays grabbable | Same |
+| Content cards | `.glass-card` mix scales with slider | Output area transparent; text uses light halos |
 
-### 2.5 Auto-update
+### 5.6 Auto-update
 
-`electron/updater.ts` wraps `electron-updater` for packaged builds. The Title bar download icon triggers `updaterCheck`; status events flow to the renderer via preload. Release artifacts include `latest-mac.yml` / `latest.yml` for the updater. Homebrew cask installs are expected to use `brew upgrade --cask` instead of the in-app updater.
+`electron/updater.ts` wraps `electron-updater` for packaged builds. Title bar download icon triggers `updaterCheck`; status events flow to the renderer via preload. Homebrew cask installs use `brew upgrade --cask` instead of the in-app updater.
 
-## 3. Security model
+---
 
-### 3.1 Window hardening
+## 6. Realtime transports
 
-`electron/main.ts` hardens the window and limits leakage:
+There is **no WebRTC** and **no app-owned WebSocket to the worker**.
 
-- `contextIsolation: true`, `sandbox: true`, and `nodeIntegration: false` keep Node out of the renderer.
-- `setContentProtection(true)` reduces capture through OS screen recording paths.
-- On macOS, `setSharingType("none")` and `setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })` keep the window usable while limiting sharing exposure.
-- Navigation is locked down so only trusted origins can load in the window, and external links open in the default browser.
+| Transport | Used for | Client module | Server endpoint |
+|-----------|----------|---------------|-----------------|
+| Deepgram WebSocket | Live interview transcription | `lib/transcription/deepgramSession.ts` | Key minted at `GET /api/deepgram` |
+| Deepgram WebSocket | Ask AI mic dictation | `hooks/useAskMic.ts` | Key minted at `GET /api/deepgram/ask` |
+| HTTP SSE | AI completions (Copilot, Summarizer, Ask AI) | `lib/sse.ts` | `POST /api/completion` |
+| REST + cookies | Auth, notes, presets, sessions, support, etc. | Various hooks | `/api/*` |
+| Electron IPC | Window, screen capture, click-through, updater | `electron/preload.ts` | N/A (main process) |
 
-### 3.2 CSP and origin checks
+### Deepgram connection defaults
 
-The main process installs a strict content security policy and origin header handling before loading the app. The worker also enforces trusted origins so desktop and browser requests agree on what is allowed.
+`lib/transcription/deepgramLiveConnection.ts` connects with:
 
-### 3.3 Preload API
+- Model: `nova-2` (default)
+- `interim_results: true`, `smart_format: true`
 
-`electron/preload.ts` exposes only the capabilities the UI needs:
+| Pipeline | MediaRecorder timeslice |
+|----------|-------------------------|
+| Interview (system audio) | 500 ms |
+| Ask AI mic | 250 ms |
 
-- Window controls such as minimize, maximize, close, always-on-top, resize, ignore mouse events, and focus.
-- App lifecycle actions such as quit, relaunch, and auto-update check.
-- Screen capture helpers such as access checks, OS settings, the macOS permission prompt, screenshot capture, and capture-and-ask events.
-- Platform flags such as `platform`, `isElectron`, and `supportsSystemAudio`.
+CSP allows `wss://*.deepgram.com` (set in `app/layout.tsx` meta, `electron/security/csp.ts`, and `public/_headers`).
 
-No direct filesystem, shell, or arbitrary IPC access is exposed to the renderer.
+### SSE contract
 
-## 4. Audio and screenshot capture
+Worker streams:
 
-### 4.1 System audio without virtual drivers
+```
+data: {"text":"..."}\n\n
+data: {"error":"..."}\n\n
+data: [DONE]\n\n
+```
 
-The app captures speaker output using Electron display-media support and native OS loopback audio instead of third-party virtual audio drivers.
+Client parser: `lib/sse.ts` (`parseSseStream`) with carry-buffer for partial frames.
 
-`electron/security/permissions.ts` installs the capture handlers:
+---
 
-- `setPermissionRequestHandler` grants `media`, `display-capture`, and `notifications` only for trusted renderer origins.
-- `setPermissionCheckHandler` lets Chromium complete synchronous media checks so native macOS permission flows are reached correctly.
-- `setDisplayMediaRequestHandler` returns the primary screen with `audio: "loopback"` so Chromium receives system audio directly.
+## 7. State management (client)
 
-This keeps the app off tools like BlackHole, VB-Audio, and Voicemeeter.
+No Redux, Zustand, or global state library. State is React Context + custom hooks.
 
-### 4.2 macOS permissions
+### Global context
 
-macOS requires separate permissions for screen capture and microphone capture.
+| Context | File | State owned |
+|---------|------|-------------|
+| `TranscriptionProvider` | `components/TranscriptionContext.tsx` | Live transcript, segments, session state, start/stop |
+| `TabProvider` | `components/TabContext.tsx` | `activeTab` (copilot \| ask-ai \| presets), `compactMode` |
+| `AppBackdropProvider` | `components/AppBackdropContext.tsx` | Window backdrop opacity |
+
+### Feature hooks
+
+| Hook | Responsibility |
+|------|----------------|
+| `useCopilotSubmit` | Copilot/Summarizer completion SSE stream |
+| `useAskChat` | Multi-turn Ask AI chat |
+| `useAskMic` | Mic dictation WebSocket session |
+| `useMicPushToTalk` | Space / Ctrl+Space push-to-talk |
+| `useNotes` / `usePresets` / `useExport` | CRUD against worker APIs |
+| `useCaptureAndAsk` | Global screenshot hotkey wiring |
+| `useClickThrough` | Compact overlay mouse passthrough |
+| `useCompactWindowSize` | Electron window resize on compact toggle |
+| `useAnnouncements` | In-app banners/popups |
+| `useSupportMessages` | Support thread UI |
+
+### Persistence
+
+| Storage | Keys / usage |
+|---------|--------------|
+| `localStorage` | `interview-copilot-compact-mode`, `copilot-backdrop-opacity` |
+| `sessionStorage` | Resume/JD context (`bg`), compact completion/chat (`components/compact/storage.ts`) |
+
+### Auth session
+
+`authClient.useSession()` from Better Auth — cookie-based, `credentials: "include"` on all API fetches.
+
+### Telemetry (parallel paths)
+
+- **PostHog** — `components/PostHogProvider.tsx`, event captures in hooks/components
+- **GTM** — `sendGTMEvent` in `main.tsx`, `copilot.tsx`
+- **Worker events** — `trackEvent()` in `lib/session-tracking.ts` → `POST /api/events/track`
+
+---
+
+## 8. Worker API reference
+
+### 8.1 Public routes
+
+All routes pass through CORS + CSRF origin gate. Legacy aliases without `/api` prefix exist for some endpoints.
+
+| Method | Path | Handler | Auth | Rate limit |
+|--------|------|---------|------|------------|
+| GET/POST | `/api/deepgram` | `handleDeepgram` | Approved | `COMPLETION_LIMITER` (`deepgram:{userId}`) |
+| GET | `/api/deepgram/ask` | `handleDeepgramAsk` | Approved | `COMPLETION_LIMITER` (`deepgram-ask:{userId}`) |
+| POST | `/api/completion` | `handleCompletion` | Approved | `COMPLETION_LIMITER` (`userId`) |
+| GET | `/api/notes` | `handleGetNotes` | Approved | — |
+| POST | `/api/notes` | `handleCreateNote` | Approved | — |
+| DELETE | `/api/notes/:id` | `handleDeleteNote` | Approved | — |
+| GET | `/api/presets` | `handleGetPresets` | Approved | — |
+| POST | `/api/export` | `handleExport` | Approved | — |
+| GET | `/api/usage/me` | `handleUsageMe` | Approved | — |
+| POST | `/api/sessions/start` | `handleSessionStart` | Approved | `COMPLETION_LIMITER` (`session_start:{userId}`) |
+| POST | `/api/sessions/end` | `handleSessionEnd` | Approved | — |
+| POST | `/api/sessions/end-all` | `handleSessionEndAll` | Approved | — |
+| POST | `/api/events/track` | `handleEventTrack` | Approved | `COMPLETION_LIMITER` (`event_track:{userId}`) |
+| GET | `/api/support/messages` | `handleListSupportMessages` | Pending OK | — |
+| POST | `/api/support/messages` | `handleCreateSupportMessage` | Pending OK | `COMPLETION_LIMITER` (`support_create:{userId}`) |
+| POST | `/api/support/messages/read` | `handleMarkSupportThreadReadByUser` | Pending OK | — |
+| GET | `/api/announcements/active` | `handleActiveAnnouncements` | Pending OK | — |
+| POST | `/api/announcements/:id/dismiss` | `handleDismissAnnouncement` | Approved | — |
+| POST | `/api/announcements/:id/ack` | `handleAckAnnouncement` | Approved | — |
+| * | `/api/auth/*` | Better Auth handler | Varies | D1 auth rate limits (plugin) |
+
+`COMPLETION_LIMITER`: 30 requests per 60 seconds per key prefix.
+
+### 8.2 Client → API mapping
+
+| Client file | Endpoint(s) |
+|-------------|---------------|
+| `lib/auth-client.ts` | `/api/auth/*` |
+| `lib/transcription/deepgramSession.ts` | `GET /api/deepgram`, `POST /api/sessions/start`, `POST /api/sessions/end` |
+| `lib/session-tracking.ts` | `POST /api/sessions/start`, `/end`, `/end-all`, `POST /api/events/track` |
+| `hooks/mic/keyFetch.ts` | `GET /api/deepgram/ask` |
+| `hooks/useCopilotSubmit.ts` | `POST /api/completion` |
+| `components/compact/useCompactGenerate.ts` | `POST /api/completion` |
+| `hooks/useAskChat.ts` | `POST /api/completion` |
+| `hooks/useNotes.ts` | `GET/POST/DELETE /api/notes` |
+| `hooks/usePresets.ts` | `GET /api/presets` |
+| `hooks/useExport.ts` | `POST /api/export` |
+| `hooks/useAnnouncements.ts` | `GET /api/announcements/active`, `POST .../dismiss`, `POST .../ack` |
+| `hooks/useSupportMessages.ts` | `GET/POST /api/support/messages`, `POST .../read` |
+
+### 8.3 Admin API (`/api/auth/self-hosted-admin/*`)
+
+Mounted as a Better Auth plugin in `realtime-worker-api/src/plugins/self-hosted-admin/`. All endpoints are admin-gated via `isAdmin` (email in `ADMIN_EMAILS` env or D1 `admin_config`).
+
+| Group | Endpoints | File |
+|-------|-----------|------|
+| Dashboard | `app-config`, `me`, `overview`, `chart-signups`, `health` | `endpoints/dashboard.ts` |
+| Users | `list-users`, `get-user`, `update-user`, `delete-user`, `bulk-approve`, `bulk-ban`, `bulk-delete`, `export-users` | `endpoints/users.ts` |
+| Auth sessions | `list-sessions`, `revoke-session`, `revoke-all-sessions` | `endpoints/sessions.ts` |
+| Config | `config`, `reveal-config`, `update-config`, `test-model`, `openai-config`, `admins` | `endpoints/config.ts` |
+| Model params | `model-params`, `user-model-params` | `endpoints/model-params.ts` |
+| Live sessions | `live-sessions`, `live-session`, `live-session-terminate` | `endpoints/live-sessions.ts` |
+| Support | `support/threads`, `support/thread`, `support/reply`, `support/update-status` | `endpoints/support.ts` |
+| Announcements | `announcements`, `announcements/create`, `update`, `delete`, `stats` | `endpoints/announcements.ts` |
+| Usage | `usage/summary`, `usage/by-user`, `usage/user`, `usage/events`, `usage/timeseries`, `usage/export.csv` | `endpoints/usage.ts` |
+| AI Gateway | `ai-gateway/logs`, `ai-gateway/log`, `ai-gateway/summary`, `providers/health` | `endpoints/ai-gateway-routes.ts` |
+| Audit | `audit-logs`, `security-events`, `activity` | `endpoints/audit.ts` |
+| Notes/presets | `list-notes`, `delete-note`, preset admin endpoints | `endpoints/notes-presets.ts` |
+| Cleanup | `cleanup` | `endpoints/cleanup.ts` |
+
+**External dashboard:** `https://interview-copilot-admin.vedgupta.in`  
+Deploy: `NEXT_PUBLIC_API_URL=https://realtime-worker-api-prod.vedgupta.in bun run deploy` (in the admin repo).
+
+**Admin terminate live session:** `adminTerminateLiveSession` revokes the Deepgram key via `DELETE /v1/projects/{projectId}/keys/{keyId}`, dropping the client's WebSocket on the next audio chunk.
+
+### 8.4 Completion pipeline internals
+
+```
+handleCompletion (routes/completion.ts)
+  → getAuthenticatedUser + rate limit
+  → validate prompt/bg/messages/images
+  → buildWireMessages (lib/prompt.ts)
+  → getCachedConfig + getEffectiveModelParams
+  → if cfg.useCustom:
+       streamOpenAICompatibleCompletion (routes/completion-openai.ts)
+     else:
+       streamGeminiCompletion (routes/completion-gemini.ts)
+  → TransformStream SSE writer
+  → ctx.waitUntil: usage_event insert (usage.ts)
+```
+
+**Provider paths:**
+
+| Provider | Endpoint | Auth |
+|----------|----------|------|
+| Gemini (default) | `https://gateway.ai.cloudflare.com/v1/{accountId}/{gatewayId}/google-ai-studio/v1beta/models/{model}:streamGenerateContent?alt=sse` | `x-goog-api-key` |
+| OpenAI-compatible | `{customBaseUrl}/chat/completions` | `Bearer {customApiKey}` |
+
+**Privacy:** `usage_event` stores char counts, model name, duration, and status — **never prompt bodies**.
+
+**Request shapes from client:**
+
+Copilot / Summarizer (`useCopilotSubmit.ts`):
+```json
+{ "bg": "...", "flag": "copilot"|"summarizer", "prompt": "<transcript>" }
+```
+
+Ask AI (`useAskChat.ts`):
+```json
+{
+  "bg": "<ASK_AI_BACKGROUND>",
+  "flag": "copilot",
+  "prompt": "<latest user text>",
+  "image": "<data URL or array>",
+  "messages": [{ "role": "user"|"assistant", "text": "...", "images": [...] }]
+}
+```
+
+### 8.5 Deepgram key minting
+
+Both `handleDeepgram` and `handleDeepgramAsk`:
+
+1. Authenticate approved user
+2. Rate limit
+3. Load Deepgram project key from D1 config (never from KV cache alone)
+4. `GET https://api.deepgram.com/v1/projects` → project ID
+5. `POST .../projects/{id}/keys` — 60s TTL, `usage:write` scope
+6. Return `{ key }` to client
+
+`handleDeepgram` optionally binds `api_key_id` to `live_session` when `?sessionId=` is provided.
+
+---
+
+## 9. Data model
+
+### 9.1 D1 tables (`realtime-worker-api/src/db/schema.ts`)
+
+| Table | Purpose |
+|-------|---------|
+| `user` | Accounts; `isApproved`, `isBanned`, `lastActiveAt` |
+| `session` | Better Auth sessions |
+| `account` | Credential / OAuth links |
+| `verification` | Email verification tokens |
+| `live_session` | Active recordings; Deepgram key binding; admin terminate target |
+| `saved_note` | User-saved interview answers (`content` stored as `body` column) |
+| `interview_preset` | Built-in + per-user preset templates |
+| `usage_event` | Per-action usage tracking (no prompt bodies) |
+| `admin_config` | Key-value runtime config (model keys, feature flags) |
+| `user_model_params` | Per-user LLM parameter overrides |
+| `support_message` | User ↔ admin support threads |
+| `app_announcement` | In-app banners, popups, toasts |
+| `app_announcement_dismissal` | Per-user popup dismissal records |
+| `audit_event` | Admin audit trail |
+| `security_event` | Security incidents (failed logins, disposable email blocks) |
+| `rate_limit` | Auth rate limiting (signup/login windows) |
+
+**Migrations:** `realtime-worker-api/drizzle/` (`0000`–`0009`).
+
+### 9.2 Live session lifecycle
+
+| Event | Handler | Effect |
+|-------|---------|--------|
+| Start listening | `handleSessionStart` | Insert `live_session`; auto-evict oldest if >3 concurrent per user |
+| Stop listening | `handleSessionEnd` | Set `endedAt`, `endedBy: "user"` |
+| Crash recovery | `handleSessionEndAll` | Bulk-end all active sessions for user (idempotent) |
+| Client telemetry | `handleEventTrack` | Allow-listed actions → `usage_event` + bump `live_session.eventCount` |
+| Cron maintenance | `runScheduledMaintenance` | End stale sessions (`lastSeenAt` > 5 min ago) |
+| Admin terminate | `adminTerminateLiveSession` | Revoke Deepgram key → WS dies; optionally revoke auth sessions |
+
+### 9.3 KV usage (`CONFIG_KV`)
+
+Registry: `realtime-worker-api/src/kv-keys.ts`
+
+| Key pattern | TTL | Purpose |
+|-------------|-----|---------|
+| `admin_config:v1` | 5 min | Non-secret admin config cache (`config-cache.ts`) |
+| `activity:{userId}` | 5 min | Throttle `lastActiveAt` D1 writes |
+
+Secrets (Gemini key, Deepgram key, custom API key) are **always loaded from D1** even when KV cache hits — never stored in KV.
+
+### 9.4 Config resolution
+
+`config-cache.ts` — `getCachedConfig`, `getEffectiveModelParams`
 
-Screen recording uses a dedicated onboarding flow:
+Priority: D1 `admin_config` → env vars (`GOOGLE_GENERATIVE_AI_API_KEY`, `DEEPGRAM_API_KEY`, `GEMINI_MODEL`, `CF_*`) → defaults.
 
-- `components/ScreenRecordingOnboard.tsx` polls permission state.
-- In **full mode**, a modal explains the one-time setup; **Later** collapses to a bottom pill.
-- In **compact mode**, a non-blocking **Screen access** chip on the right opens System Settings so the overlay stays usable without granting permission first.
-- `screen:trigger-prompt` in `electron/ipc/screen.ts` triggers the native prompt by calling `desktopCapturer.getSources()`.
-- `screen:open-settings` opens the correct macOS settings page.
-- After permission changes, the app relaunches so the OS can apply the updated TCC state cleanly.
+---
 
-Microphone access for Ask AI is handled separately:
+## 10. Security model
 
-- `electron/main.ts` checks `systemPreferences.getMediaAccessStatus("microphone")` during startup.
-- If the status is `not-determined`, the app waits for `systemPreferences.askForMediaAccess("microphone")` before creating the renderer window.
-- If the status is `denied` or `restricted`, the app opens the macOS microphone privacy pane.
-- Packaged macOS builds include `NSMicrophoneUsageDescription` in `package.json` and the `com.apple.security.device.audio-input` entitlement in `build/entitlements.mac.plist` and `build/entitlements.mac.inherit.plist`.
+### 10.1 Window hardening
 
-### 4.3 Screenshot capture
+`electron/main.ts`:
+
+- `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`
+- `setContentProtection(true)` reduces OS screen-recording capture
+- macOS: `setSharingType("none")`, `setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })`
+- Navigation locked to trusted origins; external links open in default browser
 
-`electron/ipc/screen.ts` also performs one-shot screenshot capture:
+### 10.2 CSP and origin checks
 
-- It captures the primary display with `desktopCapturer`.
-- It downsizes large images to keep request payloads manageable.
-- It returns a PNG data URL to the renderer.
+CSP is set in three layers that must stay in lockstep:
 
-The global hotkey `CommandOrControl+Shift+1` is registered in the main process and sends `screen:capture-and-ask` to the renderer. The Ask AI UI attaches the screenshot to the next request.
+1. `electron/security/csp.ts` — Electron dev header (allows `unsafe-eval` for React dev)
+2. `app/layout.tsx` meta tag — production static export (no `unsafe-eval`)
+3. `public/_headers` — static hosting fallback
 
-## 5. Transcription pipeline
+Worker enforces `TRUSTED_ORIGINS` via CSRF gate and CORS.
 
-### 5.1 Capture and chunking
+### 10.3 Preload API surface
 
-The renderer uses `navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })`, stops the video track, and keeps the audio track for transcription.
+`electron/preload.ts` exposes only:
 
-The audio stream is passed to `MediaRecorder` with a 250 ms timeslice so the app emits small chunks at a steady cadence.
+- Window controls (minimize, maximize, close, always-on-top, resize, ignore mouse events, focus)
+- App lifecycle (quit, relaunch, auto-update)
+- Screen capture (access checks, macOS permission prompt, screenshot, capture-and-ask events)
+- Platform flags (`platform`, `isElectron`, `supportsSystemAudio`)
 
-### 5.2 Deepgram token minting
+No filesystem, shell, or arbitrary IPC access.
 
-The worker mints short-lived Deepgram keys on demand:
+### 10.4 Audio and screenshot capture
 
-- `GET /api/deepgram` and `GET /api/deepgram/ask` are the live routes, with legacy aliases supported.
-- The worker checks authentication, applies rate limits, and can bind the token to a live session.
-- The Deepgram project key never reaches the client.
-- The token TTL is 60 seconds in the current implementation.
+**System audio (no virtual drivers):**
 
-The Ask AI mic-only flow uses its own minting route so it can be tracked separately from the main transcription path.
+`electron/security/permissions.ts`:
 
-### 5.3 Deepgram streaming
+- `setDisplayMediaRequestHandler` returns primary screen with `audio: "loopback"`
+- Renderer uses `getDisplayMedia({ video: true, audio: true })`, stops video track, keeps audio
 
-The live transcription client opens a WebSocket to Deepgram with `model=nova-3`, diarization, multi-language detection, and endpointing enabled. Interim results drive the live gray line, and final results are appended to the transcript list.
+**macOS permissions:**
 
-Ask AI microphone dictation uses `hooks/useAskMic.ts`, mints a token from `/api/deepgram/ask`, opens a short-lived Deepgram WebSocket, and streams microphone chunks from `MediaRecorder`.
+- Screen recording: `components/ScreenRecordingOnboard.tsx`, `screen:trigger-prompt`, `screen:open-settings` IPC
+- Microphone (Ask AI): `systemPreferences.askForMediaAccess("microphone")` at startup; `com.apple.security.device.audio-input` entitlement in `build/entitlements.mac.plist`
 
-`hooks/useMicPushToTalk.ts` owns the Space and Ctrl+Space push-to-talk behavior, tap toggle behavior, and release timing guard so a slow key or slow socket handshake does not cancel recording early.
+**Screenshots:** `electron/ipc/screen.ts` — primary display capture, downsize, PNG data URL. Hotkey `Cmd/Ctrl+Shift+1` → `screen:capture-and-ask`.
 
-### 5.4 Session tracking
+### 10.5 Worker defenses
 
-The worker exposes session lifecycle endpoints:
+| Layer | Implementation |
+|-------|----------------|
+| CSRF | `originIsTrusted` blocks cross-site POSTs from untrusted origins |
+| CORS | Shared `TRUSTED_ORIGINS` with Better Auth |
+| Auth gate | Approved + non-banned for billable routes |
+| Rate limits | CF `COMPLETION_LIMITER` (30/min) + D1 auth rate limits in admin plugin |
+| SSRF | `validateOutboundUrl` on custom model URLs (`url-guard.ts`) |
+| Secrets | Never in desktop app; Deepgram keys 60s TTL |
+| Passwords | PBKDF2-SHA256, 100k iterations, constant-time verify |
+| Images | Validated data URLs and size bounds; `rehype-sanitize` on rendered markdown |
+| HTTPS | All production remote calls use HTTPS |
 
-- `POST /api/sessions/start`
-- `POST /api/sessions/end`
-- `POST /api/sessions/end-all`
+### 10.6 Operational privacy
 
-These endpoints help recover from hard-killed processes and support usage and admin views.
+Prompt text, API keys, and PII should not be logged. `usage_event` stores metadata only. `PRIVACY.md` is the user-facing data handling policy.
 
-## 6. Ask AI and completions
+---
 
-### 6.1 User-facing modes
+## 11. Infrastructure and deployment
 
-The app uses the same worker completion endpoint for multiple workflows:
+| Component | Deploy target | CI |
+|-----------|---------------|-----|
+| Desktop app | GitHub Releases (DMG/ZIP/EXE) + Homebrew cask | `.github/workflows/release.yml` (tags `v*`) |
+| Worker API | Cloudflare Workers (`wrangler deploy`) | Manual only |
+| Admin dashboard | Cloudflare Workers (external repo) | External |
 
-- Copilot answers the latest interview question from the live transcript.
-- Summarizer condenses the conversation so far.
-- Ask AI handles direct questions, with or without an attached screenshot.
+### Distribution channels
 
-The main endpoint is `POST /api/completion`.
+| Platform | Channel |
+|----------|---------|
+| macOS | GitHub Releases + `brew install --cask realtime-interview-copilot` |
+| Windows | GitHub Releases (NSIS installer) |
+| Linux | electron-builder targets configured (AppImage, deb) but not in default release matrix |
 
-### 6.2 Request validation
+### Worker deployment
 
-The worker validates:
+```bash
+cd realtime-worker-api
+bun run deploy   # wrangler deploy
+```
 
-- Prompt and background text length.
-- Message count limits.
-- Image payload shape.
-- Custom base URL safety for OpenAI-compatible endpoints.
+Secrets via `wrangler secret put` or `.dev.vars` locally (see `realtime-worker-api/.dev.vars.example`).
 
-Vision payloads are limited to accepted image data URLs. The client helper in `lib/vision-screenshot.ts` mirrors the worker’s accepted MIME types so invalid captures are rejected early.
+---
 
-### 6.3 Prompt construction
+## 12. Build and release pipeline
 
-The worker builds Copilot and Summarizer prompts server-side in `realtime-worker-api/src/lib/prompt.ts` so transcript logic and final answer style stay separate.
+### 12.1 Local development
 
-Ask AI also carries a front-end background instruction, `ASK_AI_BACKGROUND`, in both `components/QuestionAssistant.tsx` and `components/CompactCopilot.tsx`. The client sends that background with the first turn through `hooks/useAskChat.ts`; the worker applies it without repeating it on every turn. Screenshot-only Ask AI requests use `VISION_FALLBACK_PROMPT` from `lib/vision-screenshot.ts`.
+| Command | Effect |
+|---------|--------|
+| `bun run electron:dev` | Compile Electron TS, start Next.js on :3000, launch Electron |
+| `bun run electron:debug` | Same + DevTools auto-open |
+| `bun run electron:build` | Compile Electron, `next build`, `electron-builder` |
+| `cd realtime-worker-api && bun run dev` | `wrangler dev` for local worker |
 
-### 6.4 Provider abstraction
+### 12.2 Electron compilation
 
-The completion route supports two provider paths:
+`scripts/build-electron.js` compiles `electron/**/*.ts` → `electron/*.js` via `tsconfig.electron.json`.
 
-- Gemini through the Cloudflare and Google path, which is the default.
-- OpenAI-compatible custom endpoints for users who bring their own backend.
+### 12.3 Packaging targets
 
-`realtime-worker-api/src/routes/completion-gemini.ts` and `realtime-worker-api/src/routes/completion-openai.ts` handle provider-specific wire formats. `realtime-worker-api/src/routes/completion.ts` owns validation, rate limiting, usage tracking, and the SSE contract.
-
-### 6.5 SSE response format
-
-The worker streams plain SSE frames containing JSON payloads:
-
-- `{ "text": "..." }` for generated text.
-- `{ "error": "..." }` for failures.
-- `[DONE]` as the terminator.
-
-The client parses these streams through `lib/sse.ts`, which preserves the same carry-buffer behavior across the UI surfaces.
-
-### 6.6 Screenshot attachment flow
-
-When the user presses the hotkey:
-
-1. The main process captures a screenshot.
-2. The renderer receives it through `screen:capture-and-ask`.
-3. `QuestionAssistant.tsx` stores the data URL and attaches it to the next completion request.
-4. The worker converts it to the provider-specific multimodal format.
-
-For Gemini, the image becomes `inlineData`. For OpenAI-compatible endpoints, the worker emits a multimodal `messages` array with `image_url` entries.
-
-## 7. Worker API
-
-`realtime-worker-api/src/index.ts` is the request dispatcher. It routes traffic to specialized handlers and applies shared cross-cutting concerns such as CORS and origin gating.
-
-### 7.1 Public routes
-
-| Route | Purpose |
-|---|---|
-| `POST /api/auth/*` | Better Auth signup, signin, and session handling |
-| `GET /api/deepgram` | Mint short-lived Deepgram keys for live transcription |
-| `GET /api/deepgram/ask` | Mint short-lived Deepgram keys for Ask AI mic capture |
-| `POST /api/completion` | Stream Copilot, Summarizer, and Ask AI completions |
-| `POST /api/export` | Export session data as markdown or HTML |
-| `GET /api/notes`, `POST /api/notes`, `DELETE /api/notes/:id` | Saved interview notes |
-| `GET /api/presets` | Interview preset templates and background context |
-| `GET /api/usage/me` | User usage summary |
-| `POST /api/sessions/start`, `POST /api/sessions/end`, `POST /api/sessions/end-all` | Session lifecycle management |
-| `POST /api/events/track` | Analytics and product events |
-| `GET /api/support/messages`, `POST /api/support/messages`, `POST /api/support/messages/read` | Support threads |
-| `GET /api/announcements/active`, `POST /api/announcements/:id/dismiss`, `POST /api/announcements/:id/ack` | In-app announcements |
-
-Some routes also keep backward-compatible aliases without the `/api` prefix.
-
-### 7.2 Authentication
-
-`realtime-worker-api/src/auth.ts` uses Better Auth with a Drizzle SQLite adapter.
-
-Key points:
-
-- Email and password authentication are enabled.
-- Passwords are hashed and verified in worker code.
-- Trusted browser origins are explicitly allowlisted.
-- Cookies use `SameSite=None` and `Secure` because the desktop app and worker are not same-site in the normal browser sense.
-- The admin plugin controls approval, banning, and administrative configuration.
-
-### 3.1 Admin dashboard (separate repo)
-
-The Salesforce-style admin console lives in a sibling repo, `interview-copilot-admin/` on the developer machine (not inside this monorepo). It deploys to Cloudflare Workers via OpenNext:
-
-- Production: `https://interview-copilot-admin.vedgupta.in`
-- Worker name: `interview-copilot-admin`
-- API target: `NEXT_PUBLIC_API_URL` → worker `/api/auth/self-hosted-admin/*`
-- Deep-linked routes: `/overview`, `/users`, `/users/[userId]`, `/inbox`, `/live-sessions`, etc.
-- Deploy: `NEXT_PUBLIC_API_URL=https://realtime-worker-api-prod.vedgupta.in bun run deploy`
-
-The worker trusts the admin origin in `realtime-worker-api/src/auth.ts`. A daily Cron Trigger (`0 3 * * * UTC`) runs DB maintenance (expired sessions, stale live sessions) via `src/lib/maintenance.ts`.
-- Disposable-email blocking and rate limits are enforced at the auth layer.
-
-### 7.3 Config and secrets
-
-Runtime config comes from Cloudflare bindings and per-user configuration stored in D1. The worker can read:
-
-- Gemini model and key configuration.
-- Deepgram project key for minting short-lived tokens.
-- Custom model base URL and API key.
-- Admin email list and auth secret material.
-
-The desktop app only receives the minimal session-scoped values it needs.
-
-## 8. Data model
-
-The database lives in Cloudflare D1 and is managed with Drizzle migrations. The schema is grouped around a few functional areas:
-
-- Users, sessions, and account links.
-- Per-user config and feature settings.
-- Live interview sessions and Deepgram key bindings.
-- Saved notes and interview presets.
-- Support threads and announcements.
-- Usage, audit, and security events.
-
-Operational data stays in the worker database rather than inside the desktop binary.
-
-## 9. Security and privacy
-
-The security model is built around explicit trust boundaries and short-lived credentials.
-
-### 9.1 Main defenses
-
-- System audio is captured with OS-native loopback support, not a third-party driver.
-- The desktop window is content-protected and difficult to capture.
-- Renderer access is limited to a preload-defined API.
-- The worker enforces trusted origins before accepting state-changing requests.
-- Rate limiting is applied to auth, Deepgram key minting, and completions.
-- Model API keys and Deepgram project keys never ship in the desktop app.
-- Image input is restricted to validated data URLs and size bounds.
-- Network calls use HTTPS.
-
-### 9.2 Operational privacy
-
-The app should be conservative about logging. Prompt text, API keys, and other sensitive user data should not be logged unless a specific debug path requires it. `PRIVACY.md` is the source of truth for user-facing data handling.
-
-## 10. Build and packaging
-
-### 10.1 Local development
-
-The main workflows are driven by `package.json`:
-
-- `bun run electron:dev` builds the Electron TypeScript files, starts Next.js, and launches Electron against the dev server.
-- `bun run electron:debug` does the same but opens DevTools automatically.
-- `bun run electron:build` compiles the Electron scripts, builds the Next.js app, and hands off to `electron-builder`.
-
-### 10.2 Electron compilation
-
-`scripts/build-electron.js` resolves the local TypeScript compiler with `require.resolve("typescript/bin/tsc")` and compiles `electron/main.ts` and `electron/preload.ts` into `electron/`. That keeps builds consistent across platforms without depending on an external `tsc` binary.
-
-### 10.3 Packaging targets
-
-The app is configured to produce:
+Configured in root `package.json` `build` section:
 
 - macOS: `dmg`, `zip`
 - Windows: `nsis`
 - Linux: `AppImage`, `deb`
 
-The release pipeline currently publishes macOS and Windows artifacts. Linux packaging is present but not part of the default release matrix.
+macOS entitlements (`build/entitlements.mac.plist`) include `com.apple.security.device.audio-input` for microphone privacy settings.
 
-macOS packaging uses Electron Builder entitlements from `build/entitlements.mac.plist` and `build/entitlements.mac.inherit.plist`. Those entitlements include `com.apple.security.device.audio-input`, which is required for packaged builds to appear in macOS microphone privacy settings.
+### 12.4 Release CI (`.github/workflows/release.yml`)
 
-### 10.4 Homebrew cask
+**Triggers:** tags `v*`, or manual `workflow_dispatch`.
 
-`scripts/update-homebrew-cask.js` regenerates the Homebrew cask version and SHA256 from the release artifacts. The cask update is part of the release flow so macOS users can install with `brew install --cask realtime-interview-copilot` and update with `brew upgrade --cask realtime-interview-copilot` after each tagged release.
+**Jobs:**
 
-## 11. Release pipeline
+1. **build** (matrix: `macos-14`, `windows-latest`) — Bun install, electron compile, Next build, `electron-builder`, macOS mic entitlement verification, artifact upload
+2. **release** — GitHub Release with auto-generated notes
+3. **tap** — regenerates Homebrew cask via `scripts/update-homebrew-cask.js`, pushes to `innovatorved/homebrew-tap`
 
-`.github/workflows/release.yml` drives releases.
+### 12.5 Homebrew cask
 
-### 11.1 Triggers
+`homebrew/Casks/realtime-interview-copilot.rb` synced on each release. Users update with `brew upgrade --cask realtime-interview-copilot`.
 
-- Pushes of tags matching `v*`.
-- Manual `workflow_dispatch` with a tag name.
+---
 
-### 11.2 Build job
+## 13. End-to-end reference diagram
 
-The build job runs on macOS and Windows:
+Full path for a single interview question with optional screenshot:
 
-- Installs Bun and Node 22.
-- Runs `bun install --frozen-lockfile`.
-- Trusts only the native packages that need postinstall scripts.
-- Builds Electron and Next.js.
-- Packages the app with `electron-builder`.
-- Verifies the packaged macOS app contains `com.apple.security.device.audio-input` and `NSMicrophoneUsageDescription` before uploading artifacts.
-- Uploads DMG, ZIP, EXE, and blockmap artifacts.
+```mermaid
+sequenceDiagram
+  participant Interviewer
+  participant CallApp as Zoom/Meet/Teams
+  participant Electron as Electron Renderer
+  participant Main as Electron Main
+  participant Worker as Worker API
+  participant D1 as D1
+  participant DG as Deepgram
+  participant LLM as Gemini
 
-### 11.3 Release job
+  Interviewer->>CallApp: Speaks question
+  CallApp->>Electron: System audio (loopback)
+  Electron->>Worker: POST /api/sessions/start
+  Worker->>D1: Insert live_session
+  Electron->>Worker: GET /api/deepgram?sessionId=
+  Worker->>DG: Create 60s temp key
+  Worker-->>Electron: API key
+  Electron->>DG: WebSocket audio chunks (500ms)
+  DG-->>Electron: Transcript (interim + final)
+  Electron->>Electron: User clicks Generate
+  Electron->>Worker: POST /api/completion (SSE)
+  Worker->>D1: Load config + model params
+  Worker->>LLM: streamGenerateContent
+  LLM-->>Worker: Token stream
+  Worker-->>Electron: SSE text chunks
+  Worker->>D1: usage_event (async)
+  Electron->>Electron: Render answer
 
-The release job downloads the build artifacts and publishes a GitHub Release with generated release notes.
+  opt Screenshot hotkey
+    Electron->>Main: Cmd/Ctrl+Shift+1
+    Main->>Main: desktopCapturer screenshot
+    Main-->>Electron: PNG data URL
+    Electron->>Worker: POST /api/completion (multimodal)
+    Worker->>LLM: inlineData image + text
+  end
+```
 
-### 11.4 Tap update job
+From the user's perspective this is one assistant experience. Under the hood it is a chain of tightly scoped components with explicit trust boundaries.
 
-The tap job regenerates the Homebrew cask and, if the Homebrew tap token is present, pushes the updated cask to the external tap repository. If the token is missing, the job skips cleanly.
+---
 
-## 12. Repository layout
+## 14. Reference file index
 
-| Path | Purpose |
-|---|---|
-| `app/` | Next.js app routes and global styles |
-| `components/` | Desktop UI, onboarding, assistant surfaces, shared components |
-| `electron/` | Electron main process, preload, IPC, permissions, security |
-| `build/` | Electron Builder resources such as macOS entitlement plists |
-| `hooks/` | Frontend hooks for notes, presets, capture, export, mic, and window behavior |
-| `lib/` | Shared helpers, SSE parsing, vision validation, constants, auth client |
-| `realtime-worker-api/` | Cloudflare Worker backend and its routes, middleware, schema, and config |
-| `public/` | Icons and static assets |
-| `scripts/` | Build and release helpers |
-| `.github/workflows/` | CI and release automation |
+### Desktop entry points
 
-## 13. End-to-end flow
+| File | Role |
+|------|------|
+| `electron/main.ts` | Main process |
+| `electron/preload.ts` | Preload bridge |
+| `app/layout.tsx` | Root layout + providers |
+| `app/page.tsx` | Home → AuthGuard → MainPage |
+| `components/main.tsx` | App shell orchestrator |
 
-This is the path a single interview question takes through the system:
+### Desktop features
 
-1. The interviewer speaks in Zoom, Meet, Teams, or another call app.
-2. The Electron main process routes system audio into Chromium through loopback capture.
-3. The renderer chunks that audio with `MediaRecorder` and sends it to Deepgram.
-4. Deepgram returns interim and final transcript results.
-5. The UI updates the live transcript and, in Copilot mode, sends the latest question context to the worker.
-6. The worker validates the request, resolves the user config, and streams a completion from Gemini or a custom OpenAI-compatible model.
-7. The renderer consumes the SSE stream and paints the answer as it arrives.
-8. If the user uses the screenshot hotkey, the desktop app captures the screen, attaches the image, and repeats the completion flow with multimodal input.
+| File | Role |
+|------|------|
+| `components/copilot.tsx` | Copilot tab |
+| `components/QuestionAssistant.tsx` | Ask AI tab |
+| `components/CompactCopilot.tsx` | Compact overlay |
+| `components/TranscriptionContext.tsx` | Transcription state |
+| `components/recorder.tsx` | Start/stop listening |
+| `components/auth/auth-guard.tsx` | Auth gate |
+| `components/ScreenRecordingOnboard.tsx` | macOS screen permission UX |
+| `components/AppBackdropContext.tsx` | Backdrop opacity |
+| `hooks/useClickThrough.ts` | Compact click-through |
+| `hooks/useCopilotSubmit.ts` | Copilot SSE submit |
+| `hooks/useAskChat.ts` | Ask AI chat |
+| `hooks/useAskMic.ts` | Mic dictation |
+| `hooks/useMicPushToTalk.ts` | Push-to-talk |
+| `hooks/useNotes.ts` | Notes CRUD |
+| `hooks/usePresets.ts` | Presets fetch |
+| `hooks/useExport.ts` | Export |
+| `lib/auth-client.ts` | Better Auth client |
+| `lib/constant.ts` | Backend API URL |
+| `lib/sse.ts` | SSE parser |
+| `lib/vision-screenshot.ts` | Screenshot validation |
+| `lib/session-tracking.ts` | Live session + events |
+| `lib/transcription/deepgramSession.ts` | Interview transcription pipeline |
+| `lib/transcription/deepgramLiveConnection.ts` | Deepgram WebSocket helpers |
 
-From the user's point of view, the whole loop is one assistant experience. Under the hood, it is a chain of tightly scoped components with explicit trust boundaries.
+### Electron IPC and security
 
-## 14. Reference files
+| File | Role |
+|------|------|
+| `electron/ipc/screen.ts` | Screenshot + permissions |
+| `electron/ipc/window.ts` | Window controls |
+| `electron/ipc/app.ts` | App lifecycle |
+| `electron/security/permissions.ts` | Loopback audio handlers |
+| `electron/security/csp.ts` | Content security policy |
+| `electron/updater.ts` | Auto-update |
+| `build/entitlements.mac.plist` | macOS entitlements |
 
-- `electron/main.ts`
-- `electron/preload.ts`
-- `electron/ipc/screen.ts`
-- `electron/security/permissions.ts`
-- `build/entitlements.mac.plist`
-- `build/entitlements.mac.inherit.plist`
-- `components/main.tsx`
-- `components/copilot.tsx`
-- `components/QuestionAssistant.tsx`
-- `components/CompactCopilot.tsx`
-- `components/ScreenRecordingOnboard.tsx`
-- `components/AppBackdropContext.tsx`
-- `hooks/useClickThrough.ts`
-- `hooks/useAskMic.ts`
-- `hooks/useMicPushToTalk.ts`
-- `electron/updater.ts`
-- `lib/sse.ts`
-- `lib/vision-screenshot.ts`
-- `realtime-worker-api/src/index.ts`
-- `realtime-worker-api/src/auth.ts`
-- `realtime-worker-api/src/routes/completion.ts`
-- `realtime-worker-api/src/routes/deepgram.ts`
-- `.github/workflows/release.yml`
-- `scripts/build-electron.js`
-- `scripts/update-homebrew-cask.js`
+### Worker API
+
+| File | Role |
+|------|------|
+| `realtime-worker-api/src/index.ts` | Request dispatcher |
+| `realtime-worker-api/src/auth.ts` | Better Auth setup |
+| `realtime-worker-api/src/middleware/auth.ts` | Session + approval gate |
+| `realtime-worker-api/src/middleware/cors.ts` | CORS |
+| `realtime-worker-api/src/middleware/csrf.ts` | Origin gate |
+| `realtime-worker-api/src/db/schema.ts` | Drizzle schema |
+| `realtime-worker-api/src/config-cache.ts` | Config + KV cache |
+| `realtime-worker-api/src/kv-keys.ts` | KV key registry |
+| `realtime-worker-api/src/usage.ts` | Usage tracking |
+| `realtime-worker-api/src/lib/maintenance.ts` | Cron maintenance |
+| `realtime-worker-api/src/lib/prompt.ts` | Copilot/Summarizer prompts |
+| `realtime-worker-api/src/routes/completion.ts` | Completion dispatcher |
+| `realtime-worker-api/src/routes/completion-gemini.ts` | Gemini streaming |
+| `realtime-worker-api/src/routes/completion-openai.ts` | OpenAI-compatible streaming |
+| `realtime-worker-api/src/routes/deepgram.ts` | Deepgram key minting |
+| `realtime-worker-api/src/routes/sessions.ts` | Live session lifecycle |
+| `realtime-worker-api/wrangler.toml` | Worker bindings + cron |
+
+### Admin plugin
+
+| File | Role |
+|------|------|
+| `realtime-worker-api/src/plugins/self-hosted-admin/index.ts` | Plugin entry |
+| `realtime-worker-api/src/plugins/self-hosted-admin/endpoints/users.ts` | User management |
+| `realtime-worker-api/src/plugins/self-hosted-admin/endpoints/live-sessions.ts` | Live session admin |
+| `realtime-worker-api/src/plugins/self-hosted-admin/endpoints/config.ts` | Runtime config |
+| `realtime-worker-api/src/plugins/self-hosted-admin/endpoints/usage.ts` | Usage analytics |
+| `realtime-worker-api/src/plugins/self-hosted-admin/endpoints/support.ts` | Support inbox |
+| `realtime-worker-api/src/plugins/self-hosted-admin/endpoints/announcements.ts` | Announcements admin |
+| `realtime-worker-api/src/plugins/self-hosted-admin/endpoints/ai-gateway-routes.ts` | AI Gateway logs |
+
+### CI and release
+
+| File | Role |
+|------|------|
+| `.github/workflows/release.yml` | Release pipeline |
+| `scripts/build-electron.js` | Electron TS compile |
+| `scripts/update-homebrew-cask.js` | Homebrew cask updater |
+| `homebrew/Casks/realtime-interview-copilot.rb` | Cask template |

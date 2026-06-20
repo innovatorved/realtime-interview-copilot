@@ -23,12 +23,14 @@ interface CopilotProps {
   addInSavedData: (data: HistoryData) => void;
   isActive?: boolean;
   presetContext?: string;
+  hasContextAttached?: boolean;
 }
 
 export function Copilot({
   addInSavedData,
   isActive = false,
   presetContext = "",
+  hasContextAttached = false,
 }: CopilotProps) {
   const isClientReady = useClientReady();
   const { data: session } = authClient.useSession();
@@ -41,11 +43,12 @@ export function Copilot({
   const [bg, setBg] = useState<string>("");
   const transcriptionBoxRef = useRef<HTMLDivElement>(null);
 
-  const { completion, isLoading, error, submit, stop } = useCopilotSubmit({
-    flag,
-    bg,
-    transcribedText,
-  });
+  const { completion, isLoading, error, submit, stop, regenerate, canRegenerate } =
+    useCopilotSubmit({
+      flag,
+      bg,
+      transcribedText,
+    });
 
   useEffect(() => {
     if (transcriptionBoxRef.current) {
@@ -192,8 +195,17 @@ export function Copilot({
   return (
     <div className="flex flex-col h-full min-h-0 gap-3 px-3 py-3 sm:gap-4 sm:px-4 sm:py-4 overflow-hidden">
       {error && (
-        <div className="fixed top-12 left-1/2 -translate-x-1/2 px-4 py-2 text-center text-xs bg-red-600/95 text-white z-[60] animate-fade-in-scale rounded-xl border border-red-500/35 shadow-xl max-w-md">
-          {error.message}
+        <div className="fixed top-12 left-1/2 -translate-x-1/2 px-4 py-2 text-center text-xs bg-red-600/95 text-white z-[60] animate-fade-in-scale rounded-xl border border-red-500/35 shadow-xl max-w-md flex items-center gap-3">
+          <span className="flex-1">{error.message}</span>
+          {canRegenerate && (
+            <button
+              type="button"
+              className="shrink-0 underline underline-offset-2 hover:text-red-100"
+              onClick={() => void regenerate()}
+            >
+              Retry
+            </button>
+          )}
         </div>
       )}
 
@@ -202,6 +214,7 @@ export function Copilot({
           bg={bg}
           onBgChange={setBg}
           presetContext={presetContext}
+          hasContextAttached={hasContextAttached}
           recorder={<RecorderTranscriber />}
           formRef={formRef}
           flag={flag}

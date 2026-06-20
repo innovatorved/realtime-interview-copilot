@@ -12,6 +12,7 @@
       "devDependencies": {
         "@cloudflare/workers-types": "^4.20260617.1",
         "drizzle-kit": "^0.31.10",
+        "tsx": "^4.20.3",
         "typescript": "^6.0.3",
         "wrangler": "^4.102.0",
       },

@@ -26,4 +26,8 @@ export interface Env extends PostHogEnv {
   COMPLETION_LIMITER?: {
     limit: (opts: { key: string }) => Promise<{ success: boolean }>;
   };
+  /** When "true", quota checks block over-limit requests. */
+  QUOTA_ENFORCEMENT?: string;
+  /** When "false", disable dry-run quota consumption recording. Default ON. */
+  QUOTA_RECORD_CONSUMPTION?: string;
 }

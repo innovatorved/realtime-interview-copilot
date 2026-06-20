@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { BACKEND_API_URL } from "@/lib/constant";
+import { ricFetch } from "@/lib/ric-fetch";
 import type { SavedNote, NotesResponse, PaginationInfo } from "@/lib/types";
 
 interface UseNotesOptions {
@@ -83,10 +84,8 @@ export function useNotes({ initialLimit = 10 }: UseNotesOptions = {}) {
     async (content: string, tag: string, title?: string) => {
       setError(null);
       try {
-        const res = await fetch(`${BACKEND_API_URL}/api/notes`, {
+        const res = await ricFetch("/api/notes", {
           method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ content, tag, title }),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -106,9 +105,8 @@ export function useNotes({ initialLimit = 10 }: UseNotesOptions = {}) {
   const deleteNote = useCallback(async (noteId: string) => {
     setError(null);
     try {
-      const res = await fetch(`${BACKEND_API_URL}/api/notes/${noteId}`, {
+      const res = await ricFetch(`/api/notes/${encodeURIComponent(noteId)}`, {
         method: "DELETE",
-        credentials: "include",
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setNotes((prev) => prev.filter((n) => n.id !== noteId));

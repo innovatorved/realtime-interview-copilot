@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { BACKEND_API_URL } from "@/lib/constant";
+import { ricFetch } from "@/lib/ric-fetch";
 
 export function useExport() {
   const [isExporting, setIsExporting] = useState(false);
@@ -13,10 +13,8 @@ export function useExport() {
       setError(null);
 
       try {
-        const res = await fetch(`${BACKEND_API_URL}/api/export`, {
+        const res = await ricFetch("/api/export", {
           method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ format, noteIds }),
         });
 

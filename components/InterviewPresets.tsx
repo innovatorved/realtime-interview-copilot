@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useState } from "react";
 import {
   Code,
   LayoutDashboard,
@@ -9,16 +10,28 @@ import {
   Sparkles,
   Check,
   X,
+  FileText,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/Kbd";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { buildContextBlock, presetHasAttachedContext } from "@/lib/prompt-context";
+import { parseResumeFile } from "@/lib/resume-parser";
 import type { InterviewPreset } from "@/lib/types";
+import type { PresetContextFields } from "@/hooks/usePresets";
 
 interface InterviewPresetsProps {
   presets: InterviewPreset[];
-  onApply: (context: string) => void;
+  onApply: (context: string, preset: InterviewPreset) => void;
   activeContext: string;
+  activePresetId: string | null;
   onClear: () => void;
+  onSaveContext: (
+    presetId: string,
+    fields: PresetContextFields,
+  ) => Promise<boolean>;
 }
 
 const iconMap: Record<string, React.ElementType> = {
@@ -122,11 +135,109 @@ export function InterviewPresets({
   presets,
   onApply,
   activeContext,
+  activePresetId,
   onClear,
+  onSaveContext,
 }: InterviewPresetsProps) {
   const displayPresets = presets.length > 0 ? presets : defaultPresets;
-
   const categories = Array.from(new Set(displayPresets.map((p) => p.category)));
+
+  const [selectedPreset, setSelectedPreset] = useState<InterviewPreset | null>(
+    null,
+  );
+  const [draftResumeText, setDraftResumeText] = useState("");
+  const [draftResumeFileName, setDraftResumeFileName] = useState<string | null>(
+    null,
+  );
+  const [draftJobDescription, setDraftJobDescription] = useState("");
+  const [parseError, setParseError] = useState<string | null>(null);
+  const [isParsing, setIsParsing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const openPresetEditor = useCallback((preset: InterviewPreset) => {
+    setSelectedPreset(preset);
+    setDraftResumeText(preset.resumeText ?? "");
+    setDraftResumeFileName(preset.resumeFileName ?? null);
+    setDraftJobDescription(preset.jobDescription ?? "");
+    setParseError(null);
+  }, []);
+
+  const handleResumeFile = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file) return;
+      setParseError(null);
+      setIsParsing(true);
+      try {
+        const { text, fileName } = await parseResumeFile(file);
+        setDraftResumeText(text);
+        setDraftResumeFileName(fileName);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setParseError(msg);
+      } finally {
+        setIsParsing(false);
+      }
+    },
+    [],
+  );
+
+  const handleApplyPreset = useCallback(
+    (preset: InterviewPreset) => {
+      const resumeText =
+        selectedPreset?.id === preset.id ? draftResumeText : preset.resumeText;
+      const jobDescription =
+        selectedPreset?.id === preset.id
+          ? draftJobDescription
+          : preset.jobDescription;
+      const context = buildContextBlock({
+        existingBg: preset.context,
+        resumeText,
+        jobDescription,
+      });
+      onApply(context, {
+        ...preset,
+        resumeText: resumeText?.trim() || null,
+        jobDescription: jobDescription?.trim() || null,
+      });
+    },
+    [
+      draftJobDescription,
+      draftResumeText,
+      onApply,
+      selectedPreset?.id,
+    ],
+  );
+
+  const handleSaveContext = useCallback(async () => {
+    if (!selectedPreset) return;
+    setIsSaving(true);
+    setParseError(null);
+    try {
+      const ok = await onSaveContext(selectedPreset.id, {
+        resumeText: draftResumeText.trim() || null,
+        resumeFileName: draftResumeFileName,
+        jobDescription: draftJobDescription.trim() || null,
+      });
+      if (ok) {
+        setSelectedPreset({
+          ...selectedPreset,
+          resumeText: draftResumeText.trim() || null,
+          resumeFileName: draftResumeFileName,
+          jobDescription: draftJobDescription.trim() || null,
+        });
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  }, [
+    draftJobDescription,
+    draftResumeFileName,
+    draftResumeText,
+    onSaveContext,
+    selectedPreset,
+  ]);
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6 animate-fade-in-up">
@@ -176,6 +287,105 @@ export function InterviewPresets({
         </div>
       )}
 
+      {selectedPreset && (
+        <div className="glass-card p-4 space-y-4 border-white/[0.06]">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-medium text-white">
+                Attach context — {selectedPreset.name}
+              </p>
+              <p className="text-[11px] text-neutral-500 mt-0.5">
+                Optional resume and job description are folded into the preset
+                when you apply.
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 text-neutral-400"
+              onClick={() => setSelectedPreset(null)}
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-[10px] uppercase tracking-wider text-neutral-500">
+              Resume (.txt, .pdf, .docx)
+            </Label>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-white/[0.08] bg-white/[0.03] text-xs text-neutral-300 cursor-pointer hover:bg-white/[0.06]">
+                <FileText className="w-3.5 h-3.5" />
+                Choose file
+                <input
+                  type="file"
+                  accept=".txt,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  className="sr-only"
+                  onChange={(e) => void handleResumeFile(e)}
+                  disabled={isParsing}
+                />
+              </label>
+              {isParsing && (
+                <span className="inline-flex items-center gap-1.5 text-xs text-neutral-400">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Parsing…
+                </span>
+              )}
+              {draftResumeFileName && !isParsing && (
+                <span className="text-[11px] text-emerald-400/80 truncate max-w-[14rem]">
+                  {draftResumeFileName}
+                </span>
+              )}
+            </div>
+            {parseError && (
+              <p className="text-[11px] text-red-300">{parseError}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label
+              htmlFor="preset-jd"
+              className="text-[10px] uppercase tracking-wider text-neutral-500"
+            >
+              Job description
+            </Label>
+            <Textarea
+              id="preset-jd"
+              placeholder="Paste the job description or role requirements…"
+              className="min-h-[88px] resize-y bg-white/[0.02] border-white/[0.06] text-xs text-neutral-200"
+              value={draftJobDescription}
+              onChange={(e) => setDraftJobDescription(e.target.value)}
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <Button
+              size="sm"
+              className="h-8 accent-gradient text-white text-xs"
+              onClick={() => handleApplyPreset(selectedPreset)}
+            >
+              Apply preset
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs border-white/[0.08]"
+              disabled={isSaving}
+              onClick={() => void handleSaveContext()}
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                  Saving…
+                </>
+              ) : (
+                "Save context"
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {categories.map((category) => {
         const catPresets = displayPresets.filter(
           (p) => p.category === category,
@@ -197,12 +407,13 @@ export function InterviewPresets({
             <div className="grid gap-3 sm:grid-cols-2">
               {catPresets.map((preset) => {
                 const Icon = iconMap[preset.icon ?? ""] ?? Code;
-                const isActive = activeContext === preset.context;
+                const isActive = activePresetId === preset.id;
+                const hasContext = presetHasAttachedContext(preset);
 
                 return (
                   <button
                     key={preset.id}
-                    onClick={() => onApply(preset.context)}
+                    onClick={() => openPresetEditor(preset)}
                     className={`glass-card-hover p-4 text-left group transition-all ${colors.glow} hover:shadow-xl ${
                       isActive ? `${colors.border} ${colors.bg}` : ""
                     }`}
@@ -214,13 +425,18 @@ export function InterviewPresets({
                         <Icon className={`w-4 h-4 ${colors.text}`} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className="text-sm font-medium text-white">
                             {preset.name}
                           </span>
                           {isActive && (
                             <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded-full border border-emerald-500/20">
                               Active
+                            </span>
+                          )}
+                          {hasContext && (
+                            <span className="text-[9px] bg-sky-500/10 text-sky-300 px-1.5 py-0.5 rounded-full border border-sky-500/20">
+                              Context saved
                             </span>
                           )}
                         </div>

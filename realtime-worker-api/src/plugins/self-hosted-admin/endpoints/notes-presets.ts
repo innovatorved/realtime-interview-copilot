@@ -2,7 +2,8 @@
 
 import { and, asc, count, desc, eq, like } from "drizzle-orm";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
-import { interviewPreset, savedNote, user } from "../../../db/schema";
+import { interviewPreset, presetUserContext, savedNote, user } from "../../../db/schema";
+import { presetContextQuerySchema } from "../../../schemas/preset-context";
 import { SAFE_ID_RE } from "../constants";
 import { parseLimit, parseOffset, sanitizeSearch } from "../helpers";
 import {
@@ -133,9 +134,10 @@ export function notesPresetsEndpoints(deps: AdminDeps) {
         const adminEmail = ctx.context.session.user.email;
         if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
-        const { name, category, context, description, icon, isBuiltIn } = ctx.body;
+        const { name, category, context, description, icon, isBuiltIn, resumeText, resumeFileName, jobDescription } = ctx.body;
 
         const id = crypto.randomUUID();
+        const now = new Date();
         await db.insert(interviewPreset).values({
           id,
           name,
@@ -145,7 +147,11 @@ export function notesPresetsEndpoints(deps: AdminDeps) {
           icon: icon ?? null,
           isBuiltIn: isBuiltIn ?? true,
           userId: null,
-          createdAt: new Date(),
+          resumeText: resumeText ?? null,
+          resumeFileName: resumeFileName ?? null,
+          jobDescription: jobDescription ?? null,
+          createdAt: now,
+          updatedAt: now,
         });
 
         await recordAudit({
@@ -178,8 +184,11 @@ export function notesPresetsEndpoints(deps: AdminDeps) {
         if (fields.context !== undefined) updates.context = fields.context;
         if (fields.description !== undefined) updates.description = fields.description;
         if (fields.icon !== undefined) updates.icon = fields.icon;
-
+        if (fields.resumeText !== undefined) updates.resumeText = fields.resumeText;
+        if (fields.resumeFileName !== undefined) updates.resumeFileName = fields.resumeFileName;
+        if (fields.jobDescription !== undefined) updates.jobDescription = fields.jobDescription;
         if (Object.keys(updates).length > 0) {
+          updates.updatedAt = new Date();
           await db.update(interviewPreset).set(updates).where(eq(interviewPreset.id, presetId));
         }
 
@@ -208,6 +217,74 @@ export function notesPresetsEndpoints(deps: AdminDeps) {
           metadata: { action: "delete_preset", presetId },
         });
         return ctx.json({ ok: true });
+      },
+    ),
+
+    adminGetPresetContext: createAuthEndpoint(
+      "/self-hosted-admin/preset-context",
+      { method: "GET", use: [sessionMiddleware] },
+      async (ctx) => {
+        if (!(await isAdmin(ctx.context.session.user.email)))
+          throw new APIError("FORBIDDEN");
+        const db = opts.getDb();
+        const url = new URL(ctx.request?.url ?? "http://localhost");
+        const parsed = presetContextQuerySchema.safeParse({
+          userId: url.searchParams.get("userId"),
+          presetId: url.searchParams.get("presetId"),
+        });
+        if (!parsed.success) {
+          throw new APIError("BAD_REQUEST", { message: "Invalid userId or presetId" });
+        }
+        const { userId, presetId } = parsed.data;
+
+        const [preset] = await db
+          .select()
+          .from(interviewPreset)
+          .where(eq(interviewPreset.id, presetId));
+        if (!preset) throw new APIError("NOT_FOUND", { message: "Preset not found" });
+
+        if (preset.isBuiltIn) {
+          const [overlay] = await db
+            .select()
+            .from(presetUserContext)
+            .where(
+              and(
+                eq(presetUserContext.userId, userId),
+                eq(presetUserContext.presetId, presetId),
+              ),
+            );
+          return ctx.json({
+            userId,
+            presetId,
+            overlay: overlay
+              ? {
+                  resumeText: overlay.resumeText,
+                  resumeFileName: overlay.resumeFileName,
+                  jobDescription: overlay.jobDescription,
+                  updatedAt: overlay.updatedAt,
+                }
+              : null,
+          });
+        }
+
+        if (preset.userId !== userId) {
+          return ctx.json({
+            userId,
+            presetId,
+            overlay: null,
+          });
+        }
+
+        return ctx.json({
+          userId,
+          presetId,
+          overlay: {
+            resumeText: preset.resumeText,
+            resumeFileName: preset.resumeFileName,
+            jobDescription: preset.jobDescription,
+            updatedAt: preset.updatedAt,
+          },
+        });
       },
     ),
   };

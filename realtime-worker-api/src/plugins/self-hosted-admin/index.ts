@@ -52,6 +52,8 @@ import { aiGatewayEndpoints } from "./endpoints/ai-gateway-routes";
 import { announcementEndpoints } from "./endpoints/announcements";
 import { auditEndpoints } from "./endpoints/audit";
 import { cleanupEndpoints } from "./endpoints/cleanup";
+import { quotaEndpoints } from "./endpoints/quota";
+import { ensureQuotaRow } from "../../services/quota.service";
 import { configEndpoints } from "./endpoints/config";
 import { dashboardEndpoints } from "./endpoints/dashboard";
 import { exportsEndpoints } from "./endpoints/exports";
@@ -250,6 +252,11 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
                 ipAddress: getClientIp(ctx.headers),
                 userAgent: getUserAgentStr(ctx.headers),
               });
+              try {
+                await ensureQuotaRow(opts.getDb(), s.user.id);
+              } catch (e) {
+                console.warn("[SelfHostedAdmin] ensureQuotaRow on signup failed:", e);
+              }
             }
           }),
         },
@@ -315,6 +322,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
       ...supportEndpoints(deps),
       ...announcementEndpoints(deps),
       ...cleanupEndpoints(deps),
+      ...quotaEndpoints(deps),
     },
   } satisfies BetterAuthPlugin;
 };

@@ -8,6 +8,11 @@ import {
 import { getDb } from "../db";
 import { jsonResponse } from "../lib/http";
 import { getUsageTimeseries, getUserUsageSummary } from "../usage";
+import {
+  ensureQuotaRow,
+  getQuotaForUser,
+  toQuotaSummary,
+} from "../services/quota.service";
 import type { Env } from "../env";
 
 const USAGE_WINDOWS: Record<string, number> = {
@@ -40,6 +45,10 @@ export async function handleUsageMe(
 
   const summary = await getUserUsageSummary(db, authResult.id, since);
 
+  await ensureQuotaRow(db, authResult.id);
+  const quotaRow = await getQuotaForUser(db, authResult.id);
+  const quota = toQuotaSummary(quotaRow, env);
+
   // Choose a sensible bucket width so the chart has ~30 points regardless
   // of window size.
   const bucketSeconds = Math.max(60, Math.floor(windowMs / 1000 / 30));
@@ -57,5 +66,6 @@ export async function handleUsageMe(
     totals: summary.totals,
     perAction: summary.perAction,
     timeseries: series,
+    quota,
   });
 }

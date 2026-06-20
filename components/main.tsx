@@ -14,7 +14,9 @@ import { useNotes } from "@/hooks/useNotes";
 import { useNotesSidebar } from "@/hooks/useNotesSidebar";
 import { usePresets } from "@/hooks/usePresets";
 import { useExport } from "@/hooks/useExport";
+import { presetHasAttachedContext } from "@/lib/prompt-context";
 import { cn } from "@/lib/utils";
+import type { InterviewPreset } from "@/lib/types";
 import { authClient } from "@/lib/auth-client";
 import {
   sessionDisplayName,
@@ -38,6 +40,8 @@ export default function MainPage() {
   const { activeTab, setActiveTab, compactMode, setCompactMode } = useTab();
   const { data: session } = authClient.useSession();
   const [presetContext, setPresetContext] = useState("");
+  const [activePresetId, setActivePresetId] = useState<string | null>(null);
+  const [hasContextAttached, setHasContextAttached] = useState(false);
   const [isElectron, setIsElectron] = useState(false);
   const {
     open: notesSidebarOpen,
@@ -58,7 +62,8 @@ export default function MainPage() {
     deleteNote,
   } = useNotes({ initialLimit: 8 });
 
-  const { presets, error: presetsError, fetchPresets } = usePresets();
+  const { presets, error: presetsError, fetchPresets, updatePresetContext } =
+    usePresets();
   const { isExporting, error: exportError, exportNotes } = useExport();
   const [saveNoteError, setSaveNoteError] = useState<string | null>(null);
   const [dismissedError, setDismissedError] = useState(false);
@@ -110,12 +115,20 @@ export default function MainPage() {
   );
 
   const handleApplyPreset = useCallback(
-    (context: string) => {
+    (context: string, preset: InterviewPreset) => {
       setPresetContext(context);
+      setActivePresetId(preset.id);
+      setHasContextAttached(presetHasAttachedContext(preset));
       setActiveTab("copilot");
     },
     [setActiveTab],
   );
+
+  const handleClearPreset = useCallback(() => {
+    setPresetContext("");
+    setActivePresetId(null);
+    setHasContextAttached(false);
+  }, []);
 
   const handleLogout = useCallback(async () => {
     try {
@@ -270,7 +283,9 @@ export default function MainPage() {
               {presetContext && (
                 <div className="hidden items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/[0.07] px-2.5 py-1 text-[10px] font-medium text-emerald-300/90 md:flex">
                   <Sparkles className="h-3 w-3 shrink-0" aria-hidden />
-                  <span className="max-w-[10rem] truncate">Preset</span>
+                  <span className="max-w-[10rem] truncate">
+                    {hasContextAttached ? "Context attached" : "Preset"}
+                  </span>
                 </div>
               )}
               <button
@@ -309,6 +324,7 @@ export default function MainPage() {
             <CompactCopilot
               addInSavedData={({ data, tag }) => handleSaveNote(data, tag)}
               presetContext={presetContext}
+              hasContextAttached={hasContextAttached}
               onExitCompact={() => setCompactMode(false)}
               onHasOutputChange={setCompactHasOutput}
             />
@@ -332,6 +348,7 @@ export default function MainPage() {
                     }
                     isActive={activeTab === "copilot"}
                     presetContext={presetContext}
+                    hasContextAttached={hasContextAttached}
                   />
                 </div>
 
@@ -442,7 +459,9 @@ export default function MainPage() {
                   presets={presets}
                   onApply={handleApplyPreset}
                   activeContext={presetContext}
-                  onClear={() => setPresetContext("")}
+                  activePresetId={activePresetId}
+                  onClear={handleClearPreset}
+                  onSaveContext={updatePresetContext}
                 />
               </div>
             </>

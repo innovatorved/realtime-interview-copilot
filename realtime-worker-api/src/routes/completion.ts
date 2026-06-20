@@ -19,6 +19,9 @@ import {
 import { encoder, jsonResponse } from "../lib/http";
 import { buildPrompt, buildSummarizerPrompt } from "../lib/prompt";
 import { recordUsage, startUsage } from "../usage";
+import { getDb } from "../db";
+import { consumeQuota } from "../services/quota.service";
+import { recordSecurityEvent } from "../lib/security-log";
 import type { Env } from "../env";
 import {
   FLAGS,
@@ -153,6 +156,15 @@ export async function handleCompletion(
     const check = validateOutboundUrl(cfg.customBaseUrl);
     if (!check.ok) {
       console.warn("[Worker] refused custom base URL:", check.reason);
+      ctx.waitUntil(
+        recordSecurityEvent(getDb(env), {
+          eventType: "ssrf_blocked",
+          action: "custom_model_url",
+          ipAddress: request.headers.get("CF-Connecting-IP"),
+          userEmail: trackedUser.email,
+          metadata: { reason: check.reason },
+        }),
+      );
       return jsonResponse(
         { error: "Custom model base URL is not permitted" },
         400,
@@ -259,12 +271,20 @@ export async function handleCompletion(
     })
     .finally(async () => {
       try {
+        const status = streamError ? "error" : "ok";
         tracker.finish({
-          status: streamError ? "error" : "ok",
+          status,
           errorCode: streamError ?? null,
           responseChars,
           model: activeModel,
         });
+        if (status === "ok") {
+          ctx.waitUntil(
+            consumeQuota(getDb(env), env, trackedUser.id, "completion", {
+              completions: 1,
+            }),
+          );
+        }
       } catch {
         /* never throw from tracker */
       }

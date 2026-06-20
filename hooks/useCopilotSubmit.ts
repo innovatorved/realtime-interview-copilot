@@ -10,8 +10,12 @@
 import { sendGTMEvent } from "@next/third-parties/google";
 import posthog from "posthog-js";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { humanizeError, humanizeHttpStatus } from "@/lib/api-errors";
-import { BACKEND_API_URL } from "@/lib/constant";
+import {
+  humanizeError,
+  humanizeHttpStatus,
+  parseApiErrorResponse,
+} from "@/lib/api-errors";
+import { ricFetch } from "@/lib/ric-fetch";
 import { parseSseStream } from "@/lib/sse";
 import { FLAGS } from "@/lib/types";
 
@@ -29,6 +33,8 @@ export interface CopilotSubmitHandle {
   setError: (err: Error | null) => void;
   submit: (e: React.FormEvent<HTMLFormElement>) => Promise<void>;
   stop: (e?: React.MouseEvent<HTMLButtonElement>) => void;
+  regenerate: () => Promise<void>;
+  canRegenerate: boolean;
 }
 
 export function useCopilotSubmit({
@@ -39,7 +45,13 @@ export function useCopilotSubmit({
   const [completion, setCompletion] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
+  const [canRegenerate, setCanRegenerate] = useState(false);
   const controller = useRef<AbortController | null>(null);
+  const lastFailedRef = useRef<{
+    flag: FLAGS;
+    bg: string;
+    prompt: string;
+  } | null>(null);
 
   const stop = useCallback((e?: React.MouseEvent<HTMLButtonElement>) => {
     if (e) {
@@ -66,17 +78,10 @@ export function useCopilotSubmit({
     };
   }, []);
 
-  const submit = useCallback(
-    async (e: React.FormEvent<HTMLFormElement>) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (isLoading) return;
-      if (controller.current) return;
-
-      // Empty prompt → friendly message instead of letting the worker
-      // 404/422 us. This is the path the user reported: pressing Generate
-      // with nothing transcribed used to surface "HTTP error! status: 404".
-      if (!transcribedText.trim()) {
+  const runCompletion = useCallback(
+    async (runFlag: FLAGS, runBg: string, prompt: string) => {
+      if (isLoading || controller.current) return;
+      if (!prompt.trim()) {
         setError(new Error(humanizeHttpStatus(0, { kind: "no-input" })));
         return;
       }
@@ -84,40 +89,30 @@ export function useCopilotSubmit({
       setError(null);
       setCompletion("");
       setIsLoading(true);
-
       controller.current = new AbortController();
 
-      sendGTMEvent({ event: "generate_completion", flag: flag });
+      sendGTMEvent({ event: "generate_completion", flag: runFlag });
       posthog.capture("completion_generated", {
-        mode: flag === FLAGS.COPILOT ? "copilot" : "summarizer",
-        has_context: bg.length > 0,
-        transcription_length: transcribedText.length,
+        mode: runFlag === FLAGS.COPILOT ? "copilot" : "summarizer",
+        has_context: runBg.length > 0,
+        transcription_length: prompt.length,
       });
 
       try {
-        const response = await fetch(`${BACKEND_API_URL}/api/completion`, {
+        const response = await ricFetch("/api/completion", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
           body: JSON.stringify({
-            bg,
-            flag,
-            prompt: transcribedText,
+            bg: runBg,
+            flag: runFlag,
+            prompt,
           }),
           signal: controller.current.signal,
-          credentials: "include",
         });
 
         if (!response.ok) {
-          throw new Error(humanizeHttpStatus(response.status));
+          throw new Error(await parseApiErrorResponse(response));
         }
 
-        // Shared SSE parser with a 1MB client-side carry-buffer cap so a
-        // broken upstream can't balloon memory. Behavior matches the
-        // previous inline loop: `[DONE]` is skipped, `{ error }` payloads
-        // throw, parse errors per event are logged but the stream
-        // continues so a single malformed chunk doesn't drop the rest.
         let streamError: string | null = null;
         await parseSseStream(response, {
           signal: controller.current.signal,
@@ -137,19 +132,42 @@ export function useCopilotSubmit({
         if (streamError) {
           throw new Error(streamError);
         }
+        lastFailedRef.current = null;
+        setCanRegenerate(false);
       } catch (err: unknown) {
         if (err instanceof Error && err.name !== "AbortError") {
           console.error("Stream error:", err);
           setError(new Error(humanizeError(err)));
           posthog.captureException(err);
+          lastFailedRef.current = {
+            flag: runFlag,
+            bg: runBg,
+            prompt,
+          };
+          setCanRegenerate(true);
         }
       } finally {
         setIsLoading(false);
         controller.current = null;
       }
     },
-    [bg, flag, isLoading, transcribedText],
+    [isLoading],
   );
+
+  const submit = useCallback(
+    async (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      await runCompletion(flag, bg, transcribedText);
+    },
+    [bg, flag, runCompletion, transcribedText],
+  );
+
+  const regenerate = useCallback(async () => {
+    const last = lastFailedRef.current;
+    if (!last) return;
+    await runCompletion(last.flag, last.bg, last.prompt);
+  }, [runCompletion]);
 
   return {
     completion,
@@ -159,5 +177,7 @@ export function useCopilotSubmit({
     setError,
     submit,
     stop,
+    regenerate,
+    canRegenerate,
   };
 }

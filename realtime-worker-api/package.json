@@ -5,11 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "test": "node --import tsx --test src/**/*.test.ts"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260617.1",
     "drizzle-kit": "^0.31.10",
+    "tsx": "^4.20.3",
     "typescript": "^6.0.3",
     "wrangler": "^4.102.0"
   },

@@ -13,6 +13,7 @@ import {
   isAuthed,
 } from "../middleware/auth";
 import { getClientIp } from "../lib/ip";
+import { limitByIp } from "../lib/ip-rate-limit";
 import { jsonResponse } from "../lib/http";
 import { SAFE_RESOURCE_ID_RE } from "../lib/ids";
 import { recordUsage } from "../usage";
@@ -40,6 +41,14 @@ export async function handleCreateSupportMessage(
 
   // Per-user rate limit so a malicious script can't fill the inbox.
   if (env.COMPLETION_LIMITER) {
+    const ip = getClientIp(request);
+    const ipLimit = await limitByIp(env, "support_create", ip);
+    if (!ipLimit.ok) {
+      return jsonResponse(
+        { error: ipLimit.status === 429 ? "Too many messages. Please wait a moment." : "Rate limiter unavailable" },
+        ipLimit.status,
+      );
+    }
     try {
       const { success } = await env.COMPLETION_LIMITER.limit({
         key: `support_create:${user.id}`,

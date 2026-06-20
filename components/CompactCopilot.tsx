@@ -40,6 +40,7 @@ const ASK_AI_BACKGROUND =
 interface CompactCopilotProps {
   addInSavedData: (data: HistoryData) => void;
   presetContext?: string;
+  hasContextAttached?: boolean;
   onExitCompact?: () => void;
   /**
    * Notifies the parent whenever the compact surface has output to display
@@ -52,6 +53,7 @@ interface CompactCopilotProps {
 export function CompactCopilot({
   addInSavedData,
   presetContext = "",
+  hasContextAttached = false,
   onExitCompact,
   onHasOutputChange,
 }: CompactCopilotProps) {
@@ -423,6 +425,7 @@ export function CompactCopilot({
         isCapturing={isCapturing}
         askMode={askMode}
         showContext={showContext}
+        hasContextAttached={hasContextAttached}
         hasOutput={hasOutput}
         outputCollapsed={outputCollapsed}
         completion={completion}

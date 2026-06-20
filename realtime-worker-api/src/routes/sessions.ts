@@ -5,7 +5,7 @@
  *  intentionally keep the surface small and never accept arbitrary control
  *  signals from the client — only the admin plugin writes `controlSignal`. */
 
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lt, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { liveSession } from "../db/schema";
 import {
@@ -19,7 +19,8 @@ import { SAFE_SESSION_ID_RE } from "../lib/ids";
 import { recordUsage } from "../usage";
 import type { Env } from "../env";
 
-const MAX_CONCURRENT_LIVE_SESSIONS_PER_USER = 3;
+const MAX_CONCURRENT_LIVE_SESSIONS_PER_USER = 2;
+const STALE_LIVE_SESSION_MS = 4 * 60 * 60 * 1000;
 
 interface SessionStartBody {
   presetId?: unknown;
@@ -87,6 +88,28 @@ export async function handleSessionStart(
 
   const db = getDb(env);
 
+  const now = new Date();
+  const staleCutoff = new Date(now.getTime() - STALE_LIVE_SESSION_MS);
+  try {
+    await db
+      .update(liveSession)
+      .set({
+        endedAt: now,
+        lastSeenAt: now,
+        endedBy: "system",
+        endReason: "stale_timeout",
+      })
+      .where(
+        and(
+          eq(liveSession.userId, authResult.id),
+          sql`${liveSession.endedAt} IS NULL`,
+          lt(liveSession.lastSeenAt, staleCutoff),
+        ),
+      );
+  } catch (e) {
+    console.warn("[Worker] opportunistic stale session cleanup failed:", e);
+  }
+
   // Cap concurrent active sessions per user so a misbehaving client can't
   // fill the live-sessions list for admins. The cap is a FIFO ring, not a
   // hard error: a real human can be over the cap because a prior Electron
@@ -98,7 +121,6 @@ export async function handleSessionStart(
   // tagged `endedBy: "system"` / `endReason: "evicted_for_new_session"`
   // so admins can still tell evictions apart from genuine user-stops in
   // the dashboard.
-  const now = new Date();
   const activeRows = await db
     .select({ id: liveSession.id, startedAt: liveSession.startedAt })
     .from(liveSession)

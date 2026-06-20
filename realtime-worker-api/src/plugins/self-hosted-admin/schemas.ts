@@ -82,6 +82,9 @@ export const adminCreatePresetSchema = z.object({
   description: z.string().max(500).optional(),
   icon: z.string().max(50).optional(),
   isBuiltIn: z.boolean().optional(),
+  resumeText: z.string().max(6000).nullable().optional(),
+  resumeFileName: z.string().max(255).nullable().optional(),
+  jobDescription: z.string().max(4000).nullable().optional(),
 });
 
 export const adminUpdatePresetSchema = z.object({
@@ -91,6 +94,9 @@ export const adminUpdatePresetSchema = z.object({
   context: z.string().min(1).max(5000).optional(),
   description: z.string().max(500).optional(),
   icon: z.string().max(50).optional(),
+  resumeText: z.string().max(6000).nullable().optional(),
+  resumeFileName: z.string().max(255).nullable().optional(),
+  jobDescription: z.string().max(4000).nullable().optional(),
 });
 
 export const adminDeletePresetSchema = z.object({ presetId: safeIdSchema });
@@ -115,6 +121,36 @@ export const userModelParamsBodySchema = z.object({
 });
 
 export const userModelParamsDeleteSchema = z.object({ userId: safeIdSchema });
+
+export const QUOTA_PLAN_TIERS = [
+  "legacy_unlimited",
+  "free_tier",
+  "early_access",
+  "unlimited",
+] as const;
+
+export const quotaUpsertSchema = z.object({
+  userId: safeIdSchema,
+  planTier: z.enum(QUOTA_PLAN_TIERS).optional(),
+  monthlyAllowanceSeconds: z.number().int().min(0).nullable().optional(),
+  monthlyAllowanceCompletions: z.number().int().min(0).nullable().optional(),
+  overageAllowed: z.boolean().optional(),
+  consumedSeconds: z.number().int().min(0).optional(),
+  consumedCompletions: z.number().int().min(0).optional(),
+});
+
+export type QuotaUpsert = z.infer<typeof quotaUpsertSchema>;
+
+export const quotaResetCycleSchema = z.object({ userId: safeIdSchema });
+
+export const quotaListQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+  offset: z.coerce.number().int().min(0).optional(),
+  q: z.string().max(200).optional(),
+  tier: z.string().max(64).optional(),
+});
+
+export type QuotaListQuery = z.infer<typeof quotaListQuerySchema>;
 
 export const liveSessionTerminateSchema = z.object({
   sessionId: safeIdSchema,

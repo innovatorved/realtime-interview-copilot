@@ -47,6 +47,7 @@ interface CompactToolbarProps {
   isCapturing: boolean;
   askMode: boolean;
   showContext: boolean;
+  hasContextAttached?: boolean;
   hasOutput: boolean;
   outputCollapsed: boolean;
   completion: string;
@@ -74,6 +75,7 @@ export function CompactToolbar({
   isCapturing,
   askMode,
   showContext,
+  hasContextAttached = false,
   hasOutput,
   outputCollapsed,
   completion,
@@ -308,14 +310,26 @@ export function CompactToolbar({
         onClick={onToggleContext}
         title={showContext ? "Hide context" : "Edit context"}
         className={cn(
-          "h-7 w-7 p-0 rounded-lg transition-colors",
+          "h-7 w-7 p-0 rounded-lg transition-colors relative",
           showContext
             ? "text-emerald-300 bg-emerald-500/[0.08]"
             : "text-neutral-400 hover:text-neutral-100 hover:bg-white/[0.05]",
         )}
       >
         <Settings2 className="w-3.5 h-3.5" />
+        {hasContextAttached && (
+          <span
+            className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-sky-400 ring-2 ring-[color:var(--app-surface)]"
+            aria-label="Context attached"
+          />
+        )}
       </Button>
+
+      {hasContextAttached && (
+        <span className="hidden md:inline text-[9px] text-sky-300/90 bg-sky-500/[0.08] px-2 py-0.5 rounded-full border border-sky-500/15">
+          Context attached
+        </span>
+      )}
 
       <div className="flex-1" />
 

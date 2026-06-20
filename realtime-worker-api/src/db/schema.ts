@@ -40,6 +40,7 @@ export const savedNote = sqliteTable(
       .references(() => user.id, { onDelete: "cascade" }),
     content: text("body").notNull(),
     tag: text("tag").notNull().default("Copilot"),
+    workspaceId: text("workspaceId"),
     createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
   },
   (table) => [
@@ -59,13 +60,76 @@ export const interviewPreset = sqliteTable(
     icon: text("icon"),
     isBuiltIn: integer("isBuiltIn", { mode: "boolean" }).default(true),
     userId: text("userId").references(() => user.id, { onDelete: "cascade" }),
+    resumeText: text("resumeText"),
+    resumeFileName: text("resumeFileName"),
+    jobDescription: text("jobDescription"),
     createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updatedAt", { mode: "timestamp" }),
   },
   (table) => [
     index("preset_user_idx").on(table.userId),
     index("preset_builtin_idx").on(table.isBuiltIn),
     index("preset_category_idx").on(table.category),
   ],
+);
+
+export const presetUserContext = sqliteTable(
+  "preset_user_context",
+  {
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    presetId: text("presetId")
+      .notNull()
+      .references(() => interviewPreset.id, { onDelete: "cascade" }),
+    resumeText: text("resumeText"),
+    resumeFileName: text("resumeFileName"),
+    jobDescription: text("jobDescription"),
+    updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.presetId] }),
+    index("preset_user_context_preset_idx").on(table.presetId),
+  ],
+);
+
+export const quotaBalance = sqliteTable("quota_balance", {
+  userId: text("userId")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  planTier: text("planTier").notNull().default("legacy_unlimited"),
+  monthlyAllowanceSeconds: integer("monthlyAllowanceSeconds"),
+  monthlyAllowanceCompletions: integer("monthlyAllowanceCompletions"),
+  consumedSeconds: integer("consumedSeconds").notNull().default(0),
+  consumedCompletions: integer("consumedCompletions").notNull().default(0),
+  cycleResetAt: integer("cycleResetAt", { mode: "timestamp" }).notNull(),
+  overageAllowed: integer("overageAllowed", { mode: "boolean" }).notNull().default(true),
+  createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+});
+
+export const workspace = sqliteTable("workspace", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  ownerUserId: text("ownerUserId")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+});
+
+export const workspaceMember = sqliteTable(
+  "workspace_member",
+  {
+    workspaceId: text("workspaceId")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    role: text("role").notNull().default("member"),
+    joinedAt: integer("joinedAt", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.workspaceId, table.userId] })],
 );
 
 export const session = sqliteTable(
@@ -227,6 +291,7 @@ export const usageEvent = sqliteTable(
     ipAddress: text("ipAddress"),
     userAgent: text("userAgent"),
     metadata: text("metadata"),
+    workspaceId: text("workspaceId"),
     createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
   },
   (table) => [
@@ -387,6 +452,7 @@ export const liveSession = sqliteTable(
     deepgramProjectId: text("deepgramProjectId"),
     eventCount: integer("eventCount").notNull().default(0),
     metadata: text("metadata"),
+    workspaceId: text("workspaceId"),
   },
   (table) => [
     index("live_session_user_idx").on(table.userId),

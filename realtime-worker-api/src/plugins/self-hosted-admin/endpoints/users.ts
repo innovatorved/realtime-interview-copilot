@@ -6,12 +6,18 @@ import {
   account,
   auditEvent,
   interviewPreset,
+  quotaBalance,
   savedNote,
   session,
   user,
   userModelParams,
 } from "../../../db/schema";
 import { getUserUsageSummary } from "../../../usage";
+import {
+  ensureQuotaRow,
+  getQuotaForUser,
+  toQuotaSummary,
+} from "../../../services/quota.service";
 import { SAFE_ID_RE } from "../constants";
 import { parseLimit, parseOffset, sanitizeSearch } from "../helpers";
 import {
@@ -65,13 +71,60 @@ export function userEndpoints(deps: AdminDeps) {
 
         const [rows, [{ total }]] = await Promise.all([
           where
-            ? db.select(baseSelect).from(user).where(where).orderBy(desc(user.createdAt)).limit(limit).offset(offset)
-            : db.select(baseSelect).from(user).orderBy(desc(user.createdAt)).limit(limit).offset(offset),
+            ? db
+                .select({
+                  ...baseSelect,
+                  planTier: quotaBalance.planTier,
+                  consumedCompletions: quotaBalance.consumedCompletions,
+                  monthlyAllowanceCompletions: quotaBalance.monthlyAllowanceCompletions,
+                })
+                .from(user)
+                .leftJoin(quotaBalance, eq(user.id, quotaBalance.userId))
+                .where(where)
+                .orderBy(desc(user.createdAt))
+                .limit(limit)
+                .offset(offset)
+            : db
+                .select({
+                  ...baseSelect,
+                  planTier: quotaBalance.planTier,
+                  consumedCompletions: quotaBalance.consumedCompletions,
+                  monthlyAllowanceCompletions: quotaBalance.monthlyAllowanceCompletions,
+                })
+                .from(user)
+                .leftJoin(quotaBalance, eq(user.id, quotaBalance.userId))
+                .orderBy(desc(user.createdAt))
+                .limit(limit)
+                .offset(offset),
           where
             ? db.select({ total: count() }).from(user).where(where)
             : db.select({ total: count() }).from(user),
         ]);
-        return ctx.json({ users: rows, total });
+
+        const users = rows.map((row) => {
+          const {
+            planTier,
+            consumedCompletions,
+            monthlyAllowanceCompletions,
+            ...userRow
+          } = row;
+          return {
+            ...userRow,
+            quota:
+              planTier != null ||
+              consumedCompletions != null ||
+              monthlyAllowanceCompletions != null
+                ? {
+                    planTier: planTier ?? null,
+                    consumedCompletions: consumedCompletions ?? null,
+                    monthlyAllowanceCompletions:
+                      monthlyAllowanceCompletions ?? null,
+                  }
+                : null,
+          };
+        });
+
+        return ctx.json({ users, total });
       },
     ),
 
@@ -202,6 +255,9 @@ export function userEndpoints(deps: AdminDeps) {
           };
         });
 
+        await ensureQuotaRow(db, userId);
+        const quotaRow = await getQuotaForUser(db, userId);
+
         return ctx.json({
           user: targetUser,
           sessions,
@@ -209,6 +265,7 @@ export function userEndpoints(deps: AdminDeps) {
           presetsCount: presets[0]?.total ?? 0,
           recentAuditEvents: recentAudit,
           modelParamsOverride,
+          quota: toQuotaSummary(quotaRow, {} as import("../../../env").Env),
           usage: {
             window: "30d",
             since: usageSince.toISOString(),

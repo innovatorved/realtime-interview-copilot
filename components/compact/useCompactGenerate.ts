@@ -6,8 +6,8 @@
 
 import posthog from "posthog-js";
 import { useCallback, useRef } from "react";
-import { humanizeError, humanizeHttpStatus } from "@/lib/api-errors";
-import { BACKEND_API_URL } from "@/lib/constant";
+import { humanizeError, humanizeHttpStatus, parseApiErrorResponse } from "@/lib/api-errors";
+import { ricFetch } from "@/lib/ric-fetch";
 import { dbg } from "@/lib/debug";
 import { parseSseStream } from "@/lib/sse";
 import { FLAGS } from "@/lib/types";
@@ -136,9 +136,8 @@ export function useCompactGenerate({
         isTypedAsk,
       );
       try {
-        const response = await fetch(`${BACKEND_API_URL}/api/completion`, {
+        const response = await ricFetch("/api/completion", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             bg,
             flag,
@@ -146,7 +145,6 @@ export function useCompactGenerate({
             ...(imagePayload !== undefined ? { image: imagePayload } : {}),
           }),
           signal: controllerRef.current.signal,
-          credentials: "include",
         });
 
         dbg(
@@ -162,9 +160,10 @@ export function useCompactGenerate({
           // For the typed Ask AI path we use the ask-ai kind so the user
           // doesn't get told to "start transcription" (they're typing).
           throw new Error(
-            humanizeHttpStatus(
-              response.status,
-              isTypedAsk ? { kind: "ask-ai" } : {},
+            await parseApiErrorResponse(response).then((msg) =>
+              isTypedAsk && msg === humanizeHttpStatus(0, { kind: "no-input" })
+                ? humanizeHttpStatus(response.status, { kind: "ask-ai" })
+                : msg,
             ),
           );
         }

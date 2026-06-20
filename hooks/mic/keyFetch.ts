@@ -10,13 +10,12 @@
  *  endpoint never accidentally applies here. */
 
 import type { DeepgramProjectKeyResponse } from "@/lib/transcription/deepgramLiveConnection";
-import { BACKEND_API_URL } from "@/lib/constant";
+import { ricFetch } from "@/lib/ric-fetch";
 
 export async function fetchAskMicKey(): Promise<DeepgramProjectKeyResponse> {
-  const res = await fetch(`${BACKEND_API_URL}/api/deepgram/ask`, {
+  const res = await ricFetch("/api/deepgram/ask", {
     method: "GET",
     cache: "no-store",
-    credentials: "include",
   });
   if (!res.ok) {
     if (res.status === 401 || res.status === 403) {

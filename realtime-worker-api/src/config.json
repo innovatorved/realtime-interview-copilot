@@ -91,5 +91,18 @@
       "topP": { "min": 0, "max": 1, "type": "float" },
       "thinkingBudget": { "type": "enum", "values": ["off", "low", "medium", "high"] }
     }
+  },
+  "quota": {
+    "defaultTierForNewUsers": "legacy_unlimited",
+    "tiers": {
+      "legacy_unlimited": {
+        "monthlyAllowanceSeconds": null,
+        "monthlyAllowanceCompletions": null
+      },
+      "free_tier": {
+        "monthlyAllowanceSeconds": 3600,
+        "monthlyAllowanceCompletions": 500
+      }
+    }
   }
 }

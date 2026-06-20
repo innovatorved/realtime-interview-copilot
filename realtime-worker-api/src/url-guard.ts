@@ -30,7 +30,8 @@ export function validateOutboundUrl(raw: string): { ok: true } | { ok: false; re
   if (blockedHostnames.has(host)) return { ok: false, reason: "loopback host" };
 
   if (host.includes(":")) {
-    if (host === "::1") return { ok: false, reason: "IPv6 loopback" };
+    const ipv6 = host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
+    if (ipv6 === "::1") return { ok: false, reason: "IPv6 loopback" };
     if (/^fe[89ab][0-9a-f]:/.test(host)) return { ok: false, reason: "IPv6 link-local" };
     if (/^f[cd][0-9a-f]{2}:/.test(host)) return { ok: false, reason: "IPv6 unique-local" };
     return { ok: true };

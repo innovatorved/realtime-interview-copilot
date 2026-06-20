@@ -2,7 +2,14 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { BACKEND_API_URL } from "@/lib/constant";
+import { ricFetch } from "@/lib/ric-fetch";
 import type { InterviewPreset } from "@/lib/types";
+
+export interface PresetContextFields {
+  resumeText?: string | null;
+  resumeFileName?: string | null;
+  jobDescription?: string | null;
+}
 
 export function usePresets() {
   const [presets, setPresets] = useState<InterviewPreset[]>([]);
@@ -38,5 +45,37 @@ export function usePresets() {
     }
   }, []);
 
-  return { presets, isLoading, error, fetchPresets };
+  const updatePresetContext = useCallback(
+    async (presetId: string, fields: PresetContextFields): Promise<boolean> => {
+      setError(null);
+      try {
+        const res = await ricFetch(
+          `/api/presets/${encodeURIComponent(presetId)}/context`,
+          {
+            method: "PATCH",
+            body: JSON.stringify(fields),
+          },
+        );
+        if (!res.ok) {
+          let msg = `HTTP ${res.status}`;
+          try {
+            const data = (await res.json()) as { error?: string };
+            if (data?.error) msg = data.error;
+          } catch {
+            /* ignore */
+          }
+          throw new Error(msg);
+        }
+        await fetchPresets();
+        return true;
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(msg);
+        return false;
+      }
+    },
+    [fetchPresets],
+  );
+
+  return { presets, isLoading, error, fetchPresets, updatePresetContext };
 }

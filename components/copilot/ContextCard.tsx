@@ -27,6 +27,7 @@ interface ContextCardProps {
   bg: string;
   onBgChange: (value: string) => void;
   presetContext: string;
+  hasContextAttached?: boolean;
   recorder: ReactNode;
   formRef: RefObject<HTMLFormElement | null>;
   flag: FLAGS;
@@ -40,6 +41,7 @@ export function ContextCard({
   bg,
   onBgChange,
   presetContext,
+  hasContextAttached = false,
   recorder,
   formRef,
   flag,
@@ -69,11 +71,18 @@ export function ContextCard({
             </span>
           )}
         </div>
-        {presetContext && (
-          <span className="shrink-0 text-[9px] text-emerald-500/60 bg-emerald-500/[0.06] px-2 py-0.5 rounded-full border border-emerald-500/10">
-            Preset loaded
-          </span>
-        )}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {hasContextAttached && (
+            <span className="text-[9px] text-sky-300/90 bg-sky-500/[0.08] px-2 py-0.5 rounded-full border border-sky-500/15">
+              Context attached
+            </span>
+          )}
+          {presetContext && !hasContextAttached && (
+            <span className="text-[9px] text-emerald-500/60 bg-emerald-500/[0.06] px-2 py-0.5 rounded-full border border-emerald-500/10">
+              Preset loaded
+            </span>
+          )}
+        </div>
       </div>
 
       <Textarea

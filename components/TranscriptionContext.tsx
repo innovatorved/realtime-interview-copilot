@@ -47,6 +47,7 @@ interface TranscriptionContextValue {
   isClientReady: boolean;
   isActive: boolean;
   isBusy: boolean;
+  isReconnecting: boolean;
   startSession: () => Promise<void>;
   stopSession: () => void;
   clearTranscription: () => void;
@@ -157,8 +158,11 @@ export function TranscriptionProvider({ children }: { children: ReactNode }) {
   }, [stopHandle]);
 
   const isActive = sessionState !== "idle";
+  const isReconnecting = sessionState === "reconnecting";
   const isBusy =
-    sessionState === "fetching-key" || sessionState === "connecting";
+    sessionState === "fetching-key" ||
+    sessionState === "connecting" ||
+    isReconnecting;
 
   // Memoize so consumers don't re-render on unrelated parent re-renders.
   // Every callback in the value is already wrapped in useCallback, so
@@ -173,6 +177,7 @@ export function TranscriptionProvider({ children }: { children: ReactNode }) {
       isClientReady,
       isActive,
       isBusy,
+      isReconnecting,
       startSession,
       stopSession,
       clearTranscription,
@@ -187,6 +192,7 @@ export function TranscriptionProvider({ children }: { children: ReactNode }) {
       isClientReady,
       isActive,
       isBusy,
+      isReconnecting,
       startSession,
       stopSession,
       clearTranscription,

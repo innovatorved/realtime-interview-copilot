@@ -11,6 +11,59 @@
 
 const DEFAULT_MESSAGE = "Something went wrong. Please try again.";
 
+export function humanizeQuotaExceeded(resetAt?: string | null): string {
+  if (resetAt) {
+    try {
+      const date = new Date(resetAt);
+      if (!Number.isNaN(date.getTime())) {
+        return `You've reached your usage limit. Your quota resets on ${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}.`;
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+  return "You've reached your usage limit for this billing cycle. Please try again later.";
+}
+
+function isQuotaExceededPayload(data: unknown): boolean {
+  if (!data || typeof data !== "object") return false;
+  const obj = data as Record<string, unknown>;
+  if (obj.code === "quota_exceeded" || obj.error === "quota_exceeded") {
+    return true;
+  }
+  if (typeof obj.error === "string" && /quota[_\s-]?exceeded/i.test(obj.error)) {
+    return true;
+  }
+  return false;
+}
+
+/** Parse a failed API JSON body and return a friendly message when possible. */
+export async function parseApiErrorResponse(res: Response): Promise<string> {
+  try {
+    const data = (await res.clone().json()) as Record<string, unknown>;
+    if (isQuotaExceededPayload(data)) {
+      const resetAt =
+        typeof data.resetAt === "string"
+          ? data.resetAt
+          : typeof data.cycleResetAt === "string"
+            ? data.cycleResetAt
+            : null;
+      return humanizeQuotaExceeded(resetAt);
+    }
+    if (typeof data.error === "string" && data.error.trim()) {
+      if (/quota[_\s-]?exceeded/i.test(data.error)) {
+        return humanizeQuotaExceeded(
+          typeof data.resetAt === "string" ? data.resetAt : null,
+        );
+      }
+      return data.error;
+    }
+  } catch {
+    /* not JSON */
+  }
+  return humanizeHttpStatus(res.status);
+}
+
 /**
  * Map an HTTP `Response` (or just a status code) to a friendly message.
  *
@@ -21,9 +74,12 @@ const DEFAULT_MESSAGE = "Something went wrong. Please try again.";
  */
 export function humanizeHttpStatus(
   status: number,
-  opts: { kind?: "no-input" | "generic" | "ask-ai" } = {},
+  opts: { kind?: "no-input" | "generic" | "ask-ai" | "quota_exceeded" } = {},
 ): string {
   const { kind = "generic" } = opts;
+  if (kind === "quota_exceeded" || status === 402) {
+    return humanizeQuotaExceeded();
+  }
   if (kind === "ask-ai") {
     // Tailored copy for the Ask AI surface — transcription is irrelevant
     // here, so the Copilot wording ("start transcription") would be wrong
@@ -77,6 +133,9 @@ export function humanizeError(err: unknown): string {
   if (err instanceof Error) {
     if (err.name === "AbortError") return ""; // caller should ignore
     const msg = err.message;
+    if (/quota[_\s-]?exceeded/i.test(msg)) {
+      return humanizeQuotaExceeded();
+    }
     // "HTTP error! status: 404" → extract status, humanize.
     const match = msg.match(/status:\s*(\d{3})/i);
     if (match) {

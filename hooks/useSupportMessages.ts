@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BACKEND_API_URL } from "@/lib/constant";
+import { ricFetch } from "@/lib/ric-fetch";
 import type {
   SupportMessage,
   SupportThreadListResponse,
@@ -80,10 +81,8 @@ export function useSupportMessages(
     async ({ body, subject, parentId }: SendOptions) => {
       setError(null);
       try {
-        const res = await fetch(`${BACKEND_API_URL}/api/support/messages`, {
+        const res = await ricFetch("/api/support/messages", {
           method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ body, subject, parentId }),
         });
         if (!res.ok) {
@@ -127,15 +126,10 @@ export function useSupportMessages(
 
   const markThreadRead = useCallback(async (threadId: string) => {
     try {
-      const res = await fetch(
-        `${BACKEND_API_URL}/api/support/messages/read`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ threadId }),
-        },
-      );
+      const res = await ricFetch("/api/support/messages/read", {
+        method: "POST",
+        body: JSON.stringify({ threadId }),
+      });
       if (!res.ok) return false;
       setThreads((prev) =>
         prev.map((t) =>

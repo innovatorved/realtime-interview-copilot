@@ -71,6 +71,27 @@
       "when": 1764750000000,
       "tag": "0009_add_support_and_announcements",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1764800000000,
+      "tag": "0010_add_quota_balance",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1764850000000,
+      "tag": "0011_add_resume_jd_to_presets",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1764900000000,
+      "tag": "0012_add_workspace_columns",
+      "breakpoints": true
     }
   ]
 }
