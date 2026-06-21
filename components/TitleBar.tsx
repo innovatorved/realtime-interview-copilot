@@ -18,7 +18,7 @@ import { authClient } from "@/lib/auth-client";
 import { sendGTMEvent } from "@next/third-parties/google";
 import { useTab } from "@/components/TabContext";
 import { useAppBackdrop } from "@/components/AppBackdropContext";
-import { useInterviewContext } from "@/hooks/useInterviewContext";
+import { useInterviewContext } from "@/components/InterviewContextProvider";
 import { SignalStrip } from "@/components/shell/SignalStrip";
 import { UserMenu } from "@/components/shell/UserMenu";
 import { WorkspaceTabs } from "@/components/shell/WorkspaceTabs";

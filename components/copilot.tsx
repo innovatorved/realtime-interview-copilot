@@ -10,7 +10,7 @@ import { AlertBanner } from "@/components/shell/AlertBanner";
 import { useTranscription } from "@/components/TranscriptionContext";
 import { useClientReady } from "@/hooks/useClientReady";
 import { useCopilotSubmit } from "@/hooks/useCopilotSubmit";
-import { useInterviewContext } from "@/hooks/useInterviewContext";
+import { useInterviewContext } from "@/components/InterviewContextProvider";
 import { useCopilotSession } from "@/components/CopilotSessionProvider";
 import { useTab } from "@/components/TabContext";
 import { authClient } from "@/lib/auth-client";

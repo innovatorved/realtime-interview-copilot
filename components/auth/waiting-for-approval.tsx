@@ -14,7 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 
 // Single source of truth for the auth chrome palette; the wizard pulls
 // from the same module.
-import { TOKEN } from "./_shared/tokens";
+import { authTokens as TOKEN } from "@/lib/design-tokens";
 
 const MAX_BODY = 2000;
 const MAX_SUBJECT = 200;

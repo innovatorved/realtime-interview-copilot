@@ -11,7 +11,7 @@ import {
   useMemo,
   type ReactNode,
 } from "react";
-import { useInterviewContext } from "@/hooks/useInterviewContext";
+import { useInterviewContext } from "@/components/InterviewContextProvider";
 import { useAskChat, type UseAskChatHandle } from "@/hooks/useAskChat";
 import {
   APP_SESSION_KEYS,

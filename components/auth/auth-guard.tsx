@@ -9,7 +9,7 @@ import { AppAnnouncements } from "@/components/announcements/AppAnnouncements";
 import { AlertTriangle, Ban, Loader2 } from "lucide-react";
 import posthog from "posthog-js";
 
-import { TOKEN } from "./_shared/tokens";
+import { authTokens as TOKEN } from "@/lib/design-tokens";
 
 function AuthLoadingShell() {
   return (

@@ -1,22 +1,17 @@
 "use client";
 
 /** Owns the single-shot Copilot/Summarizer completion flow for the
- *  full Copilot surface.
- *
- *  Strictly behavior-preserving: the abort controller, error mapping,
- *  GTM / PostHog payloads, and the SSE parser configuration mirror the
- *  previous inline `handleSubmit` in `components/copilot.tsx`. */
+ *  full Copilot surface. */
 
 import { sendGTMEvent } from "@next/third-parties/google";
 import posthog from "posthog-js";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { humanizeHttpStatus } from "@/lib/api-errors";
 import {
-  humanizeError,
-  humanizeHttpStatus,
-  parseApiErrorResponse,
-} from "@/lib/api-errors";
-import { ricFetch } from "@/lib/ric-fetch";
-import { parseSseStream } from "@/lib/sse";
+  humanizeStreamError,
+  isAbortError,
+  streamCompletion,
+} from "@/lib/stream-completion";
 import { FLAGS } from "@/lib/types";
 import { useCopilotSession } from "@/components/CopilotSessionProvider";
 
@@ -67,8 +62,6 @@ export function useCopilotSubmit({
     }
   }, []);
 
-  // Abort in-flight streams only when the app unmounts (providers stay
-  // mounted across compact ↔ full toggles).
   useEffect(() => {
     return () => {
       if (controller.current) {
@@ -99,45 +92,21 @@ export function useCopilotSubmit({
       });
 
       try {
-        const response = await ricFetch("/api/completion", {
-          method: "POST",
-          body: JSON.stringify({
-            bg: runBg,
-            flag: runFlag,
-            prompt,
-          }),
+        await streamCompletion({
+          flag: runFlag,
+          bg: runBg,
+          prompt,
           signal: controller.current.signal,
-        });
-
-        if (!response.ok) {
-          throw new Error(await parseApiErrorResponse(response));
-        }
-
-        let streamError: string | null = null;
-        await parseSseStream(response, {
-          signal: controller.current.signal,
-          maxBufferChars: 1_000_000,
-          onChunk: (delta) => {
-            if (delta.text) {
-              setCompletion((text) => text + delta.text!);
-            }
-          },
-          onError: (message) => {
-            streamError = message;
-          },
-          onParseError: (err) => {
-            console.error("Error parsing SSE data:", err);
+          onChunk: (text) => {
+            setCompletion((current) => current + text);
           },
         });
-        if (streamError) {
-          throw new Error(streamError);
-        }
         lastFailedRef.current = null;
         setCanRegenerate(false);
       } catch (err: unknown) {
-        if (err instanceof Error && err.name !== "AbortError") {
+        if (!isAbortError(err)) {
           console.error("Stream error:", err);
-          setError(new Error(humanizeError(err)));
+          setError(new Error(humanizeStreamError(err)));
           posthog.captureException(err);
           lastFailedRef.current = {
             flag: runFlag,
@@ -151,7 +120,7 @@ export function useCopilotSubmit({
         controller.current = null;
       }
     },
-    [isLoading],
+    [isLoading, setCompletion],
   );
 
   const submit = useCallback(

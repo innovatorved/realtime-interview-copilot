@@ -8,7 +8,7 @@ import { ArrowLeft, Loader2, Mic, MoveRight } from "lucide-react";
 import { sendGTMEvent } from "@next/third-parties/google";
 import posthog from "posthog-js";
 
-import { TOKEN as SHARED_TOKEN } from "./_shared/tokens";
+import { authTokens as TOKEN } from "@/lib/design-tokens";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,6 @@ interface AuthWizardProps {
   initialStep?: "welcome" | "signup" | "signin";
   onSuccess?: () => void;
 }
-
-const TOKEN = SHARED_TOKEN;
 
 function NotionInput(
   props: React.InputHTMLAttributes<HTMLInputElement> & {

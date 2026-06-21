@@ -22,7 +22,7 @@ import {
   resolveCompactHeight,
   type CompactLayoutState,
 } from "@/hooks/useCompactWindowSize";
-import { useInterviewContext } from "@/hooks/useInterviewContext";
+import { useInterviewContext } from "@/components/InterviewContextProvider";
 import { authClient } from "@/lib/auth-client";
 import { buildContextBlock, hasAttachedContext } from "@/lib/prompt-context";
 import { sessionDisplayName } from "@/lib/session-display";

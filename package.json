@@ -1,6 +1,6 @@
 {
   "name": "realtime-interview-copilot",
-  "version": "0.14.3-beta",
+  "version": "0.15.0-beta",
   "description": "Real-time AI copilot for interviews (beta desktop app)",
   "author": "Ved Gupta <vedgupta@protonmail.com>",
   "private": true,
@@ -8,15 +8,13 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "build:static": "next build && next export",
-    "start": "next start",
     "lint": "eslint .",
     "fix": "bunx @biomejs/biome format --write .",
     "build:electron": "node scripts/build-electron.js",
     "electron:dev": "bun run build:electron && concurrently \"PORT=3000 bun run dev\" \"wait-on http://localhost:3000 && DEV_PORT=3000 electron .\"",
     "electron:debug": "ELECTRON_DEBUG=true bun run build:electron && concurrently \"PORT=3000 bun run dev\" \"wait-on http://localhost:3000 && DEV_PORT=3000 electron .\"",
-    "electron:build": "rm -f electron/DEBUG_BUILD && bun run build:electron && bun run build && electron-builder",
-    "electron:build:debug": "bun run build:electron && bun run build && printf 'debug build · %s\\n' \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\" > electron/DEBUG_BUILD && electron-builder",
+    "electron:build": "rm -f electron/DEBUG_BUILD && bun run build:electron && bun run build && node scripts/apply-app-constants.js && electron-builder",
+    "electron:build:debug": "bun run build:electron && bun run build && node scripts/apply-app-constants.js && printf 'debug build · %s\\n' \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\" > electron/DEBUG_BUILD && electron-builder",
     "electron:start": "bun run build:electron && electron .",
     "clean": "rm -rf .next out dist electron/*.js electron/*.js.map electron/DEBUG_BUILD"
   },
@@ -30,7 +28,6 @@
     "@radix-ui/react-switch": "^1.3.1",
     "@tailwindcss/postcss": "^4.3.1",
     "@tailwindcss/typography": "^0.5.20",
-    "@uidotdev/usehooks": "^2.4.1",
     "better-auth": "^1.6.19",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -56,18 +53,15 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.5.0",
-    "baseline-browser-mapping": "^2.10.38",
     "concurrently": "^10.0.3",
     "electron": "^42.4.1",
     "electron-builder": "^26.15.3",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.9",
-    "png-to-ico": "^3.0.1",
     "postcss": "^8.5.15",
     "tailwindcss": "^4.3.1",
     "typescript": "^6.0.3",
-    "wait-on": "^9.0.10",
-    "wrangler": "^4.102.0"
+    "wait-on": "^9.0.10"
   },
   "main": "electron/main.js",
   "trustedDependencies": [
@@ -84,8 +78,8 @@
   ],
   "build": {
     "appId": "com.realtime.interview.copilot.beta",
-    "productName": "Realtime Interview Copilot Beta",
-    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "productName": "Meeting Copilot",
+    "artifactName": "Realtime.Interview.Copilot.Beta-${version}-${os}-${arch}.${ext}",
     "publish": [
       {
         "provider": "github",
@@ -113,9 +107,9 @@
       "entitlementsInherit": "build/entitlements.mac.inherit.plist",
       "minimumSystemVersion": "11.0",
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "Realtime Interview Copilot uses the microphone to transcribe your voice for the Ask AI feature.",
-        "NSCameraUsageDescription": "Realtime Interview Copilot does not record from the camera; this permission is requested only by macOS for media capture APIs and will not be used.",
-        "NSAppleEventsUsageDescription": "Realtime Interview Copilot does not script other apps; this permission is requested only by macOS for system integration.",
+        "NSMicrophoneUsageDescription": "Meeting Copilot uses the microphone to transcribe your voice for the Ask AI feature.",
+        "NSCameraUsageDescription": "Meeting Copilot does not record from the camera; this permission is requested only by macOS for media capture APIs and will not be used.",
+        "NSAppleEventsUsageDescription": "Meeting Copilot does not script other apps; this permission is requested only by macOS for system integration.",
         "LSUIElement": false,
         "NSHighResolutionCapable": true
       },
@@ -133,13 +127,6 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
-    },
-    "linux": {
-      "icon": "public/icons/android-chrome-512x512.png",
-      "target": [
-        "AppImage",
-        "deb"
-      ]
     }
   }
 }

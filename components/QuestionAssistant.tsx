@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { formatShortcut, Kbd } from "@/components/ui/Kbd";
 import { LevelMeter } from "@/components/ui/LevelMeter";
 import { useSharedAskChat } from "@/components/AskChatProvider";
-import { useInterviewContext } from "@/hooks/useInterviewContext";
+import { useInterviewContext } from "@/components/InterviewContextProvider";
 import { useAskMic } from "@/hooks/useAskMic";
 import { useMicPushToTalk } from "@/hooks/useMicPushToTalk";
 import { dbg } from "@/lib/debug";

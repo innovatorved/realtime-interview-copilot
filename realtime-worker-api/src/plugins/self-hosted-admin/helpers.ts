@@ -1,6 +1,7 @@
 /** Pure helpers (no closure deps) used across endpoints. */
 
 import { APIError } from "better-auth/api";
+import { getClientIpFromHeaders } from "../../lib/ip";
 import {
   DEFAULT_LIMIT,
   DISPOSABLE_DOMAINS,
@@ -11,12 +12,7 @@ import {
 } from "./constants";
 
 export function getClientIp(headers: Headers | undefined): string | null {
-  if (!headers) return null;
-  return (
-    headers.get("cf-connecting-ip") ??
-    headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    null
-  );
+  return getClientIpFromHeaders(headers);
 }
 
 export function getUserAgentStr(headers: Headers | undefined): string | null {

@@ -24,6 +24,6 @@ Please be respectful and courteous to other contributors.
 
 - We use TypeScript for type safety.
 - We use Tailwind CSS for styling.
-- We use Next.js for server-side rendering and routing.
+- We use Next.js with static export for the desktop UI.
 
 We appreciate your contributions!

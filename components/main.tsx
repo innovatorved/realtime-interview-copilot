@@ -20,7 +20,7 @@ import { authClient } from "@/lib/auth-client";
 import { sessionDisplayName } from "@/lib/session-display";
 import { useEffect, useState, useCallback, useLayoutEffect } from "react";
 import { useTab } from "@/components/TabContext";
-import { useInterviewContext } from "@/hooks/useInterviewContext";
+import { useInterviewContext } from "@/components/InterviewContextProvider";
 import { Mic, Minimize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { sendGTMEvent } from "@next/third-parties/google";
