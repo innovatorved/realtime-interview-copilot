@@ -40,4 +40,6 @@ if (pkg.build.mac?.extendInfo) {
 }
 
 fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
-console.log(`Applied displayName "${displayName}" to package.json build config.`);
+console.log(
+  `Applied displayName "${displayName}" to package.json build config.`,
+);

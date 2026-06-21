@@ -4,8 +4,7 @@ export const overlayTextShadow =
   "[text-shadow:0_1px_3px_rgba(0,0,0,0.85),0_0_8px_rgba(0,0,0,0.4)]";
 
 /** Halo hugging text blocks — not a full-panel fill. */
-export const overlayTextBlock =
-  "rounded-md bg-black/20 backdrop-blur-[2px]";
+export const overlayTextBlock = "rounded-md bg-black/20 backdrop-blur-[2px]";
 
 export const overlayPanel = "bg-transparent";
 

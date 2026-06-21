@@ -382,7 +382,10 @@ export function QuestionAssistant({
             <div className="min-w-0 flex-1">
               <h2 className="flex items-center gap-1.5 text-[12px] font-semibold leading-none text-text-primary">
                 Ask AI
-                <span className="relative flex h-1.5 w-1.5 shrink-0" aria-hidden>
+                <span
+                  className="relative flex h-1.5 w-1.5 shrink-0"
+                  aria-hidden
+                >
                   <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-accent" />
                 </span>
                 {messages.length > 0 && (

@@ -17,7 +17,11 @@ const signalColors: Record<TabType, string> = {
 export function SignalStrip({ activeTab, className }: SignalStripProps) {
   return (
     <div
-      className={cn("h-0.5 w-full shrink-0", signalColors[activeTab], className)}
+      className={cn(
+        "h-0.5 w-full shrink-0",
+        signalColors[activeTab],
+        className,
+      )}
       aria-hidden
     />
   );

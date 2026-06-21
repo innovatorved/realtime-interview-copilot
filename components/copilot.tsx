@@ -77,29 +77,32 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
     }
   }, [transcriptionSegments]);
 
-  const handleFlag = useCallback((checked: boolean) => {
-    if (!checked) {
-      setFlag(FLAGS.SUMMARIZER);
-      sendGTMEvent({ event: "switch_mode", mode: "summarizer" });
-      posthog.capture("mode_switched", {
-        mode: "summarizer",
-        previous_mode: "copilot",
-      });
-      trackEvent("mode_switched", {
-        metadata: { mode: "summarizer", previous_mode: "copilot" },
-      });
-    } else {
-      setFlag(FLAGS.COPILOT);
-      sendGTMEvent({ event: "switch_mode", mode: "copilot" });
-      posthog.capture("mode_switched", {
-        mode: "copilot",
-        previous_mode: "summarizer",
-      });
-      trackEvent("mode_switched", {
-        metadata: { mode: "copilot", previous_mode: "summarizer" },
-      });
-    }
-  }, [setFlag]);
+  const handleFlag = useCallback(
+    (checked: boolean) => {
+      if (!checked) {
+        setFlag(FLAGS.SUMMARIZER);
+        sendGTMEvent({ event: "switch_mode", mode: "summarizer" });
+        posthog.capture("mode_switched", {
+          mode: "summarizer",
+          previous_mode: "copilot",
+        });
+        trackEvent("mode_switched", {
+          metadata: { mode: "summarizer", previous_mode: "copilot" },
+        });
+      } else {
+        setFlag(FLAGS.COPILOT);
+        sendGTMEvent({ event: "switch_mode", mode: "copilot" });
+        posthog.capture("mode_switched", {
+          mode: "copilot",
+          previous_mode: "summarizer",
+        });
+        trackEvent("mode_switched", {
+          metadata: { mode: "copilot", previous_mode: "summarizer" },
+        });
+      }
+    },
+    [setFlag],
+  );
 
   const formRef = useRef<HTMLFormElement>(null);
 

@@ -56,8 +56,7 @@ const refVersion =
       : refName;
 
 const assetsDir =
-  process.env.RELEASE_ASSETS_DIR?.trim() ||
-  path.join(root, "release-assets");
+  process.env.RELEASE_ASSETS_DIR?.trim() || path.join(root, "release-assets");
 
 const tapDir = process.env.TAP_DIR?.trim() || "";
 const wingetDir = process.env.WINGET_DIR?.trim() || "";
@@ -144,11 +143,7 @@ function pickAsset(files, refVer, versionFromName, label) {
 }
 
 function writeCask(version, sha256) {
-  const caskPath = path.join(
-    tapDir,
-    "Casks",
-    `${HOMEBREW.cask}.rb`,
-  );
+  const caskPath = path.join(tapDir, "Casks", `${HOMEBREW.cask}.rb`);
   fs.mkdirSync(path.dirname(caskPath), { recursive: true });
 
   const contents = `# Synced from ${SOURCE.repo} release CI via scripts/sync-distribution.js
@@ -284,12 +279,7 @@ ManifestVersion: 1.6.0
 `,
   );
 
-  const latestPath = path.join(
-    wingetDir,
-    "packages",
-    WINGET.folder,
-    "LATEST",
-  );
+  const latestPath = path.join(wingetDir, "packages", WINGET.folder, "LATEST");
   fs.mkdirSync(path.dirname(latestPath), { recursive: true });
   fs.writeFileSync(latestPath, `${version}\n`);
 

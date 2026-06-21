@@ -154,10 +154,7 @@ export default function TitleBar() {
       {!compactMode && <SignalStrip activeTab={activeTab} />}
       <div className="flex min-h-0 flex-1 items-center justify-between px-3">
         <div className="flex min-w-0 items-center gap-2">
-          <span
-            className="relative flex h-1.5 w-1.5 shrink-0"
-            aria-hidden
-          >
+          <span className="relative flex h-1.5 w-1.5 shrink-0" aria-hidden>
             <span className="absolute inline-flex h-full w-full rounded-full bg-accent/40" />
             <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-accent" />
           </span>
@@ -257,10 +254,7 @@ export default function TitleBar() {
           <Button
             size="icon"
             variant="ghost"
-            className={cn(
-              "h-6 w-6",
-              isAlwaysOnTop && "text-info",
-            )}
+            className={cn("h-6 w-6", isAlwaysOnTop && "text-info")}
             onClick={handleToggleAlwaysOnTop}
             title={
               isAlwaysOnTop ? "Disable always on top" : "Enable always on top"

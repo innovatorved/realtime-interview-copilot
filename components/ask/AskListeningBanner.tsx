@@ -37,7 +37,9 @@ export function AskListeningBanner({
     <div
       className={cn(
         "flex items-center gap-2 rounded-md border border-destructive/25 bg-destructive-muted",
-        density === "compact" ? "px-2 py-1" : "mb-2 px-3 py-1.5 animate-fade-in-scale",
+        density === "compact"
+          ? "px-2 py-1"
+          : "mb-2 px-3 py-1.5 animate-fade-in-scale",
       )}
     >
       <span className="relative flex h-1.5 w-1.5 shrink-0 md:h-2 md:w-2">

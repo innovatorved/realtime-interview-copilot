@@ -1,7 +1,13 @@
 "use client";
 
 import posthog from "posthog-js";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { useAskScreenshotBridge } from "@/components/ask/useAskScreenshotBridge";
 import { useAskKeyboard } from "@/components/ask/useAskKeyboard";
 import { useTranscription } from "@/components/TranscriptionContext";
@@ -11,7 +17,10 @@ import { useAskMic } from "@/hooks/useAskMic";
 import { useMicPushToTalk } from "@/hooks/useMicPushToTalk";
 import { dbg } from "@/lib/debug";
 import { FLAGS, type HistoryData } from "@/lib/types";
-import { isVisionScreenshotDataUrl, VISION_FALLBACK_PROMPT } from "@/lib/vision-screenshot";
+import {
+  isVisionScreenshotDataUrl,
+  VISION_FALLBACK_PROMPT,
+} from "@/lib/vision-screenshot";
 import { CompactAskComposer } from "./compact/CompactAskComposer";
 import { CompactContextDrawer } from "./compact/CompactContextDrawer";
 import { CompactLiveTranscript } from "./compact/CompactLiveTranscript";
@@ -457,9 +466,7 @@ export function CompactCopilot({
         onExitCompact={onExitCompact}
       />
 
-      {showLiveTranscript && (
-        <CompactLiveTranscript text={transcribedText} />
-      )}
+      {showLiveTranscript && <CompactLiveTranscript text={transcribedText} />}
 
       {showContext && (
         <CompactContextDrawer

@@ -26,10 +26,7 @@ function NotionInput(
   },
 ) {
   return (
-    <Input
-      {...props}
-      className={cn("h-9 text-[13px]", props.className)}
-    />
+    <Input {...props} className={cn("h-9 text-[13px]", props.className)} />
   );
 }
 

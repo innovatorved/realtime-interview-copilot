@@ -19,7 +19,10 @@ export function CompactContextDrawer({
   hasSavedResumeOrJd = false,
 }: CompactContextDrawerProps) {
   return (
-    <div data-clickable className="app-toolbar space-y-1 border-t border-border-subtle px-3 py-2">
+    <div
+      data-clickable
+      className="app-toolbar space-y-1 border-t border-border-subtle px-3 py-2"
+    >
       {hasSavedResumeOrJd && (
         <p className="text-[10px] text-accent-text">
           Saved resume and job description are included automatically.

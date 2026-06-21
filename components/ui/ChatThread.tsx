@@ -137,7 +137,9 @@ function ChatBubble({
           )}
         >
           {isUser ? (
-            <p className="m-0 whitespace-pre-wrap break-words">{message.text}</p>
+            <p className="m-0 whitespace-pre-wrap break-words">
+              {message.text}
+            </p>
           ) : message.pending && !message.text ? (
             <TypingIndicator />
           ) : (

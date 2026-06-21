@@ -205,51 +205,53 @@ export default function History({
       <div
         className={cn(
           "sticky top-0 z-10 shrink-0 gap-2 bg-surface-base pb-3",
-          isSidebar ? "flex flex-col" : "flex flex-col space-y-2 border-b border-border-subtle",
+          isSidebar
+            ? "flex flex-col"
+            : "flex flex-col space-y-2 border-b border-border-subtle",
         )}
       >
         <div className={cn("flex gap-2", isSidebar && "flex-col")}>
-        <div className="relative flex-1 min-w-0">
-          <Search
-            className={cn(
-              "absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-500",
-              isSidebar ? "w-3.5 h-3.5" : "w-4 h-4 left-3",
-            )}
-          />
-          <Input
-            value={searchQuery}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder="Search…"
-            className={cn(
-              isSidebar ? "h-8 pl-8 text-[11px]" : "h-9 pl-9 text-sm",
-            )}
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-1">
-          {tags.map((tag) => (
-            <button
-              key={tag}
-              type="button"
-              onClick={() => {
-                const next = activeTag === tag ? "" : tag;
-                setActiveTag(next);
-                onSearch(searchQuery, next);
-              }}
+          <div className="relative flex-1 min-w-0">
+            <Search
               className={cn(
-                "rounded-lg font-medium transition-all border",
-                isSidebar
-                  ? "px-2 py-1 text-[9px]"
-                  : "px-2.5 py-1.5 text-[10px]",
-                activeTag === tag
-                  ? (tagColors[tag] ??
-                      "bg-neutral-500/10 text-neutral-400 border-neutral-500/20")
-                  : "border-transparent text-text-tertiary hover:bg-surface-overlay",
+                "absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-500",
+                isSidebar ? "w-3.5 h-3.5" : "w-4 h-4 left-3",
               )}
-            >
-              {tag}
-            </button>
-          ))}
-        </div>
+            />
+            <Input
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              placeholder="Search…"
+              className={cn(
+                isSidebar ? "h-8 pl-8 text-[11px]" : "h-9 pl-9 text-sm",
+              )}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-1">
+            {tags.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => {
+                  const next = activeTag === tag ? "" : tag;
+                  setActiveTag(next);
+                  onSearch(searchQuery, next);
+                }}
+                className={cn(
+                  "rounded-lg font-medium transition-all border",
+                  isSidebar
+                    ? "px-2 py-1 text-[9px]"
+                    : "px-2.5 py-1.5 text-[10px]",
+                  activeTag === tag
+                    ? (tagColors[tag] ??
+                        "bg-neutral-500/10 text-neutral-400 border-neutral-500/20")
+                    : "border-transparent text-text-tertiary hover:bg-surface-overlay",
+                )}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

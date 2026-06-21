@@ -2,7 +2,10 @@
 
 import type { RefObject } from "react";
 import { TranscriptionDisplay } from "@/components/TranscriptionDisplay";
-import { overlayPanel, overlayTextShadow } from "@/components/compact/compactTextStyles";
+import {
+  overlayPanel,
+  overlayTextShadow,
+} from "@/components/compact/compactTextStyles";
 import { Label } from "@/components/ui/label";
 import type { TranscriptionSegment } from "@/lib/types";
 

@@ -71,7 +71,10 @@ function loadDisplayName(): string {
         const parsed = JSON.parse(fs.readFileSync(candidate, "utf8")) as {
           displayName?: string;
         };
-        if (typeof parsed.displayName === "string" && parsed.displayName.length > 0) {
+        if (
+          typeof parsed.displayName === "string" &&
+          parsed.displayName.length > 0
+        ) {
           return parsed.displayName;
         }
       }

@@ -11,8 +11,7 @@ interface AlertBannerProps {
 }
 
 const variantClasses = {
-  error:
-    "border-destructive/30 bg-destructive-muted text-destructive",
+  error: "border-destructive/30 bg-destructive-muted text-destructive",
   warning: "border-warning/30 bg-warning/10 text-warning",
   info: "border-info/30 bg-info/10 text-info",
 };

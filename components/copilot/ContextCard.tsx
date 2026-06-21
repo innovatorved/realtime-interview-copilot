@@ -3,14 +3,7 @@
 /** Context toolbar on the full Copilot surface. */
 
 import dynamic from "next/dynamic";
-import {
-  ChevronDown,
-  FileText,
-  Loader2,
-  Upload,
-  X,
-  Zap,
-} from "lucide-react";
+import { ChevronDown, FileText, Loader2, Upload, X, Zap } from "lucide-react";
 import type { ChangeEvent, RefObject } from "react";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";

@@ -12,7 +12,10 @@ import { UserMenu } from "@/components/shell/UserMenu";
 import { WorkspaceTabs } from "@/components/shell/WorkspaceTabs";
 import { useCaptureAndAsk } from "@/hooks/useCaptureAndAsk";
 import { useClickThrough } from "@/hooks/useClickThrough";
-import { useCompactWindowSize, COMPACT_HEIGHT_IDLE } from "@/hooks/useCompactWindowSize";
+import {
+  useCompactWindowSize,
+  COMPACT_HEIGHT_IDLE,
+} from "@/hooks/useCompactWindowSize";
 import { useNotes } from "@/hooks/useNotes";
 import { useExport } from "@/hooks/useExport";
 import { cn } from "@/lib/utils";

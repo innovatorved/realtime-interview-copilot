@@ -59,7 +59,10 @@ export function WorkspaceTabs({
                 {tab.label}
               </span>
               {isActive && (
-                <span className="h-0.5 w-5 rounded-full bg-accent" aria-hidden />
+                <span
+                  className="h-0.5 w-5 rounded-full bg-accent"
+                  aria-hidden
+                />
               )}
             </button>
           );

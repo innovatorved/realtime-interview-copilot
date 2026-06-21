@@ -44,8 +44,7 @@ export const tokens = {
     lg: "10px",
   },
   font: {
-    sans:
-      '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
+    sans: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
   },
 } as const;
 
