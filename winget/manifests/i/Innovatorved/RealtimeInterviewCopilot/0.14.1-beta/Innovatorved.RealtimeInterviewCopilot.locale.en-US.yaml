@@ -1,0 +1,24 @@
+# Synced to github.com/innovatorved/winget by CI.
+PackageIdentifier: Innovatorved.RealtimeInterviewCopilot
+PackageVersion: 0.14.1-beta
+PackageLocale: en-US
+Publisher: Innovatorved
+PublisherUrl: https://github.com/innovatorved
+PublisherSupportUrl: https://github.com/innovatorved/realtime-interview-copilot/issues
+PackageName: Realtime Interview Copilot Beta
+PackageUrl: https://github.com/innovatorved/realtime-interview-copilot
+License: Apache-2.0
+LicenseUrl: https://github.com/innovatorved/realtime-interview-copilot/blob/main/LICENSE
+Copyright: Copyright (c) Ved Gupta
+ShortDescription: Real-time AI copilot for interviews (beta)
+Description: |-
+  Desktop app for live interview assistance. Captures system audio, transcribes
+  speech in real time, and answers questions using text or screenshots.
+Moniker: realtime-interview-copilot
+Tags:
+  - ai
+  - interview
+  - productivity
+  - electron
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0
