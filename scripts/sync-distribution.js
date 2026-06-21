@@ -307,9 +307,12 @@ const exeFiles = fs
 
 if (tapDir) {
   const dmg = pickAsset(dmgFiles, refVersion, versionFromDmgFilename, "DMG");
-  const expected = `Realtime Interview Copilot Beta-${dmg.version}-mac-arm64.dmg`;
-  if (dmg.name !== expected) {
-    console.error(`❌ Unexpected DMG name ${dmg.name} (expected ${expected})`);
+  const expectedCi = `Realtime Interview Copilot Beta-${dmg.version}-mac-arm64.dmg`;
+  const expectedRelease = `Realtime.Interview.Copilot.Beta-${dmg.version}-mac-arm64.dmg`;
+  if (dmg.name !== expectedCi && dmg.name !== expectedRelease) {
+    console.error(
+      `❌ Unexpected DMG name ${dmg.name} (expected ${expectedCi} or ${expectedRelease})`,
+    );
     process.exit(1);
   }
   writeCask(dmg.version, sha256File(path.join(assetsDir, dmg.name)));
