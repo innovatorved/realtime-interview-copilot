@@ -34,7 +34,23 @@ brew reinstall --cask realtime-interview-copilot
 
 Homebrew-managed installs should use `brew upgrade` rather than the in-app updater.
 
-Windows releases are available on the GitHub Releases page.
+Windows (WinGet, one command):
+
+```powershell
+irm https://raw.githubusercontent.com/innovatorved/winget/main/install.ps1 | iex
+```
+
+To update an existing WinGet install, re-run the same command.
+
+To uninstall:
+
+```powershell
+winget uninstall -e --id InnovatorVed.RealtimeInterviewCopilot
+```
+
+WinGet-managed installs should use the install script above rather than the in-app updater. Windows builds are unsigned; SmartScreen may prompt on first launch (**More info → Run anyway**).
+
+Manual downloads are also on the [GitHub Releases](https://github.com/innovatorved/realtime-interview-copilot/releases/latest) page.
 
 ## Features
 
@@ -43,7 +59,7 @@ Windows releases are available on the GitHub Releases page.
 - **Compact mode** — picture-in-picture overlay with click-through; toolbar stays interactive while empty space passes clicks to apps behind
 - **Backdrop slider** — Title bar **− / +** controls window transparency (full mode dims the whole UI; compact mode dims only the title bar and toolbar strip)
 - Hidden from normal screen sharing (`contentProtection` + macOS sharing settings)
-- In-app **Check for updates** (Title bar download icon); Homebrew installs should still use `brew upgrade --cask`
+- In-app **Check for updates** (Title bar download icon); Homebrew and WinGet installs should use their package manager instead
 - Keyboard shortcuts (see below)
 
 ### Keyboard shortcuts

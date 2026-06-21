@@ -48,6 +48,8 @@ next-env.d.ts
 # local-only reference docs (never pushed)
 /docs/local/
 
+/release-assets/
+
 # electron
 /dist
 /electron/*.js
