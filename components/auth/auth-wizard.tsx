@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import constants from "@/constant.json";
 
 interface AuthWizardProps {
   initialStep?: "welcome" | "signup" | "signin";
@@ -297,7 +298,7 @@ export function AuthWizard({
                 margin: 0,
               }}
             >
-              Interview Copilot
+              {constants.displayName}
             </p>
             <p
               style={{

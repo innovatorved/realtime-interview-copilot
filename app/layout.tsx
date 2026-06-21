@@ -10,9 +10,10 @@ import { CopilotSessionProvider } from "@/components/CopilotSessionProvider";
 import { AskChatProvider } from "@/components/AskChatProvider";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
 import { PostHogProvider } from "@/components/PostHogProvider";
+import constants from "@/constant.json";
 
 export const metadata: Metadata = {
-  title: "Realtime Interview Copilot",
+  title: constants.displayName,
   description: "Get Interview Answers Realtime",
   icons: {
     icon: [

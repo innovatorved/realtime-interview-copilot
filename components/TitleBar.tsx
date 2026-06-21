@@ -22,6 +22,7 @@ import { useInterviewContext } from "@/hooks/useInterviewContext";
 import { SignalStrip } from "@/components/shell/SignalStrip";
 import { UserMenu } from "@/components/shell/UserMenu";
 import { WorkspaceTabs } from "@/components/shell/WorkspaceTabs";
+import constants from "@/constant.json";
 
 export default function TitleBar() {
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(true);
@@ -161,7 +162,7 @@ export default function TitleBar() {
             <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-accent" />
           </span>
           <span className="truncate text-[11px] font-semibold text-text-primary">
-            Interview Copilot
+            {constants.displayName}
           </span>
 
           {!compactMode && (

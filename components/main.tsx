@@ -24,6 +24,7 @@ import { useInterviewContext } from "@/hooks/useInterviewContext";
 import { Mic, Minimize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { sendGTMEvent } from "@next/third-parties/google";
+import constants from "@/constant.json";
 
 export default function MainPage() {
   const { activeTab, setActiveTab, compactMode, setCompactMode } = useTab();
@@ -140,7 +141,7 @@ export default function MainPage() {
               </div>
               <div className="min-w-0 hidden sm:block">
                 <p className="truncate text-sm font-semibold tracking-tight text-text-primary">
-                  Interview Copilot
+                  {constants.displayName}
                 </p>
                 <p className="truncate text-[11px] text-text-tertiary">
                   {session?.user

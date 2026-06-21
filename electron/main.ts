@@ -60,6 +60,28 @@ function resolveIconPath(): string {
   return path.join(__dirname, "../public/icons/android-chrome-512x512.png");
 }
 
+function loadDisplayName(): string {
+  const candidates = [
+    path.join(__dirname, "../constant.json"),
+    path.join(app.getAppPath(), "constant.json"),
+  ];
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) {
+        const parsed = JSON.parse(fs.readFileSync(candidate, "utf8")) as {
+          displayName?: string;
+        };
+        if (typeof parsed.displayName === "string" && parsed.displayName.length > 0) {
+          return parsed.displayName;
+        }
+      }
+    } catch {
+      /* try next candidate */
+    }
+  }
+  return "Meeting Copilot";
+}
+
 async function createWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   const iconPath = resolveIconPath();
@@ -216,6 +238,8 @@ async function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  app.setName(loadDisplayName());
+
   installPermissionRequestHandler(session.defaultSession);
   installDisplayMediaHandler(session.defaultSession);
 

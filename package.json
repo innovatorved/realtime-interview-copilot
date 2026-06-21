@@ -1,6 +1,6 @@
 {
   "name": "realtime-interview-copilot",
-  "version": "0.14.1-beta",
+  "version": "0.14.2-beta",
   "description": "Real-time AI copilot for interviews (beta desktop app)",
   "author": "Ved Gupta <vedgupta@protonmail.com>",
   "private": true,
@@ -98,7 +98,8 @@
       "out/**/*",
       "electron/**/*",
       "node_modules/**/*",
-      "package.json"
+      "package.json",
+      "constant.json"
     ],
     "directories": {
       "buildResources": "public"
