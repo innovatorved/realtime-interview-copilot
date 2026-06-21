@@ -85,7 +85,7 @@ function sha256File(filePath) {
 
 function versionFromDmgFilename(name) {
   const m = name.match(
-    /^Realtime Interview Copilot Beta-(\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?)-mac-arm64\.dmg$/i,
+    /^Realtime[ .]Interview[ .]Copilot[ .]Beta-(\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?)-mac-arm64\.dmg$/i,
   );
   return m ? m[1] : null;
 }
