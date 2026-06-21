@@ -79,7 +79,7 @@
   "build": {
     "appId": "com.realtime.interview.copilot.beta",
     "productName": "Meeting Copilot",
-    "artifactName": "Realtime.Interview.Copilot.Beta-${version}-${os}-${arch}.${ext}",
+    "artifactName": "Realtime Interview Copilot Beta-${version}-${os}-${arch}.${ext}",
     "publish": [
       {
         "provider": "github",

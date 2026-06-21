@@ -21,8 +21,10 @@ const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
 if (!pkg.build) pkg.build = {};
 
 pkg.build.productName = displayName;
+// Keep legacy download filenames (spaces) so CI sync + Homebrew/WinGet URLs stay
+// compatible with v0.14.x releases. productName alone controls the bundled .app name.
 pkg.build.artifactName =
-  "Realtime.Interview.Copilot.Beta-${version}-${os}-${arch}.${ext}";
+  "Realtime Interview Copilot Beta-${version}-${os}-${arch}.${ext}";
 
 if (pkg.build.mac?.extendInfo) {
   const info = pkg.build.mac.extendInfo;
