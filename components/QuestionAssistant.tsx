@@ -188,6 +188,46 @@ export function QuestionAssistant({
     }
   }, [appendImage, attachedImages.length]);
 
+  const submitQuestion = useCallback(
+    async (textOverride?: string) => {
+      if (isLoading) return;
+      const raw = textOverride ?? question;
+      if (!raw.trim() && attachedImages.length === 0) return;
+
+      stickToBottomRef.current = true;
+      setShowScrollDown(false);
+
+      const turnNumber = messages.length / 2 + 1;
+      posthog.capture("question_asked", {
+        question_length: raw.length,
+        has_image: attachedImages.length > 0,
+        image_count: attachedImages.length,
+        chat_turn: Math.floor(turnNumber),
+        is_follow_up: messages.length > 0,
+      });
+      trackEvent("question_asked", {
+        metadata: {
+          question_length: raw.length,
+          has_image: attachedImages.length > 0,
+          image_count: attachedImages.length,
+          chat_turn: Math.floor(turnNumber),
+          is_follow_up: messages.length > 0,
+        },
+      });
+
+      const effectivePrompt = raw.trim() || VISION_FALLBACK_PROMPT;
+      const imagesSnapshot =
+        attachedImages.length > 0 ? [...attachedImages] : undefined;
+
+      setQuestion("");
+      setAttachedImages([]);
+      micPrefixRef.current = "";
+
+      await chat.send({ text: effectivePrompt, images: imagesSnapshot });
+    },
+    [attachedImages, chat.send, isLoading, messages.length, question],
+  );
+
   // Mic-driven dictation. Interim transcripts live-update the question
   // input; on `stop()` (commit) we finalize and auto-submit. `cancel()`
   // (drag-off / window blur) clears the WS without submitting.
@@ -197,15 +237,7 @@ export function QuestionAssistant({
     },
     onFinal: (finalText) => {
       const merged = (micPrefixRef.current + finalText).trim();
-      setQuestion(merged);
-      // Auto-submit. Defer one tick so React commits the updated `question`
-      // state before handleSubmit reads it via the ref. We submit the form
-      // directly (rather than calling handleSubmit) so the existing
-      // in-flight/abort guards inside handleSubmit run consistently.
-      if (!merged && attachedImages.length === 0) return;
-      setTimeout(() => {
-        formRef.current?.requestSubmit();
-      }, 0);
+      void submitQuestion(merged);
     },
   });
 
@@ -329,52 +361,12 @@ export function QuestionAssistant({
   }, [isActive]);
 
   const handleSubmit = useCallback(
-    async (e: React.FormEvent<HTMLFormElement>) => {
+    (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
       e.stopPropagation();
-      // Defence against Enter-while-streaming and double-clicks on Send —
-      // useAskChat already refuses concurrent sends but it's cheaper to
-      // short-circuit here than wait for the hook to ignore.
-      if (isLoading) return;
-      if (!question.trim() && attachedImages.length === 0) return;
-
-      stickToBottomRef.current = true;
-      setShowScrollDown(false);
-
-      // Tail of the conversation so we can tag "follow-up vs first turn"
-      // in telemetry without leaking question content into PostHog.
-      const turnNumber = messages.length / 2 + 1; // approx user-turn count
-      posthog.capture("question_asked", {
-        question_length: question.length,
-        has_image: attachedImages.length > 0,
-        image_count: attachedImages.length,
-        chat_turn: Math.floor(turnNumber),
-        is_follow_up: messages.length > 0,
-      });
-      trackEvent("question_asked", {
-        metadata: {
-          question_length: question.length,
-          has_image: attachedImages.length > 0,
-          image_count: attachedImages.length,
-          chat_turn: Math.floor(turnNumber),
-          is_follow_up: messages.length > 0,
-        },
-      });
-
-      const effectivePrompt = question.trim() || VISION_FALLBACK_PROMPT;
-      const imagesSnapshot =
-        attachedImages.length > 0 ? [...attachedImages] : undefined;
-
-      // Clear the composer optimistically — the user's message has been
-      // appended to the thread by useAskChat, and a stale `question`
-      // value would re-submit on a second Enter press while the stream
-      // is still going.
-      setQuestion("");
-      setAttachedImages([]);
-
-      await chat.send({ text: effectivePrompt, images: imagesSnapshot });
+      void submitQuestion();
     },
-    [attachedImages, chat.send, isLoading, messages.length, question],
+    [submitQuestion],
   );
 
   const hasContent = messages.length > 0 || isLoading || !!error;

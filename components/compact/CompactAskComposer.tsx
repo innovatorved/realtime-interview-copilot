@@ -14,7 +14,6 @@ import type { useMicPushToTalk } from "@/hooks/useMicPushToTalk";
 import { Button } from "@/components/ui/button";
 import { formatShortcut } from "@/components/ui/Kbd";
 import { cn } from "@/lib/utils";
-import { VISION_FALLBACK_PROMPT } from "@/lib/vision-screenshot";
 import type { CompactOutputMode } from "./OutputPanel";
 
 interface CompactAskComposerProps {
@@ -32,6 +31,7 @@ interface CompactAskComposerProps {
   isLoading: boolean;
   setOutputMode: (mode: CompactOutputMode) => void;
   setOutputCollapsed: (collapsed: boolean) => void;
+  submitAskInput: (textOverride?: string) => void | Promise<void>;
 }
 
 export function CompactAskComposer({
@@ -49,6 +49,7 @@ export function CompactAskComposer({
   isLoading,
   setOutputMode,
   setOutputCollapsed,
+  submitAskInput,
 }: CompactAskComposerProps) {
   const showListening =
     askMic.state === "recording" ||
@@ -120,27 +121,7 @@ export function CompactAskComposer({
         className="flex items-center gap-1.5"
         onSubmit={(e) => {
           e.preventDefault();
-          if (isLoading) return;
-          if (chat.isStreaming) return;
-          if (!askInput.trim() && attachedImages.length === 0) return;
-
-          const text = askInput.trim() || VISION_FALLBACK_PROMPT;
-          const imagesSnapshot =
-            attachedImages.length > 0 ? [...attachedImages] : undefined;
-
-          setOutputMode("chat");
-          setOutputCollapsed(false);
-          setAskInput("");
-          clearAttachedImages();
-          posthog.capture("question_asked", {
-            question_length: text.length,
-            has_image: !!imagesSnapshot,
-            image_count: imagesSnapshot?.length ?? 0,
-            surface: "compact",
-            chat_turn: Math.floor(chat.messages.length / 2) + 1,
-            is_follow_up: chat.messages.length > 0,
-          });
-          void chat.send({ text, images: imagesSnapshot });
+          void submitAskInput();
         }}
       >
         <input

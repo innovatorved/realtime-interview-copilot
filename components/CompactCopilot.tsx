@@ -11,7 +11,7 @@ import { useAskMic } from "@/hooks/useAskMic";
 import { useMicPushToTalk } from "@/hooks/useMicPushToTalk";
 import { dbg } from "@/lib/debug";
 import { FLAGS, type HistoryData } from "@/lib/types";
-import { isVisionScreenshotDataUrl } from "@/lib/vision-screenshot";
+import { isVisionScreenshotDataUrl, VISION_FALLBACK_PROMPT } from "@/lib/vision-screenshot";
 import { CompactAskComposer } from "./compact/CompactAskComposer";
 import { CompactContextDrawer } from "./compact/CompactContextDrawer";
 import { CompactLiveTranscript } from "./compact/CompactLiveTranscript";
@@ -205,6 +205,45 @@ export function CompactCopilot({
     };
   }, [generateControllerRef]);
 
+  const submitAskInput = useCallback(
+    async (textOverride?: string) => {
+      if (isLoading) return;
+      if (chat.isStreaming) return;
+      const raw = textOverride ?? askInput;
+      if (!raw.trim() && attachedImages.length === 0) return;
+
+      const text = raw.trim() || VISION_FALLBACK_PROMPT;
+      const imagesSnapshot =
+        attachedImages.length > 0 ? [...attachedImages] : undefined;
+
+      setOutputMode("chat");
+      setOutputCollapsed(false);
+      setAskInput("");
+      clearAttachedImages();
+      micPrefixRef.current = "";
+      posthog.capture("question_asked", {
+        question_length: text.length,
+        has_image: !!imagesSnapshot,
+        image_count: imagesSnapshot?.length ?? 0,
+        surface: "compact",
+        chat_turn: Math.floor(chat.messages.length / 2) + 1,
+        is_follow_up: chat.messages.length > 0,
+      });
+      void chat.send({ text, images: imagesSnapshot });
+    },
+    [
+      askInput,
+      attachedImages,
+      chat.isStreaming,
+      chat.messages.length,
+      chat.send,
+      clearAttachedImages,
+      isLoading,
+      setOutputCollapsed,
+      setOutputMode,
+    ],
+  );
+
   // Mic dictation for the compact Ask AI drawer. Mirrors QuestionAssistant:
   // interim transcripts live-fill the input, stop auto-submits, cancel
   // (drag-off) just drops the recording.
@@ -214,12 +253,7 @@ export function CompactCopilot({
     },
     onFinal: (finalText) => {
       const merged = (micPrefixRef.current + finalText).trim();
-      setAskInput(merged);
-      if (!merged && attachedImages.length === 0) return;
-      // Auto-submit on next tick so React commits setAskInput first.
-      setTimeout(() => {
-        askFormRef.current?.requestSubmit();
-      }, 0);
+      void submitAskInput(merged);
     },
   });
 
@@ -451,6 +485,7 @@ export function CompactCopilot({
           isLoading={isLoading}
           setOutputMode={setOutputMode}
           setOutputCollapsed={setOutputCollapsed}
+          submitAskInput={submitAskInput}
         />
       )}
 
