@@ -221,11 +221,8 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
     steps:
-      - name: Checkout main
+      - name: Checkout source repo
         uses: actions/checkout@v4
-        with:
-          ref: main
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download release artifacts
         uses: actions/download-artifact@v4
@@ -243,16 +240,39 @@ jobs:
           RELEASE_TAG: ${{ needs.release.outputs.tag }}
         run: node scripts/update-winget-manifest.js
 
-      - name: Commit manifest bump to main
+      - name: Check for winget token
+        id: token
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_MANIFEST_TOKEN || secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "$WINGET_TOKEN" ]; then
+            echo "has_token=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::WINGET_MANIFEST_TOKEN / HOMEBREW_TAP_TOKEN not set — skipping winget push. Manifests were regenerated locally under winget/."
+          else
+            echo "has_token=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push manifests to innovatorved/winget
+        if: steps.token.outputs.has_token == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_MANIFEST_TOKEN || secrets.HOMEBREW_TAP_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
+          WINGET_DIR="$RUNNER_TEMP/winget"
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/innovatorved/winget.git" "$WINGET_DIR"
+          rsync -a --delete winget/manifests/ "$WINGET_DIR/manifests/"
+          rsync -a winget/packages/ "$WINGET_DIR/packages/"
+          cp winget/install.ps1 "$WINGET_DIR/install.ps1"
+          cp winget/install-realtime-interview-copilot.ps1 "$WINGET_DIR/install-realtime-interview-copilot.ps1"
+          cp winget/hub/README.md "$WINGET_DIR/README.md"
+          cd "$WINGET_DIR"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add winget/
+          git add manifests packages install.ps1 install-realtime-interview-copilot.ps1 README.md
           if git diff --cached --quiet; then
-            echo "No winget manifest changes to commit."
+            echo "No winget hub changes to commit."
             exit 0
           fi
-          git commit -m "winget: bump manifests for ${{ needs.release.outputs.tag || github.ref_name }}"
-          git push origin main
+          git commit -m "realtime-interview-copilot: bump manifests for ${{ needs.release.outputs.tag || github.ref_name }}"
+          git push origin HEAD

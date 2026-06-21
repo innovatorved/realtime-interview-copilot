@@ -129,8 +129,8 @@ personal information from them.
 
 ## 7. Security
 
-- Releases are distributed via GitHub Releases, Homebrew (macOS), and WinGet
-  manifests in this repo under `winget/`.
+- Releases are distributed via GitHub Releases, Homebrew (macOS), and the
+  [innovatorved/winget](https://github.com/innovatorved/winget) hub for Windows.
 - macOS builds are ad-hoc signed; Windows builds are currently unsigned
   (users bypass SmartScreen via "More info → Run anyway").
 - All network traffic uses HTTPS.

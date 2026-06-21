@@ -20,6 +20,7 @@ const pkgVersion = pkg.version;
 const GITHUB_OWNER = "innovatorved";
 const GITHUB_REPO = "realtime-interview-copilot";
 const PACKAGE_ID = "Innovatorved.RealtimeInterviewCopilot";
+const PACKAGE_FOLDER = "RealtimeInterviewCopilot";
 
 const refName = (
   process.env.RELEASE_TAG?.trim() ||
@@ -69,7 +70,7 @@ function writeManifests(version, sha256) {
   );
   fs.mkdirSync(manifestDir, { recursive: true });
 
-  const versionYaml = `# Managed in this repo under winget/.
+  const versionYaml = `# Synced to github.com/${GITHUB_OWNER}/winget by CI.
 # scripts/update-winget-manifest.js rewrites version, url, and sha256 fields.
 PackageIdentifier: ${PACKAGE_ID}
 PackageVersion: ${version}
@@ -78,7 +79,7 @@ ManifestType: version
 ManifestVersion: 1.6.0
 `;
 
-  const installerYaml = `# Managed in this repo under winget/.
+  const installerYaml = `# Synced to github.com/${GITHUB_OWNER}/winget by CI.
 PackageIdentifier: ${PACKAGE_ID}
 PackageVersion: ${version}
 Installers:
@@ -97,7 +98,7 @@ ManifestType: installer
 ManifestVersion: 1.6.0
 `;
 
-  const localeYaml = `# Managed in this repo under winget/.
+  const localeYaml = `# Synced to github.com/${GITHUB_OWNER}/winget by CI.
 PackageIdentifier: ${PACKAGE_ID}
 PackageVersion: ${version}
 PackageLocale: en-US
@@ -133,13 +134,20 @@ ManifestVersion: 1.6.0
     localeYaml,
   );
 
-  const latestPath = path.join(root, "winget", "LATEST");
+  const latestPath = path.join(
+    root,
+    "winget",
+    "packages",
+    PACKAGE_FOLDER,
+    "LATEST",
+  );
+  fs.mkdirSync(path.dirname(latestPath), { recursive: true });
   fs.writeFileSync(latestPath, `${version}\n`);
 
   console.log(`✅ Wrote manifests → ${manifestDir}`);
   console.log(`   InstallerUrl: ${installerUrl(version)}`);
   console.log(`   InstallerSha256: ${sha256}`);
-  console.log(`   LATEST → ${version}`);
+  console.log(`   packages/${PACKAGE_FOLDER}/LATEST → ${version}`);
 }
 
 const winExes = fs

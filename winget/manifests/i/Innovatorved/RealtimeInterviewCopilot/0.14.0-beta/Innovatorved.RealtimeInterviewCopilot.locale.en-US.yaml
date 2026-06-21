@@ -1,4 +1,4 @@
-# Managed in this repo under winget/.
+# Synced to github.com/innovatorved/winget by CI.
 PackageIdentifier: Innovatorved.RealtimeInterviewCopilot
 PackageVersion: 0.14.0-beta
 PackageLocale: en-US
