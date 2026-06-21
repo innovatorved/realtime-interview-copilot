@@ -2,8 +2,8 @@
 
 // Regenerates winget/manifests/i/Innovatorved/RealtimeInterviewCopilot/<version>/:
 // - PackageVersion, InstallerUrl, InstallerSha256 from the x64 NSIS .exe in release-assets/
-// - EXE basename must follow package.json build.artifactName (URL-safe dots):
-//     Realtime.Interview.Copilot.Beta-<semver>-win-x64.exe
+// - EXE basename from CI: Realtime Interview Copilot Beta-<semver>-win-x64.exe (spaces)
+// - GitHub Release URL uses dots: Realtime.Interview.Copilot.Beta-<semver>-win-x64.exe
 // - RELEASE_TAG (e.g. v0.14.0-beta) must match the semver inside that filename
 //   (after stripping "v"). Otherwise CI fails — bump package.json before tagging.
 
@@ -45,10 +45,10 @@ if (!fs.existsSync(assetsDir)) {
   process.exit(1);
 }
 
-/** Semver before -win-x64.exe (matches build.artifactName, dots not spaces). */
+/** Semver before -win-x64.exe. CI artifacts use spaces; GitHub Release URLs use dots. */
 function versionFromExeFilename(name) {
   const m = name.match(
-    /^Realtime\.Interview\.Copilot\.Beta-(\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?)-win-x64\.exe$/i,
+    /^Realtime[ .]Interview[ .]Copilot[ .]Beta-(\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?)-win-x64\.exe$/i,
   );
   return m ? m[1] : null;
 }
@@ -239,9 +239,12 @@ if (pkgVersion !== version) {
   );
 }
 
-const expectedBase = `Realtime.Interview.Copilot.Beta-${version}-win-x64.exe`;
-if (exeName !== expectedBase) {
-  console.error(`❌ Unexpected EXE name ${exeName} (expected ${expectedBase})`);
+const expectedCi = `Realtime Interview Copilot Beta-${version}-win-x64.exe`;
+const expectedRelease = `Realtime.Interview.Copilot.Beta-${version}-win-x64.exe`;
+if (exeName !== expectedCi && exeName !== expectedRelease) {
+  console.error(
+    `❌ Unexpected EXE name ${exeName} (expected ${expectedCi} from CI or ${expectedRelease} from release)`,
+  );
   process.exit(1);
 }
 

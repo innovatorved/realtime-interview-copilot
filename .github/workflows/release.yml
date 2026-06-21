@@ -261,8 +261,10 @@ jobs:
           set -euo pipefail
           WINGET_DIR="$RUNNER_TEMP/winget"
           git clone "https://x-access-token:${GH_TOKEN}@github.com/innovatorved/winget.git" "$WINGET_DIR"
-          rsync -a --delete winget/manifests/ "$WINGET_DIR/manifests/"
-          rsync -a winget/packages/ "$WINGET_DIR/packages/"
+          mkdir -p "$WINGET_DIR/manifests/i/Innovatorved/RealtimeInterviewCopilot"
+          mkdir -p "$WINGET_DIR/packages/RealtimeInterviewCopilot"
+          rsync -a --delete winget/manifests/i/Innovatorved/RealtimeInterviewCopilot/ "$WINGET_DIR/manifests/i/Innovatorved/RealtimeInterviewCopilot/"
+          rsync -a winget/packages/RealtimeInterviewCopilot/ "$WINGET_DIR/packages/RealtimeInterviewCopilot/"
           cp winget/install.ps1 "$WINGET_DIR/install.ps1"
           cp winget/install-realtime-interview-copilot.ps1 "$WINGET_DIR/install-realtime-interview-copilot.ps1"
           cp winget/hub/README.md "$WINGET_DIR/README.md"
