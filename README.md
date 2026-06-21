@@ -37,7 +37,7 @@ Homebrew-managed installs should use `brew upgrade` rather than the in-app updat
 Windows (WinGet, one command):
 
 ```powershell
-irm https://raw.githubusercontent.com/innovatorved/winget/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/innovatorved/realtime-interview-copilot/main/winget/install.ps1 | iex
 ```
 
 To update an existing WinGet install, re-run the same command.
@@ -45,7 +45,7 @@ To update an existing WinGet install, re-run the same command.
 To uninstall:
 
 ```powershell
-winget uninstall -e --id InnovatorVed.RealtimeInterviewCopilot
+winget uninstall -e --id Innovatorved.RealtimeInterviewCopilot
 ```
 
 WinGet-managed installs should use the install script above rather than the in-app updater. Windows builds are unsigned; SmartScreen may prompt on first launch (**More info → Run anyway**).

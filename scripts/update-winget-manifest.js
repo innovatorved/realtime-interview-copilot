@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// Regenerates winget/manifests/i/InnovatorVed/RealtimeInterviewCopilot/<version>/:
+// Regenerates winget/manifests/i/Innovatorved/RealtimeInterviewCopilot/<version>/:
 // - PackageVersion, InstallerUrl, InstallerSha256 from the x64 NSIS .exe in release-assets/
 // - EXE basename must follow package.json build.artifactName (URL-safe dots):
 //     Realtime.Interview.Copilot.Beta-<semver>-win-x64.exe
@@ -19,7 +19,7 @@ const pkgVersion = pkg.version;
 
 const GITHUB_OWNER = "innovatorved";
 const GITHUB_REPO = "realtime-interview-copilot";
-const PACKAGE_ID = "InnovatorVed.RealtimeInterviewCopilot";
+const PACKAGE_ID = "Innovatorved.RealtimeInterviewCopilot";
 
 const refName = (
   process.env.RELEASE_TAG?.trim() ||
@@ -63,13 +63,13 @@ function writeManifests(version, sha256) {
     "winget",
     "manifests",
     "i",
-    "InnovatorVed",
+    "Innovatorved",
     "RealtimeInterviewCopilot",
     version,
   );
   fs.mkdirSync(manifestDir, { recursive: true });
 
-  const versionYaml = `# Synced to github.com/${GITHUB_OWNER}/winget by CI.
+  const versionYaml = `# Managed in this repo under winget/.
 # scripts/update-winget-manifest.js rewrites version, url, and sha256 fields.
 PackageIdentifier: ${PACKAGE_ID}
 PackageVersion: ${version}
@@ -78,7 +78,7 @@ ManifestType: version
 ManifestVersion: 1.6.0
 `;
 
-  const installerYaml = `# Synced to github.com/${GITHUB_OWNER}/winget by CI.
+  const installerYaml = `# Managed in this repo under winget/.
 PackageIdentifier: ${PACKAGE_ID}
 PackageVersion: ${version}
 Installers:
@@ -92,16 +92,16 @@ Installers:
       SilentWithProgress: /S
     AppsAndFeaturesEntries:
       - DisplayName: Realtime Interview Copilot Beta
-        Publisher: InnovatorVed
+        Publisher: Innovatorved
 ManifestType: installer
 ManifestVersion: 1.6.0
 `;
 
-  const localeYaml = `# Synced to github.com/${GITHUB_OWNER}/winget by CI.
+  const localeYaml = `# Managed in this repo under winget/.
 PackageIdentifier: ${PACKAGE_ID}
 PackageVersion: ${version}
 PackageLocale: en-US
-Publisher: InnovatorVed
+Publisher: Innovatorved
 PublisherUrl: https://github.com/${GITHUB_OWNER}
 PublisherSupportUrl: https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/issues
 PackageName: Realtime Interview Copilot Beta

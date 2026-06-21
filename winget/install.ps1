@@ -4,19 +4,19 @@
   Install or upgrade Realtime Interview Copilot Beta via WinGet using private manifests.
 
 .DESCRIPTION
-  Downloads the latest manifest bundle from github.com/innovatorved/winget and runs
+  Downloads the latest manifest bundle from this repo's winget/ folder and runs
   winget install/upgrade against the local manifest path. No winget source registration
   or admin rights are required for source setup.
 
 .EXAMPLE
-  irm https://raw.githubusercontent.com/innovatorved/winget/main/install.ps1 | iex
+  irm https://raw.githubusercontent.com/innovatorved/realtime-interview-copilot/main/winget/install.ps1 | iex
 #>
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$PackageId = 'InnovatorVed.RealtimeInterviewCopilot'
-$WingetRepo = 'https://github.com/innovatorved/winget'
-$ZipUrl = "$WingetRepo/archive/refs/heads/main.zip"
+$PackageId = 'Innovatorved.RealtimeInterviewCopilot'
+$AppRepo = 'https://github.com/innovatorved/realtime-interview-copilot'
+$ZipUrl = "$AppRepo/archive/refs/heads/main.zip"
 
 function Ensure-Winget {
     if (Get-Command winget -ErrorAction SilentlyContinue) {
@@ -35,18 +35,23 @@ function Get-LatestVersionFromZip {
     Expand-Archive -Path $ZipPath -DestinationPath $ExtractRoot -Force
     $repoDir = Get-ChildItem -Path $ExtractRoot -Directory | Select-Object -First 1
     if (-not $repoDir) {
-        throw "Could not find extracted winget repo under $ExtractRoot"
+        throw "Could not find extracted repo under $ExtractRoot"
     }
 
-    $latestFile = Join-Path $repoDir.FullName 'LATEST'
+    $wingetRoot = Join-Path $repoDir.FullName 'winget'
+    if (-not (Test-Path $wingetRoot)) {
+        throw "No winget/ folder found in $AppRepo"
+    }
+
+    $latestFile = Join-Path $wingetRoot 'LATEST'
     if (Test-Path $latestFile) {
         $version = (Get-Content $latestFile -Raw).Trim()
         if ($version) {
-            return @{ Version = $version; RepoDir = $repoDir.FullName }
+            return @{ Version = $version; WingetRoot = $wingetRoot }
         }
     }
 
-    $manifestRoot = Join-Path $repoDir.FullName 'manifests\i\InnovatorVed\RealtimeInterviewCopilot'
+    $manifestRoot = Join-Path $wingetRoot 'manifests\i\Innovatorved\RealtimeInterviewCopilot'
     if (-not (Test-Path $manifestRoot)) {
         throw "No manifests found at $manifestRoot"
     }
@@ -58,7 +63,7 @@ function Get-LatestVersionFromZip {
         throw "No version folders under $manifestRoot"
     }
 
-    return @{ Version = $versionDir.Name; RepoDir = $repoDir.FullName }
+    return @{ Version = $versionDir.Name; WingetRoot = $wingetRoot }
 }
 
 Ensure-Winget
@@ -67,15 +72,15 @@ $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("winget-ric-" + [guid]:
 New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
 
 try {
-    $zipPath = Join-Path $tempRoot 'winget.zip'
-    Write-Host "→ Downloading manifests from $WingetRepo ..."
+    $zipPath = Join-Path $tempRoot 'repo.zip'
+    Write-Host "→ Downloading manifests from $AppRepo ..."
     Invoke-WebRequest -Uri $ZipUrl -OutFile $zipPath -UseBasicParsing
 
     $extractRoot = Join-Path $tempRoot 'extract'
     New-Item -ItemType Directory -Path $extractRoot -Force | Out-Null
     $info = Get-LatestVersionFromZip -ZipPath $zipPath -ExtractRoot $extractRoot
 
-    $manifestPath = Join-Path $info.RepoDir "manifests\i\InnovatorVed\RealtimeInterviewCopilot\$($info.Version)"
+    $manifestPath = Join-Path $info.WingetRoot "manifests\i\Innovatorved\RealtimeInterviewCopilot\$($info.Version)"
     if (-not (Test-Path $manifestPath)) {
         throw "Manifest path not found: $manifestPath"
     }

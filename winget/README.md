@@ -1,11 +1,11 @@
-# WinGet manifests for Realtime Interview Copilot
+# WinGet manifests
 
-Private WinGet manifest repo for [Realtime Interview Copilot Beta](https://github.com/innovatorved/realtime-interview-copilot). Manifests are auto-bumped on each app release by CI in the main repo.
+WinGet manifests for Realtime Interview Copilot Beta, kept in this repo under `winget/`. CI bumps them on each release.
 
 ## Install (one command)
 
 ```powershell
-irm https://raw.githubusercontent.com/innovatorved/winget/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/innovatorved/realtime-interview-copilot/main/winget/install.ps1 | iex
 ```
 
 Requires [WinGet](https://apps.microsoft.com/detail/9nblggh4nns1) (App Installer from Microsoft Store).
@@ -15,19 +15,19 @@ Requires [WinGet](https://apps.microsoft.com/detail/9nblggh4nns1) (App Installer
 Re-run the install script (it detects an existing install and runs `winget upgrade`):
 
 ```powershell
-irm https://raw.githubusercontent.com/innovatorved/winget/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/innovatorved/realtime-interview-copilot/main/winget/install.ps1 | iex
 ```
 
 ## Uninstall
 
 ```powershell
-winget uninstall -e --id InnovatorVed.RealtimeInterviewCopilot
+winget uninstall -e --id Innovatorved.RealtimeInterviewCopilot
 ```
 
 ## Manual install (local manifests)
 
 ```powershell
-winget install -e --id InnovatorVed.RealtimeInterviewCopilot --manifest .\manifests\i\InnovatorVed\RealtimeInterviewCopilot\0.14.0-beta
+winget install -e --id Innovatorved.RealtimeInterviewCopilot --manifest .\winget\manifests\i\Innovatorved\RealtimeInterviewCopilot\0.14.0-beta
 ```
 
 Replace the version folder with the latest entry in `LATEST`.
@@ -35,7 +35,7 @@ Replace the version folder with the latest entry in `LATEST`.
 ## Validate manifests (maintainers)
 
 ```powershell
-winget validate .\manifests
+winget validate .\winget\manifests
 ```
 
 ## Unsigned builds
@@ -44,4 +44,4 @@ Windows installers are not code-signed. WinGet will install the app, but Windows
 
 ## Maintainer sync
 
-CI in `innovatorved/realtime-interview-copilot` pushes updated manifests here when `WINGET_MANIFEST_TOKEN` is configured. The working copy of manifests lives under `winget/` in the main repo.
+`scripts/update-winget-manifest.js` regenerates version, URL, and SHA256 from release assets. CI runs it after each GitHub Release and commits the updated `winget/` folder to `main`.

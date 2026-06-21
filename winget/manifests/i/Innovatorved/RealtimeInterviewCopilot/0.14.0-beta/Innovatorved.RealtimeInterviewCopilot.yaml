@@ -1,6 +1,6 @@
-# Synced to github.com/innovatorved/winget by CI.
+# Managed in this repo under winget/.
 # scripts/update-winget-manifest.js rewrites version, url, and sha256 fields.
-PackageIdentifier: InnovatorVed.RealtimeInterviewCopilot
+PackageIdentifier: Innovatorved.RealtimeInterviewCopilot
 PackageVersion: 0.14.0-beta
 DefaultLocale: en-US
 ManifestType: version
