@@ -153,12 +153,10 @@ jobs:
             release-assets/*.blockmap
             release-assets/*.yml
 
-  tap:
-    name: Update Homebrew tap
+  sync-distribution:
+    name: Sync Homebrew + WinGet hubs
     needs: release
     runs-on: ubuntu-latest
-    # Skip gracefully when the tap token is not configured so this job never
-    # blocks a release; maintainers can still bump the cask manually.
     if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
     steps:
       - name: Checkout source repo
@@ -175,106 +173,85 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Regenerate cask with new version + sha256
-        env:
-          # workflow_dispatch uses the branch ref for GITHUB_REF_NAME; this is the real release tag.
-          RELEASE_TAG: ${{ needs.release.outputs.tag }}
-        run: node scripts/update-homebrew-cask.js
-
-      - name: Check for tap token
-        id: token
+      - name: Check distribution tokens
+        id: tokens
         env:
           TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: |
-          if [ -z "$TAP_TOKEN" ]; then
-            echo "has_token=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::HOMEBREW_TAP_TOKEN not set — skipping tap push. Cask was regenerated locally under homebrew/Casks/."
-          else
-            echo "has_token=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Push cask to innovatorved/homebrew-tap
-        if: steps.token.outputs.has_token == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          TAP_DIR="$RUNNER_TEMP/homebrew-tap"
-          git clone "https://x-access-token:${GH_TOKEN}@github.com/innovatorved/homebrew-tap.git" "$TAP_DIR"
-          mkdir -p "$TAP_DIR/Casks"
-          cp homebrew/Casks/realtime-interview-copilot.rb "$TAP_DIR/Casks/realtime-interview-copilot.rb"
-          cd "$TAP_DIR"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Casks/realtime-interview-copilot.rb
-          if git diff --cached --quiet; then
-            echo "No cask changes to commit."
-            exit 0
-          fi
-          git commit -m "realtime-interview-copilot: bump cask for ${{ needs.release.outputs.tag || github.ref_name }}"
-          git push origin HEAD
-
-  winget:
-    name: Update winget manifests
-    needs: release
-    runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
-    steps:
-      - name: Checkout source repo
-        uses: actions/checkout@v5
-
-      - name: Download release artifacts
-        uses: actions/download-artifact@v5
-        with:
-          path: release-assets
-          merge-multiple: true
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: "22"
-
-      - name: Regenerate winget manifests with new version + sha256
-        env:
-          RELEASE_TAG: ${{ needs.release.outputs.tag }}
-        run: node scripts/update-winget-manifest.js
-
-      - name: Check for winget token
-        id: token
-        env:
           WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
         run: |
-          if [ -z "$WINGET_TOKEN" ]; then
-            echo "has_token=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::WINGET_TOKEN not set — skipping winget push. Add a fine-grained PAT with Contents write on innovatorved/winget."
+          if [ -n "$TAP_TOKEN" ]; then
+            echo "has_tap=true" >> "$GITHUB_OUTPUT"
           else
-            echo "has_token=true" >> "$GITHUB_OUTPUT"
+            echo "has_tap=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::HOMEBREW_TAP_TOKEN not set — skipping Homebrew tap push."
+          fi
+          if [ -n "$WINGET_TOKEN" ]; then
+            echo "has_winget=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_winget=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::WINGET_TOKEN not set — skipping WinGet hub push."
           fi
 
-      - name: Push manifests to innovatorved/winget
-        if: steps.token.outputs.has_token == 'true'
+      - name: Clone hub repos and sync distribution files
+        if: steps.tokens.outputs.has_tap == 'true' || steps.tokens.outputs.has_winget == 'true'
         env:
-          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          RELEASE_TAG: ${{ needs.release.outputs.tag }}
         shell: bash
         run: |
           set -euo pipefail
-          WINGET_DIR="$RUNNER_TEMP/winget"
-          git clone "https://x-access-token:${GH_TOKEN}@github.com/innovatorved/winget.git" "$WINGET_DIR"
-          mkdir -p "$WINGET_DIR/manifests/i/Innovatorved/RealtimeInterviewCopilot"
-          mkdir -p "$WINGET_DIR/packages/RealtimeInterviewCopilot"
-          rsync -a --delete winget/manifests/i/Innovatorved/RealtimeInterviewCopilot/ "$WINGET_DIR/manifests/i/Innovatorved/RealtimeInterviewCopilot/"
-          rsync -a winget/packages/RealtimeInterviewCopilot/ "$WINGET_DIR/packages/RealtimeInterviewCopilot/"
-          cp winget/install.ps1 "$WINGET_DIR/install.ps1"
-          cp winget/install-realtime-interview-copilot.ps1 "$WINGET_DIR/install-realtime-interview-copilot.ps1"
-          cp winget/hub/README.md "$WINGET_DIR/README.md"
-          cd "$WINGET_DIR"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add manifests packages install.ps1 install-realtime-interview-copilot.ps1 README.md
-          if git diff --cached --quiet; then
-            echo "No winget hub changes to commit."
-            exit 0
+          TAG="${{ needs.release.outputs.tag || github.ref_name }}"
+
+          push_with_retry() {
+            local dir="$1"
+            local msg="$2"
+            local add_paths="$3"
+            cd "$dir"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            # shellcheck disable=SC2086
+            git add $add_paths
+            if git diff --cached --quiet; then
+              echo "No changes to commit in $(basename "$dir")."
+              return 0
+            fi
+            git commit -m "$msg"
+            for i in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin main; then
+                return 0
+              fi
+              sleep $((i * 3))
+            done
+            echo "❌ git push failed after retries in $(basename "$dir")"
+            return 1
+          }
+
+          TAP_DIR=""
+          WINGET_DIR=""
+
+          if [ "${{ steps.tokens.outputs.has_tap }}" = "true" ]; then
+            TAP_DIR="$RUNNER_TEMP/homebrew-tap"
+            git clone "https://x-access-token:${TAP_TOKEN}@github.com/innovatorved/homebrew-tap.git" "$TAP_DIR"
           fi
-          git commit -m "realtime-interview-copilot: bump manifests for ${{ needs.release.outputs.tag || github.ref_name }}"
-          git push origin HEAD
+
+          if [ "${{ steps.tokens.outputs.has_winget }}" = "true" ]; then
+            WINGET_DIR="$RUNNER_TEMP/winget"
+            git clone "https://x-access-token:${WINGET_TOKEN}@github.com/innovatorved/winget.git" "$WINGET_DIR"
+          fi
+
+          TAP_DIR="$TAP_DIR" WINGET_DIR="$WINGET_DIR" \
+            RELEASE_ASSETS_DIR="$GITHUB_WORKSPACE/release-assets" \
+            node scripts/sync-distribution.js
+
+          if [ -n "$TAP_DIR" ]; then
+            push_with_retry "$TAP_DIR" \
+              "realtime-interview-copilot: bump cask for ${TAG}" \
+              "Casks/realtime-interview-copilot.rb"
+          fi
+
+          if [ -n "$WINGET_DIR" ]; then
+            push_with_retry "$WINGET_DIR" \
+              "realtime-interview-copilot: bump manifests for ${TAG}" \
+              "manifests/i/Innovatorved/RealtimeInterviewCopilot packages/RealtimeInterviewCopilot/LATEST"
+          fi

@@ -63,3 +63,5 @@ next-env.d.ts
 .agents/
 skills-lock.json
 ARCHITECTURE.md
+.cursor/
+.vscode/
