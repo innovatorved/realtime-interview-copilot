@@ -1,7 +1,7 @@
 "use client";
 
 import posthog from "posthog-js";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useAskScreenshotBridge } from "@/components/ask/useAskScreenshotBridge";
 import { useAskKeyboard } from "@/components/ask/useAskKeyboard";
 import { useTranscription } from "@/components/TranscriptionContext";
@@ -423,7 +423,7 @@ export function CompactCopilot({
   };
   const compactHeight = resolveCompactHeight(compactLayout);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     onCompactHeightChange?.(compactHeight);
   }, [compactHeight, onCompactHeightChange]);
 

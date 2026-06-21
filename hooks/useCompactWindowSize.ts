@@ -17,6 +17,7 @@ export const COMPACT_HEIGHT_TRANSCRIPT = 140;
 export const COMPACT_HEIGHT_COMPOSER = 120;
 export const COMPACT_HEIGHT_COMPOSER_IMAGES = 168;
 export const COMPACT_HEIGHT_OUTPUT = 300;
+/** Unified compact height whenever output (Copilot, Summarize, or Ask AI) is visible. */
 export const COMPACT_HEIGHT_OUTPUT_COMPOSER = 420;
 export const COMPACT_HEIGHT_CONTEXT_EXTRA = 80;
 
@@ -40,10 +41,8 @@ export function resolveCompactHeight(state: CompactLayoutState): number {
 
   let height = COMPACT_HEIGHT_IDLE;
 
-  if (hasVisibleOutput && askMode) {
+  if (hasVisibleOutput) {
     height = COMPACT_HEIGHT_OUTPUT_COMPOSER;
-  } else if (hasVisibleOutput) {
-    height = COMPACT_HEIGHT_OUTPUT;
   } else if (askMode) {
     height = hasAttachedImages
       ? COMPACT_HEIGHT_COMPOSER_IMAGES

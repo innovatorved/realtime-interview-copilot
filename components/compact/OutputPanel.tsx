@@ -122,9 +122,13 @@ export function OutputPanel({
       ) : completion ? (
         <div
           data-clickable
-          className={`prose prose-invert prose-xs max-w-none text-sm leading-relaxed text-text-primary ${compactTextSurface} ${overlayTextShadow}`}
+          className={`rounded-lg px-2.5 py-1.5 text-xs leading-relaxed text-text-primary ${compactTextSurface} ${overlayTextShadow}`}
         >
-          <SafeMarkdown>{completion}</SafeMarkdown>
+          <div
+            className="prose prose-invert prose-sm max-w-none break-words prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-pre:my-2 prose-pre:rounded-md prose-headings:my-2 prose-headings:font-semibold prose-code:text-accent-text prose-code:before:content-none prose-code:after:content-none prose-a:text-accent-text"
+          >
+            <SafeMarkdown>{completion}</SafeMarkdown>
+          </div>
         </div>
       ) : (
         <div
