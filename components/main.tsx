@@ -5,7 +5,10 @@ import { CompactCopilot } from "@/components/CompactCopilot";
 import History from "@/components/History";
 import { QuestionAssistant } from "@/components/QuestionAssistant";
 import { ScreenRecordingOnboard } from "@/components/ScreenRecordingOnboard";
-import { AppBackdrop } from "@/components/AppBackdropContext";
+import {
+  AppBackdrop,
+  useAppBackdrop,
+} from "@/components/AppBackdropContext";
 import { AlertBanner } from "@/components/shell/AlertBanner";
 import { SignalStrip } from "@/components/shell/SignalStrip";
 import { UserMenu } from "@/components/shell/UserMenu";
@@ -31,6 +34,7 @@ import constants from "@/constant.json";
 
 export default function MainPage() {
   const { activeTab, setActiveTab, compactMode, setCompactMode } = useTab();
+  const { backdropOpacity } = useAppBackdrop();
   const { saveContext } = useInterviewContext();
   const { data: session } = authClient.useSession();
   const [isElectron, setIsElectron] = useState(false);
@@ -67,7 +71,13 @@ export default function MainPage() {
     if (!compactMode) setCompactHeight(COMPACT_HEIGHT_IDLE);
   }, [compactMode]);
 
-  useClickThrough(compactMode, isElectron);
+  useClickThrough(compactMode, isElectron, backdropOpacity);
+
+  useEffect(() => {
+    if (isElectron && !compactMode) {
+      window.electronAPI?.windowSetIgnoreMouseEvents?.(false)?.catch(() => {});
+    }
+  }, [isElectron, compactMode]);
 
   const setCompactModePersisted = useCallback(
     (next: boolean) => {

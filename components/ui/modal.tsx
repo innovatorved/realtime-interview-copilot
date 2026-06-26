@@ -22,7 +22,10 @@ export function Modal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-surface-base/80 p-4 animate-fade-in-scale">
+    <div
+      data-clickable
+      className="fixed inset-0 z-[110] flex items-center justify-center bg-surface-base/80 p-4 animate-fade-in-scale"
+    >
       <div
         className={cn(
           "relative w-full max-w-sm rounded-lg border border-border-subtle bg-surface-raised p-5 shadow-lg",

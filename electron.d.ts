@@ -41,6 +41,7 @@ export interface ElectronAPI {
     options?: { forward?: boolean },
   ) => Promise<void>;
   windowFocus?: () => Promise<void>;
+  onWindowFocus?: (callback: () => void) => () => void;
   appQuit: () => Promise<void>;
   appRelaunch: () => Promise<void>;
   updaterGetVersion?: () => Promise<string>;

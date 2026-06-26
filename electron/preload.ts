@@ -37,6 +37,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     options?: { forward?: boolean },
   ) => ipcRenderer.invoke("window-set-ignore-mouse-events", ignore, options),
   windowFocus: () => ipcRenderer.invoke("window-focus"),
+  onWindowFocus: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on("window:focus", handler);
+    return () => ipcRenderer.removeListener("window:focus", handler);
+  },
   appQuit: () => ipcRenderer.invoke("app-quit"),
   appRelaunch: () => ipcRenderer.invoke("app-relaunch"),
   updaterGetVersion: () => ipcRenderer.invoke("updater:get-version"),
@@ -85,6 +90,7 @@ export interface ElectronAPI {
     options?: { forward?: boolean },
   ) => Promise<void>;
   windowFocus: () => Promise<void>;
+  onWindowFocus?: (callback: () => void) => () => void;
   appQuit: () => Promise<void>;
   appRelaunch: () => Promise<void>;
   updaterGetVersion: () => Promise<string>;

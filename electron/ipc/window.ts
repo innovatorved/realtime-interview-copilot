@@ -1,5 +1,7 @@
 import { BrowserWindow, ipcMain, screen } from "electron";
 
+const WINDOW_FOCUS_CHANNEL = "window:focus";
+
 type WindowAccessor = () => BrowserWindow | null;
 
 /** Window control IPC. Channel names and payload shapes are intentionally
@@ -94,4 +96,15 @@ export function registerWindowIpc(getWindow: WindowAccessor): void {
     if (!w.isVisible()) w.show();
     w.focus();
   });
+}
+
+
+/** Notify renderer when the OS window gains focus (alt-tab back, etc.). */
+export function attachWindowFocusNotifier(window: BrowserWindow): void {
+  const notify = () => {
+    if (!window.isDestroyed()) {
+      window.webContents.send(WINDOW_FOCUS_CHANNEL);
+    }
+  };
+  window.on("focus", notify);
 }

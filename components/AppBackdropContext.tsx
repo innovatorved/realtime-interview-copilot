@@ -115,15 +115,19 @@ export function AppBackdropProvider({
   );
 }
 
+/** Windows transparent windows skip hit-testing on fully transparent pixels. */
+const WIN32_MIN_HIT_ALPHA = 0.01;
+
 /**
  * Renders the actual full-window dark fill behind the UI.
  *
  * Lives as a sibling of the routed content (not inside the provider) so
  * that a parent can pass in a `clipToNavbar` flag for compact mode. In
- * In compact mode the navbar strip is dimmed only via `titlebar-chrome` and
+ * compact mode the navbar strip is dimmed only via `titlebar-chrome` and
  * `app-toolbar` (both tied to `--app-backdrop-opacity`). The output area
  * below stays fully transparent — no separate backdrop layer.
  */
+
 export function AppBackdrop({
   clipToNavbar = false,
   navbarHeightPx: _navbarHeightPx = 64,
@@ -131,19 +135,27 @@ export function AppBackdrop({
   clipToNavbar?: boolean;
   navbarHeightPx?: number;
 }) {
-  const { backdropOpacity } = useAppBackdrop();
+  const { backdropOpacity, isElectron } = useAppBackdrop();
 
   if (clipToNavbar) {
     return null;
   }
 
+  const isWin32 =
+    typeof window !== "undefined" &&
+    window.electronAPI?.platform === "win32";
+  const fillAlpha =
+    isWin32 && isElectron
+      ? Math.max(backdropOpacity, WIN32_MIN_HIT_ALPHA)
+      : backdropOpacity;
+
   return (
     <div
       aria-hidden
-      className="fixed left-0 right-0 top-0 -z-10 pointer-events-none transition-[background-color,height] duration-200 ease-out"
+      className="fixed left-0 right-0 top-0 -z-10 pointer-events-auto transition-[background-color,height] duration-200 ease-out"
       style={{
         height: "100%",
-        backgroundColor: `rgba(9, 9, 11, ${backdropOpacity})`,
+        backgroundColor: `rgba(9, 9, 11, ${fillAlpha})`,
       }}
     />
   );

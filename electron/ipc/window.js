@@ -1,7 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerWindowIpc = registerWindowIpc;
+exports.attachWindowFocusNotifier = attachWindowFocusNotifier;
 const electron_1 = require("electron");
+const WINDOW_FOCUS_CHANNEL = "window:focus";
 /** Window control IPC. Channel names and payload shapes are intentionally
  *  preserved verbatim — they are consumed by the preload script and any
  *  rename would silently break the renderer. */
@@ -86,4 +88,13 @@ function registerWindowIpc(getWindow) {
             w.show();
         w.focus();
     });
+}
+/** Notify renderer when the OS window gains focus (alt-tab back, etc.). */
+function attachWindowFocusNotifier(window) {
+    const notify = () => {
+        if (!window.isDestroyed()) {
+            window.webContents.send(WINDOW_FOCUS_CHANNEL);
+        }
+    };
+    window.on("focus", notify);
 }

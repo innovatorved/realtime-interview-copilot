@@ -13,7 +13,7 @@ import * as path from "path";
 import { installSingleInstanceAndDeepLinks } from "./deepLink";
 import { registerAppIpc } from "./ipc/app";
 import { registerCaptureAndAskShortcut, registerScreenIpc } from "./ipc/screen";
-import { registerWindowIpc } from "./ipc/window";
+import { attachWindowFocusNotifier, registerWindowIpc } from "./ipc/window";
 import {
   installCsp,
   installOriginHeaderInjection,
@@ -112,6 +112,8 @@ async function createWindow() {
     skipTaskbar: false,
     show: false,
   });
+
+  attachWindowFocusNotifier(mainWindow);
 
   const isPackaged = app.isPackaged && !process.env.DEV_PORT;
   installCsp(mainWindow.webContents.session, pickCsp(isPackaged));
