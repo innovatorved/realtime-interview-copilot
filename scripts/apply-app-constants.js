@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// Reads constant.json → updates package.json build.productName,
+// Reads lib/constant.ts → updates package.json build.productName,
 // pins artifactName for stable download filenames, and rewrites macOS
 // permission strings to use displayName.
 
@@ -9,13 +9,12 @@ const path = require("path");
 
 const root = path.resolve(__dirname, "..");
 const pkgPath = path.join(root, "package.json");
-const constantsPath = path.join(root, "constant.json");
+const constantPath = path.join(root, "lib/constant.ts");
 
-const constants = JSON.parse(fs.readFileSync(constantsPath, "utf8"));
+const src = fs.readFileSync(constantPath, "utf8");
+const match = src.match(/export const APP_DISPLAY_NAME = "([^"]+)"/);
 const displayName =
-  typeof constants.displayName === "string" && constants.displayName.length > 0
-    ? constants.displayName
-    : "Meeting Copilot";
+  match?.[1] && match[1].length > 0 ? match[1] : "Meeting Copilot";
 
 const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
 if (!pkg.build) pkg.build = {};

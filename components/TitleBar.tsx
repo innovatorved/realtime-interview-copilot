@@ -14,15 +14,14 @@ import {
   Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { authClient } from "@/lib/auth-client";
-import { sendGTMEvent } from "@next/third-parties/google";
+import { authClient, signOutAndTrack } from "@/lib/auth-client";
 import { useTab } from "@/components/TabContext";
 import { useAppBackdrop } from "@/components/AppBackdropContext";
 import { useInterviewContext } from "@/components/InterviewContextProvider";
 import { SignalStrip } from "@/components/shell/SignalStrip";
 import { UserMenu } from "@/components/shell/UserMenu";
 import { WorkspaceTabs } from "@/components/shell/WorkspaceTabs";
-import constants from "@/constant.json";
+import { APP_DISPLAY_NAME } from "@/lib/constant";
 
 export default function TitleBar() {
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(true);
@@ -117,22 +116,7 @@ export default function TitleBar() {
     await window.electronAPI.updaterCheck();
   };
 
-  const handleLogout = async () => {
-    try {
-      await authClient.signOut({
-        fetchOptions: {
-          onSuccess: () => {
-            sendGTMEvent({ event: "logout" });
-            window.dispatchEvent(new Event("auth:logout"));
-          },
-        },
-      });
-      window.dispatchEvent(new Event("auth:logout"));
-    } catch (error) {
-      console.error("Sign out failed", error);
-      window.dispatchEvent(new Event("auth:logout"));
-    }
-  };
+  const handleLogout = () => void signOutAndTrack();
 
   const toggleCompactMode = () => {
     void saveContext().finally(() => setCompactMode(!compactMode));
@@ -159,7 +143,7 @@ export default function TitleBar() {
             <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-accent" />
           </span>
           <span className="truncate text-[11px] font-semibold text-text-primary">
-            {constants.displayName}
+            {APP_DISPLAY_NAME}
           </span>
 
           {!compactMode && (

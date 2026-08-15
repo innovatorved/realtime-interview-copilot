@@ -4,6 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import adminCfg from "../config.json";
 import { quotaBalance } from "../db/schema";
+import type * as schemaTypes from "../db/schema";
 import type { Env } from "../env";
 
 export type QuotaAction = "completion" | "deepgram_seconds";
@@ -30,7 +31,7 @@ export type QuotaSummary = {
   recordConsumption: boolean;
 };
 
-type Db = DrizzleD1Database<Record<string, never>>;
+type Db = DrizzleD1Database<typeof schemaTypes>;
 
 function quotaFlags(env: Env) {
   return {

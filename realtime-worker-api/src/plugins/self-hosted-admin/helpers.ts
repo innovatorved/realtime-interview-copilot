@@ -1,7 +1,6 @@
 /** Pure helpers (no closure deps) used across endpoints. */
 
 import { APIError } from "better-auth/api";
-import { getClientIpFromHeaders } from "../../lib/ip";
 import {
   DEFAULT_LIMIT,
   DISPOSABLE_DOMAINS,
@@ -10,10 +9,6 @@ import {
   SECRET_KEY_SUFFIXES,
   USAGE_WINDOW_MS,
 } from "./constants";
-
-export function getClientIp(headers: Headers | undefined): string | null {
-  return getClientIpFromHeaders(headers);
-}
 
 export function getUserAgentStr(headers: Headers | undefined): string | null {
   return headers?.get("user-agent") ?? null;

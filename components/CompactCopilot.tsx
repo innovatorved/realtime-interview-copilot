@@ -33,13 +33,9 @@ import {
 } from "@/hooks/useCompactWindowSize";
 import { useInterviewContext } from "@/components/InterviewContextProvider";
 import { authClient } from "@/lib/auth-client";
+import { MAX_IMAGES } from "@/lib/constant";
 import { buildContextBlock, hasAttachedContext } from "@/lib/prompt-context";
 import { sessionDisplayName } from "@/lib/session-display";
-
-// Hard cap on attached screenshots — mirrors MAX_IMAGES in QuestionAssistant
-// and MAX_IMAGES_PER_REQUEST on the worker. Keeps payload bounded and the UX
-// consistent between the full Ask AI tab and this compact drawer.
-const MAX_IMAGES = 4;
 
 interface CompactCopilotProps {
   addInSavedData: (data: HistoryData) => void;
@@ -127,6 +123,15 @@ export function CompactCopilot({
   // transcript-driven flows). Distinct from `completion` so a Copilot/
   // Summarizer run doesn't blow away the chat thread.
   const chat = useSharedAskChat();
+  const {
+    send,
+    messages: chatMessages,
+    isStreaming: chatIsStreaming,
+    abort: chatAbort,
+    reset: chatReset,
+    error: chatError,
+    clearError: chatClearError,
+  } = chat;
 
   const syncActiveFlag = useCallback(
     (f: FLAGS | null) => {
@@ -217,7 +222,7 @@ export function CompactCopilot({
   const submitAskInput = useCallback(
     async (textOverride?: string) => {
       if (isLoading) return;
-      if (chat.isStreaming) return;
+      if (chatIsStreaming) return;
       const raw = textOverride ?? askInput;
       if (!raw.trim() && attachedImages.length === 0) return;
 
@@ -235,19 +240,19 @@ export function CompactCopilot({
         has_image: !!imagesSnapshot,
         image_count: imagesSnapshot?.length ?? 0,
         surface: "compact",
-        chat_turn: Math.floor(chat.messages.length / 2) + 1,
-        is_follow_up: chat.messages.length > 0,
+        chat_turn: Math.floor(chatMessages.length / 2) + 1,
+        is_follow_up: chatMessages.length > 0,
       });
-      void chat.send({ text, images: imagesSnapshot });
+      void send({ text, images: imagesSnapshot });
     },
     [
       askInput,
       attachedImages,
-      chat.isStreaming,
-      chat.messages.length,
-      chat.send,
+      chatIsStreaming,
+      chatMessages.length,
       clearAttachedImages,
       isLoading,
+      send,
       setOutputCollapsed,
       setOutputMode,
     ],
@@ -300,11 +305,11 @@ export function CompactCopilot({
   useAskKeyboard({
     enabled: true,
     isMicActive: askMic.isActive,
-    isChatStreaming: chat.isStreaming,
+    isChatStreaming: chatIsStreaming,
     onMicCancel: () => ptt.cancel(),
-    onChatAbort: () => chat.abort(),
+    onChatAbort: () => chatAbort(),
     onNewChat: () => {
-      chat.reset();
+      chatReset();
       setAskInput("");
       clearAttachedImages();
       setOutputMode("chat");
@@ -399,10 +404,10 @@ export function CompactCopilot({
     clearTranscription();
     setCompletion("");
     setError(null);
-    chat.reset();
+    chatReset();
     setOutputMode("transcript");
     setSessionFlag(FLAGS.COPILOT);
-  }, [chat, clearTranscription, setCompletion, setOutputMode, setSessionFlag]);
+  }, [chatReset, clearTranscription, setCompletion, setOutputMode, setSessionFlag]);
 
   // hasOutput drives both the visibility of the output panel and the
   // parent's "needs expanded window" signal. We treat ANY pending state
@@ -410,11 +415,11 @@ export function CompactCopilot({
   // (completion text, chat messages, or surfaced error) as output.
   const hasOutput =
     completion.length > 0 ||
-    chat.messages.length > 0 ||
+    chatMessages.length > 0 ||
     isLoading ||
-    chat.isStreaming ||
+    chatIsStreaming ||
     error !== null ||
-    chat.error !== null;
+    chatError !== null;
   const hasVisibleOutput = hasOutput && !outputCollapsed;
 
   const showLiveTranscript =
@@ -499,9 +504,9 @@ export function CompactCopilot({
       {hasVisibleOutput && (
         <OutputPanel
           outputMode={outputMode}
-          chatMessages={chat.messages}
-          chatError={chat.error}
-          chatIsStreaming={chat.isStreaming}
+          chatMessages={chatMessages}
+          chatError={chatError}
+          chatIsStreaming={chatIsStreaming}
           completion={completion}
           error={error}
           activeFlag={activeFlag}
@@ -516,7 +521,7 @@ export function CompactCopilot({
             // failure store.
             dbg("ask-ui", "Dismiss error banner (compact)");
             setError(null);
-            chat.clearError();
+            chatClearError();
           }}
         />
       )}

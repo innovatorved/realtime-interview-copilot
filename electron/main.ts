@@ -62,20 +62,18 @@ function resolveIconPath(): string {
 
 function loadDisplayName(): string {
   const candidates = [
-    path.join(__dirname, "../constant.json"),
-    path.join(app.getAppPath(), "constant.json"),
+    path.join(__dirname, "../package.json"),
+    path.join(app.getAppPath(), "package.json"),
   ];
   for (const candidate of candidates) {
     try {
       if (fs.existsSync(candidate)) {
         const parsed = JSON.parse(fs.readFileSync(candidate, "utf8")) as {
-          displayName?: string;
+          build?: { productName?: string };
         };
-        if (
-          typeof parsed.displayName === "string" &&
-          parsed.displayName.length > 0
-        ) {
-          return parsed.displayName;
+        const name = parsed.build?.productName;
+        if (typeof name === "string" && name.length > 0) {
+          return name;
         }
       }
     } catch {

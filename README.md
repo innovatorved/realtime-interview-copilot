@@ -67,7 +67,7 @@ Manual downloads are also on the [GitHub Releases](https://github.com/innovatorv
 
 | Action                         | macOS                               | Windows               |
 | ------------------------------ | ----------------------------------- | --------------------- |
-| Switch tab (full mode)         | ⌥C Copilot · ⌥A Ask AI · ⌥P Presets | Alt+C / A / P         |
+| Switch tab (full mode)         | ⌥C Copilot · ⌥A Ask AI · ⌥N Notes | Alt+C / A / N         |
 | Generate Copilot answer        | ⌘Enter                              | Ctrl+Enter            |
 | Summarize transcript           | ⌘⇧Enter                             | Ctrl+Shift+Enter      |
 | Toggle Ask drawer (compact)    | ⌥A                                  | Alt+A                 |

@@ -2,9 +2,10 @@
 
 import { and, count, desc, eq, like } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
-import { savedNote } from "../db/schema";
+import { savedNote } from "../schema";
+import type * as schemaTypes from "../schema";
 
-type Db = DrizzleD1Database<Record<string, never>>;
+type Db = DrizzleD1Database<typeof schemaTypes>;
 
 export async function listNotesForUser(
   db: Db,

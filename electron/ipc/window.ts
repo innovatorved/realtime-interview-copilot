@@ -98,7 +98,6 @@ export function registerWindowIpc(getWindow: WindowAccessor): void {
   });
 }
 
-
 /** Notify renderer when the OS window gains focus (alt-tab back, etc.). */
 export function attachWindowFocusNotifier(window: BrowserWindow): void {
   const notify = () => {

@@ -12,8 +12,7 @@
  */
 
 import { Button } from "@/components/ui/button";
-import { MicIcon } from "@/components/ui/icon";
-import { Loader2, MicOffIcon } from "lucide-react";
+import { Loader2, Mic, MicOffIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranscription } from "@/components/TranscriptionContext";
 
@@ -89,7 +88,7 @@ export default function RecorderTranscriber({
         ) : sessionState === "live" ? (
           <MicOffIcon className="h-3 w-3" aria-hidden />
         ) : (
-          <MicIcon className="h-3 w-3" aria-hidden />
+          <Mic className="h-3 w-3" aria-hidden />
         )}
         <span className="hidden sm:inline">{label}</span>
       </Button>
@@ -134,7 +133,7 @@ export default function RecorderTranscriber({
             </>
           ) : (
             <>
-              <MicIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <Mic className="h-3.5 w-3.5 shrink-0" aria-hidden />
               Start Listening
             </>
           )}
@@ -188,7 +187,7 @@ export default function RecorderTranscriber({
           >
             {!isActive ? (
               <div className="flex items-center gap-2">
-                <MicIcon className="h-3 w-3" />
+                <Mic className="h-3 w-3" />
                 Start Listening
               </div>
             ) : (

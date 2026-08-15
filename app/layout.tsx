@@ -10,10 +10,11 @@ import { AskChatProvider } from "@/components/AskChatProvider";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
 import { GoogleTagManager } from "@next/third-parties/google";
 import { PostHogProvider } from "@/components/PostHogProvider";
-import constants from "@/constant.json";
+import { APP_DISPLAY_NAME } from "@/lib/constant";
+import { PROD_CSP } from "@/lib/csp";
 
 export const metadata: Metadata = {
-  title: constants.displayName,
+  title: APP_DISPLAY_NAME,
   description: "Get Interview Answers Realtime",
   icons: {
     icon: [
@@ -30,9 +31,6 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
 };
-
-const PROD_CSP =
-  "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://*.i.posthog.com https://www.googletagmanager.com; connect-src 'self' http://localhost:8787 https://*.i.posthog.com https://realtime-worker-api.innovatorved.workers.dev https://realtime-worker-api-prod.vedgupta.in https://*.deepgram.com https://api.deepgram.com https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://www.google.com https://region1.google-analytics.com https://stats.g.doubleclick.net https://*.doubleclick.net wss://*.deepgram.com ws://localhost:* ws://127.0.0.1:*; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.i.posthog.com https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://www.google.com https://www.google.co.in https://region1.google-analytics.com https://stats.g.doubleclick.net https://*.doubleclick.net; font-src 'self' data:; media-src 'self' blob:;";
 
 export default function RootLayout({
   children,

@@ -35,19 +35,18 @@ const INTERACTIVE_SELECTOR = [
   "select",
   "a",
   "label",
-  "[role=\"button\"]",
-  "[role=\"textbox\"]",
-  "[role=\"option\"]",
-  "[role=\"listbox\"]",
-  "[role=\"menu\"]",
-  "[role=\"menuitem\"]",
-  "[role=\"dialog\"]",
-  "[role=\"tab\"]",
-  "[role=\"tabpanel\"]",
-  "[contenteditable=\"true\"]",
+  '[role="button"]',
+  '[role="textbox"]',
+  '[role="option"]',
+  '[role="listbox"]',
+  '[role="menu"]',
+  '[role="menuitem"]',
+  '[role="dialog"]',
+  '[role="tab"]',
+  '[role="tabpanel"]',
+  '[contenteditable="true"]',
   "[data-radix-popper-content-wrapper]",
-]
-  .join(", ");
+].join(", ");
 
 function isInteractiveAt(clientX: number, clientY: number): boolean {
   const target = document.elementFromPoint(clientX, clientY);

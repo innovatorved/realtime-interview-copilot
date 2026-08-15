@@ -206,6 +206,7 @@ export function InterviewContextProvider({
       setError(null);
       writeAppSession(APP_SESSION_KEYS.interviewDraft, "");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-hydrate when user id changes
   }, [session?.user?.id, fetchContext]);
 
   const updateContext = useCallback(

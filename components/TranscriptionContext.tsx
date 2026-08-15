@@ -36,8 +36,6 @@ import { mergeSegments } from "@/lib/transcription/segmentMerger";
 import { endLiveSession, trackEvent } from "@/lib/session-tracking";
 import type { TranscriptionSegment } from "@/lib/types";
 
-export type { SessionState } from "@/lib/transcription/deepgramSession";
-
 interface TranscriptionContextValue {
   transcribedText: string;
   transcriptionSegments: TranscriptionSegment[];
@@ -150,6 +148,7 @@ export function TranscriptionProvider({ children }: { children: ReactNode }) {
   // provider, so this only fires on real teardown.
   useEffect(() => {
     return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- invalidate in-flight async on unmount
       sessionIdRef.current++;
       const sid = sessionHandleRef.current?.getLiveSessionId() ?? null;
       stopHandle();

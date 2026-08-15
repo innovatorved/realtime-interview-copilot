@@ -65,5 +65,3 @@ export function LevelMeter({
     </span>
   );
 }
-
-export default LevelMeter;

@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.pickCsp = pickCsp;
 exports.installCsp = installCsp;
 exports.installOriginHeaderInjection = installOriginHeaderInjection;
+const { DEV_CSP, PROD_CSP } = require("../../lib/csp.mjs");
 /** Content-Security-Policy strings + wiring.
  *
  *  Dev needs HMR websockets and `unsafe-eval` for Next.js fast refresh;
@@ -19,10 +20,8 @@ exports.installOriginHeaderInjection = installOriginHeaderInjection;
  *     referenced so a US-region fallback (`us.i.posthog.com` /
  *     `us-assets.i.posthog.com`) still works without further edits.
  *     This matches PostHog's own published CSP guidance. */
-const DEV_CSP = "default-src 'self'; connect-src 'self' http://localhost:8787 https://*.i.posthog.com https://copilot.vedgupta.in https://realtime-worker-api.innovatorved.workers.dev https://realtime-worker-api-prod.vedgupta.in https://*.deepgram.com https://api.deepgram.com https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://www.google.com https://region1.google-analytics.com https://stats.g.doubleclick.net https://*.doubleclick.net wss://*.deepgram.com ws://localhost:* ws://127.0.0.1:*; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://*.i.posthog.com https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.i.posthog.com https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://www.google.com https://www.google.co.in https://region1.google-analytics.com https://stats.g.doubleclick.net https://*.doubleclick.net; font-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';";
-const PROD_CSP = "default-src 'self'; connect-src 'self' https://*.i.posthog.com https://copilot.vedgupta.in https://realtime-worker-api.innovatorved.workers.dev https://realtime-worker-api-prod.vedgupta.in https://*.deepgram.com https://api.deepgram.com https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://www.google.com https://region1.google-analytics.com https://stats.g.doubleclick.net https://*.doubleclick.net wss://*.deepgram.com; script-src 'self' 'unsafe-inline' https://*.i.posthog.com https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.i.posthog.com https://www.googletagmanager.com https://www.google-analytics.com https://analytics.google.com https://www.google.com https://www.google.co.in https://region1.google-analytics.com https://stats.g.doubleclick.net https://*.doubleclick.net; font-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';";
 function pickCsp(isPackaged) {
-    return isPackaged ? PROD_CSP : DEV_CSP;
+  return isPackaged ? PROD_CSP : DEV_CSP;
 }
 /** Install the CSP injector on a session. Strips any upstream
  *  Content-Security-Policy / CSP-Report-Only headers (case-insensitive)
@@ -36,32 +35,34 @@ function pickCsp(isPackaged) {
  *  warning. Stripping first guarantees Electron's CSP is the SOLE policy
  *  on the response. */
 function installCsp(s, csp) {
-    s.webRequest.onHeadersReceived((details, callback) => {
-        const sourceHeaders = details.responseHeaders ?? {};
-        const filteredHeaders = {};
-        for (const [name, value] of Object.entries(sourceHeaders)) {
-            if (/^content-security-policy(-report-only)?$/i.test(name))
-                continue;
-            filteredHeaders[name] = value;
-        }
-        filteredHeaders["Content-Security-Policy"] = [csp];
-        callback({ responseHeaders: filteredHeaders });
-    });
+  s.webRequest.onHeadersReceived((details, callback) => {
+    const sourceHeaders = details.responseHeaders ?? {};
+    const filteredHeaders = {};
+    for (const [name, value] of Object.entries(sourceHeaders)) {
+      if (/^content-security-policy(-report-only)?$/i.test(name)) continue;
+      filteredHeaders[name] = value;
+    }
+    filteredHeaders["Content-Security-Policy"] = [csp];
+    callback({ responseHeaders: filteredHeaders });
+  });
 }
 /** Inject Origin header for API requests to fix "Missing or null Origin"
  *  errors. This is required because Electron sends "file://" or "null"
  *  as origin for local files. */
 function installOriginHeaderInjection(s) {
-    s.webRequest.onBeforeSendHeaders({
-        urls: [
-            "https://realtime-worker-api.innovatorved.workers.dev/*",
-            "https://realtime-worker-api-prod.vedgupta.in/*",
-            "https://*.deepgram.com/*",
-            "https://api.deepgram.com/*",
-        ],
-    }, (details, callback) => {
-        // Mimic development origin which is likely whitelisted server-side.
-        details.requestHeaders["Origin"] = "http://localhost:3000";
-        callback({ requestHeaders: details.requestHeaders });
-    });
+  s.webRequest.onBeforeSendHeaders(
+    {
+      urls: [
+        "https://realtime-worker-api.innovatorved.workers.dev/*",
+        "https://realtime-worker-api-prod.vedgupta.in/*",
+        "https://*.deepgram.com/*",
+        "https://api.deepgram.com/*",
+      ],
+    },
+    (details, callback) => {
+      // Mimic development origin which is likely whitelisted server-side.
+      details.requestHeaders["Origin"] = "http://localhost:3000";
+      callback({ requestHeaders: details.requestHeaders });
+    },
+  );
 }

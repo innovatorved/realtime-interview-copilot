@@ -142,8 +142,7 @@ export function AppBackdrop({
   }
 
   const isWin32 =
-    typeof window !== "undefined" &&
-    window.electronAPI?.platform === "win32";
+    typeof window !== "undefined" && window.electronAPI?.platform === "win32";
   const fillAlpha =
     isWin32 && isElectron
       ? Math.max(backdropOpacity, WIN32_MIN_HIT_ALPHA)

@@ -5,10 +5,7 @@ import { CompactCopilot } from "@/components/CompactCopilot";
 import History from "@/components/History";
 import { QuestionAssistant } from "@/components/QuestionAssistant";
 import { ScreenRecordingOnboard } from "@/components/ScreenRecordingOnboard";
-import {
-  AppBackdrop,
-  useAppBackdrop,
-} from "@/components/AppBackdropContext";
+import { AppBackdrop, useAppBackdrop } from "@/components/AppBackdropContext";
 import { AlertBanner } from "@/components/shell/AlertBanner";
 import { SignalStrip } from "@/components/shell/SignalStrip";
 import { UserMenu } from "@/components/shell/UserMenu";
@@ -22,15 +19,14 @@ import {
 import { useNotes } from "@/hooks/useNotes";
 import { useExport } from "@/hooks/useExport";
 import { cn } from "@/lib/utils";
-import { authClient } from "@/lib/auth-client";
+import { authClient, signOutAndTrack } from "@/lib/auth-client";
+import { APP_DISPLAY_NAME } from "@/lib/constant";
 import { sessionDisplayName } from "@/lib/session-display";
 import { useEffect, useState, useCallback, useLayoutEffect } from "react";
 import { useTab } from "@/components/TabContext";
 import { useInterviewContext } from "@/components/InterviewContextProvider";
 import { Mic, Minimize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { sendGTMEvent } from "@next/third-parties/google";
-import constants from "@/constant.json";
 
 export default function MainPage() {
   const { activeTab, setActiveTab, compactMode, setCompactMode } = useTab();
@@ -113,21 +109,7 @@ export default function MainPage() {
     [createNote],
   );
 
-  const handleLogout = useCallback(async () => {
-    try {
-      await authClient.signOut({
-        fetchOptions: {
-          onSuccess: () => {
-            sendGTMEvent({ event: "logout" });
-            window.dispatchEvent(new Event("auth:logout"));
-          },
-        },
-      });
-      window.dispatchEvent(new Event("auth:logout"));
-    } catch {
-      window.dispatchEvent(new Event("auth:logout"));
-    }
-  }, []);
+  const handleLogout = useCallback(() => signOutAndTrack(), []);
 
   return (
     <div
@@ -154,7 +136,7 @@ export default function MainPage() {
               </div>
               <div className="min-w-0 hidden sm:block">
                 <p className="truncate text-sm font-semibold tracking-tight text-text-primary">
-                  {constants.displayName}
+                  {APP_DISPLAY_NAME}
                 </p>
                 <p className="truncate text-[11px] text-text-tertiary">
                   {session?.user

@@ -48,14 +48,6 @@ export function isDebug(): boolean {
 }
 
 /**
- * Force re-evaluation of the debug flag from URL/localStorage. Mostly
- * useful for tests; production code can rely on a one-shot cache.
- */
-export function refreshDebugFlag(): void {
-  cachedDebug = null;
-}
-
-/**
  * Scoped console.debug shortcut. The `scope` shows up as `[mic]`,
  * `[ask-completion]`, `[ptt]`, etc. so the DevTools filter bar can
  * isolate one subsystem.
@@ -67,29 +59,4 @@ export function dbg(scope: string, ...args: unknown[]): void {
   // console.debug stays out of the user's way (hidden behind "Verbose"
   // in DevTools by default) but is still capturable via the filter.
   console.debug(`[${scope}]`, ...args);
-}
-
-/**
- * Run an async operation with start/end timing in the debug log. Returns
- * the resolved value (or re-throws). Use sparingly — only for spans
- * worth a wall-clock measurement (fetches, WS handshakes).
- */
-export async function dbgTime<T>(
-  scope: string,
-  label: string,
-  fn: () => Promise<T>,
-): Promise<T> {
-  if (!isDebug()) return fn();
-  const start = performance.now();
-  dbg(scope, `${label} — start`);
-  try {
-    const result = await fn();
-    const elapsed = Math.round(performance.now() - start);
-    dbg(scope, `${label} — ok in ${elapsed}ms`);
-    return result;
-  } catch (err) {
-    const elapsed = Math.round(performance.now() - start);
-    dbg(scope, `${label} — FAILED in ${elapsed}ms:`, err);
-    throw err;
-  }
 }

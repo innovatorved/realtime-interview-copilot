@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import constants from "@/constant.json";
+import { APP_DISPLAY_NAME } from "@/lib/constant";
 
 interface AuthWizardProps {
   initialStep?: "welcome" | "signup" | "signin";
@@ -293,7 +293,7 @@ export function AuthWizard({
                 margin: 0,
               }}
             >
-              {constants.displayName}
+              {APP_DISPLAY_NAME}
             </p>
             <p
               style={{

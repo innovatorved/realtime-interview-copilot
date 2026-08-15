@@ -23,14 +23,10 @@ const pkgVersion = pkg.version;
 
 let displayName = "Meeting Copilot";
 try {
-  const constants = JSON.parse(
-    fs.readFileSync(path.join(root, "constant.json"), "utf8"),
-  );
-  if (
-    typeof constants.displayName === "string" &&
-    constants.displayName.length > 0
-  ) {
-    displayName = constants.displayName;
+  const src = fs.readFileSync(path.join(root, "lib/constant.ts"), "utf8");
+  const match = src.match(/export const APP_DISPLAY_NAME = "([^"]+)"/);
+  if (match?.[1] && match[1].length > 0) {
+    displayName = match[1];
   }
 } catch {
   /* use default */
@@ -62,12 +58,12 @@ const tapDir = process.env.TAP_DIR?.trim() || "";
 const wingetDir = process.env.WINGET_DIR?.trim() || "";
 
 if (!tapDir && !wingetDir) {
-  console.error("❌ Set TAP_DIR and/or WINGET_DIR to cloned hub repo paths.");
+  console.error("Set TAP_DIR and/or WINGET_DIR to cloned hub repo paths.");
   process.exit(1);
 }
 
 if (!fs.existsSync(assetsDir)) {
-  console.error(`❌ release-assets not found at ${assetsDir}`);
+  console.error(`release-assets not found at ${assetsDir}`);
   process.exit(1);
 }
 
@@ -102,7 +98,7 @@ function pickAsset(files, refVer, versionFromName, label) {
     .filter((x) => x.version !== null);
 
   if (candidates.length === 0) {
-    console.error(`❌ No matching ${label} in ${assetsDir}`);
+    console.error(`No matching ${label} in ${assetsDir}`);
     process.exit(1);
   }
 
@@ -117,7 +113,7 @@ function pickAsset(files, refVer, versionFromName, label) {
       }
     } else {
       console.error(
-        `❌ RELEASE_TAG ${refName} but no ${label} with semver ${refVer}. Found:\n` +
+        `RELEASE_TAG ${refName} but no ${label} with semver ${refVer}. Found:\n` +
           candidates.map((x) => `  - ${x.name}`).join("\n"),
       );
       process.exit(1);
@@ -135,7 +131,7 @@ function pickAsset(files, refVer, versionFromName, label) {
   }
 
   if (!chosen) {
-    console.error(`❌ Could not pick one ${label}.`);
+    console.error(`Could not pick one ${label}.`);
     process.exit(1);
   }
 
@@ -301,7 +297,7 @@ if (tapDir) {
   const expectedRelease = `Realtime.Interview.Copilot.Beta-${dmg.version}-mac-arm64.dmg`;
   if (dmg.name !== expectedCi && dmg.name !== expectedRelease) {
     console.error(
-      `❌ Unexpected DMG name ${dmg.name} (expected ${expectedCi} or ${expectedRelease})`,
+      `Unexpected DMG name ${dmg.name} (expected ${expectedCi} or ${expectedRelease})`,
     );
     process.exit(1);
   }
@@ -314,7 +310,7 @@ if (wingetDir) {
   const expectedRelease = `Realtime.Interview.Copilot.Beta-${exe.version}-win-x64.exe`;
   if (exe.name !== expectedCi && exe.name !== expectedRelease) {
     console.error(
-      `❌ Unexpected EXE name ${exe.name} (expected ${expectedCi} or ${expectedRelease})`,
+      `Unexpected EXE name ${exe.name} (expected ${expectedCi} or ${expectedRelease})`,
     );
     process.exit(1);
   }

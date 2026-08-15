@@ -14,6 +14,7 @@ import {
 import posthog from "posthog-js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AskListeningBanner } from "@/components/ask/AskListeningBanner";
+import { useAskKeyboard } from "@/components/ask/useAskKeyboard";
 import { useAskScreenshotBridge } from "@/components/ask/useAskScreenshotBridge";
 import { AskMicDebugHud } from "@/components/ui/AskMicDebugHud";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ import { hasAttachedContext } from "@/lib/prompt-context";
 import { trackEvent } from "@/lib/session-tracking";
 import { sessionDisplayName, sessionUserTitle } from "@/lib/session-display";
 import { authClient } from "@/lib/auth-client";
+import { MAX_IMAGES } from "@/lib/constant";
 import { cn } from "@/lib/utils";
 import {
   overlayErrorBlock,
@@ -44,12 +46,6 @@ import {
 interface QuestionAssistantProps {
   isActive?: boolean;
 }
-
-// Hard cap on attached screenshots — keeps total payload size for /api/completion
-// and per-request model token cost bounded. Must match MAX_IMAGES_PER_REQUEST
-// in the worker so the server-side parser silently drops any extras a stale
-// renderer might send.
-const MAX_IMAGES = 4;
 
 export function QuestionAssistant({
   isActive = false,
@@ -67,7 +63,7 @@ export function QuestionAssistant({
 
   // Shared Ask AI thread — same conversation in full mode and compact drawer.
   const chat = useSharedAskChat();
-  const { messages, isLoading } = chat;
+  const { messages, isLoading, send, abort, reset } = chat;
   const { resumeText, jobDescription, interviewNotes } = useInterviewContext();
   const contextAttached = hasAttachedContext({ resumeText, jobDescription });
   const hasNotes = !!interviewNotes.trim();
@@ -186,7 +182,7 @@ export function QuestionAssistant({
     } finally {
       setIsCapturing(false);
     }
-  }, [appendImage, attachedImages.length]);
+  }, [appendImage, attachedImages.length, setError]);
 
   const submitQuestion = useCallback(
     async (textOverride?: string) => {
@@ -223,9 +219,9 @@ export function QuestionAssistant({
       setAttachedImages([]);
       micPrefixRef.current = "";
 
-      await chat.send({ text: effectivePrompt, images: imagesSnapshot });
+      await send({ text: effectivePrompt, images: imagesSnapshot });
     },
-    [attachedImages, chat.send, isLoading, messages.length, question],
+    [attachedImages, isLoading, messages.length, question, send],
   );
 
   // Mic-driven dictation. Interim transcripts live-update the question
@@ -270,23 +266,39 @@ export function QuestionAssistant({
         e.stopPropagation();
         e.currentTarget.blur();
       }
-      chat.abort();
+      abort();
     },
-    [chat.abort],
+    [abort],
   );
 
   // Start a brand new conversation — clears the thread, any in-flight
   // stream, the composer text, and attached screenshots. Wired both to
   // the toolbar button and to Mod+Shift+N for keyboard discoverability.
   const handleNewChat = useCallback(() => {
-    chat.reset();
+    reset();
     setQuestion("");
     setAttachedImages([]);
     setShowScrollDown(false);
     stickToBottomRef.current = true;
     inputRef.current?.focus();
     posthog.capture("ask_new_chat");
-  }, [chat.reset]);
+  }, [reset]);
+
+  useAskKeyboard({
+    enabled: isActive,
+    isMicActive: askMic.isActive,
+    isChatStreaming: isLoading,
+    onMicCancel: () => ptt.cancel(),
+    onChatAbort: () => abort(),
+    onNewChat: handleNewChat,
+    onEscapeFallback: () => {
+      if (question) {
+        setQuestion("");
+        return true;
+      }
+      return false;
+    },
+  });
 
   useEffect(() => {
     if (!isActive) return;
@@ -295,62 +307,15 @@ export function QuestionAssistant({
       const isTypingInInput =
         target.tagName === "INPUT" || target.tagName === "TEXTAREA";
 
-      // NOTE: Space / Ctrl+Space push-to-talk is owned by
-      // `useMicPushToTalk` — do NOT re-bind it here or both handlers
-      // will fire (start twice).
-
       if (e.key.toLowerCase() === "k" && !isTypingInInput) {
         e.preventDefault();
         inputRef.current?.focus();
-      }
-
-      // Mod+Shift+N → new chat. Works from anywhere on the Ask AI tab,
-      // including while focused in the composer textarea, because it's
-      // a modified shortcut that won't collide with literal typing.
-      const modKey = e.ctrlKey || e.metaKey;
-      if (modKey && e.shiftKey && e.key.toLowerCase() === "n") {
-        e.preventDefault();
-        handleNewChat();
-        return;
-      }
-
-      // Esc semantics, in order of priority:
-      //   1. If the mic is recording (incl. tap-toggle mode) → cancel
-      //      the mic without submitting. This is the ONLY way to bail
-      //      out of a tap-toggle session without sending the question.
-      //   2. Else if a completion is in flight → abort it (keeps any
-      //      partial assistant text already streamed in).
-      //   3. Else if the composer has text → clear it (lets the user
-      //      bail mid-typing without sending). The chat thread itself
-      //      is NEVER cleared by Esc — use New Chat (Mod+Shift+N) for
-      //      that, so a stray Esc never destroys the conversation.
-      if (e.key === "Escape") {
-        if (askMic.isActive) {
-          e.preventDefault();
-          dbg("ask-ui", "Esc → cancel active mic recording");
-          ptt.cancel();
-        } else if (isLoading) {
-          e.preventDefault();
-          dbg("ask-ui", "Esc → abort in-flight completion");
-          chat.abort();
-        } else if (question) {
-          e.preventDefault();
-          setQuestion("");
-        }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [
-    askMic.isActive,
-    chat.abort,
-    handleNewChat,
-    isActive,
-    isLoading,
-    ptt,
-    question,
-  ]);
+  }, [isActive]);
 
   useEffect(() => {
     if (isActive) {

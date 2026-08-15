@@ -33,7 +33,8 @@ import {
 import { eq } from "drizzle-orm";
 import adminCfg from "../../config.json";
 import { user } from "../../db/schema";
-import { getClientIp, getUserAgentStr, isDisposableEmail } from "./helpers";
+import { getClientIpFromHeaders } from "../../lib/ip";
+import { getUserAgentStr, isDisposableEmail } from "./helpers";
 import {
   createRecordAudit,
   createRecordSecurity,
@@ -160,7 +161,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
           handler: createAuthMiddleware(async (ctx) => {
             const body = ctx.body as { email?: string } | undefined;
             const email = body?.email;
-            const ip = getClientIp(ctx.headers);
+            const ip = getClientIpFromHeaders(ctx.headers);
 
             if (email && blockDisposable && isDisposableEmail(email)) {
               await recordSecurity({
@@ -195,7 +196,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         {
           matcher: (ctx) => ctx.path === "/sign-in/email",
           handler: createAuthMiddleware(async (ctx) => {
-            const ip = getClientIp(ctx.headers);
+            const ip = getClientIpFromHeaders(ctx.headers);
             const loginEmail = (ctx.body as { email?: string } | undefined)?.email;
 
             if (ip) {
@@ -249,7 +250,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
                 eventType: "user_signed_up",
                 userId: s.user.id,
                 userEmail: s.user.email,
-                ipAddress: getClientIp(ctx.headers),
+                ipAddress: getClientIpFromHeaders(ctx.headers),
                 userAgent: getUserAgentStr(ctx.headers),
               });
               try {
@@ -269,7 +270,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
                 eventType: "user_signed_in",
                 userId: s.user.id,
                 userEmail: s.user.email,
-                ipAddress: getClientIp(ctx.headers),
+                ipAddress: getClientIpFromHeaders(ctx.headers),
                 userAgent: getUserAgentStr(ctx.headers),
               });
               try {
@@ -286,7 +287,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
                 eventType: "security_blocked",
                 userEmail:
                   (ctx.body as { email?: string } | undefined)?.email ?? null,
-                ipAddress: getClientIp(ctx.headers),
+                ipAddress: getClientIpFromHeaders(ctx.headers),
                 userAgent: getUserAgentStr(ctx.headers),
                 metadata: { reason: "failed_login" },
               });
@@ -298,7 +299,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
           handler: createAuthMiddleware(async (ctx) => {
             await recordAudit({
               eventType: "user_signed_out",
-              ipAddress: getClientIp(ctx.headers),
+              ipAddress: getClientIpFromHeaders(ctx.headers),
               userAgent: getUserAgentStr(ctx.headers),
             });
           }),

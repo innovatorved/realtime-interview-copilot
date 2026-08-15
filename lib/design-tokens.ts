@@ -81,6 +81,3 @@ export const authTokens = {
   errBorder: "oklch(0.65 0.18 25 / 0.30)",
   err: tokens.semantic.destructive,
 } as const;
-
-export type DesignTokens = typeof tokens;
-export type AuthTokens = typeof authTokens;

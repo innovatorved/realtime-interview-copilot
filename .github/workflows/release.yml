@@ -226,7 +226,7 @@ jobs:
               fi
               sleep $((i * 3))
             done
-            echo "❌ git push failed after retries in $(basename "$dir")"
+            echo "git push failed after retries in $(basename "$dir")"
             return 1
           }
 

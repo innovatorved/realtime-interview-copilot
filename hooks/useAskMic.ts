@@ -629,6 +629,7 @@ export function useAskMic(options: UseAskMicOptions = {}): UseAskMicReturn {
   // navigates away mid-recording.
   useEffect(() => {
     return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- invalidate in-flight async on unmount
       sessionIdRef.current++;
       teardown();
     };

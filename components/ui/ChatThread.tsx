@@ -104,6 +104,7 @@ function ChatBubble({
               }
             >
               {/* biome-ignore lint/performance/noImgElement: data URLs from screen capture */}
+              {/* eslint-disable-next-line @next/next/no-img-element -- data URLs from screen capture */}
               <img
                 src={src}
                 alt={isUser ? "Attached by user" : "Attached"}

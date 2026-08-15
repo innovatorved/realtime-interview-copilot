@@ -29,7 +29,7 @@ async function buildElectron() {
     await runTscProject();
     console.log("Electron build completed successfully!");
   } catch (error) {
-    console.error("❌ Error building Electron:", error.message || error);
+    console.error("Error building Electron:", error.message || error);
     process.exit(1);
   }
 }

@@ -2,9 +2,10 @@
 
 import { and, asc, eq, inArray, lt, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
-import { liveSession } from "../db/schema";
+import { liveSession } from "../schema";
+import type * as schemaTypes from "../schema";
 
-type Db = DrizzleD1Database<Record<string, never>>;
+type Db = DrizzleD1Database<typeof schemaTypes>;
 
 export async function listActiveSessionsForUser(db: Db, userId: string) {
   return db

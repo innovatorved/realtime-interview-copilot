@@ -2,8 +2,9 @@
 
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { securityEvent } from "../db/schema";
+import type * as schemaTypes from "../db/schema";
 
-type Db = DrizzleD1Database<Record<string, never>>;
+type Db = DrizzleD1Database<typeof schemaTypes>;
 
 export async function recordSecurityEvent(
   db: Db,
