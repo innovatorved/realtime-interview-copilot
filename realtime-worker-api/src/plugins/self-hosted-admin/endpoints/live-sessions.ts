@@ -14,9 +14,10 @@ import {
 } from "drizzle-orm";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { liveSession, session, usageEvent, user } from "../../../db/schema";
-import { ADMIN_FETCH_TIMEOUT_MS, SAFE_ID_RE } from "../constants";
-import { parseLimit, parseOffset, sanitizeSearch } from "../helpers";
+import { ADMIN_FETCH_TIMEOUT_MS } from "../constants";
+import { parseLimit, parseOffset, parseAdminQuery, sanitizeSearch } from "../helpers";
 import { liveSessionTerminateSchema } from "../schemas";
+import { liveSessionsQuerySchema, requiredIdQuerySchema } from "../query-schemas";
 import type { AdminDeps } from "../types";
 
 export function liveSessionEndpoints(deps: AdminDeps) {
@@ -30,11 +31,18 @@ export function liveSessionEndpoints(deps: AdminDeps) {
           throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const limit = parseLimit(url.searchParams.get("limit"));
-        const offset = parseOffset(url.searchParams.get("offset"));
-        const status = url.searchParams.get("status");
-        const userId = url.searchParams.get("userId");
-        const q = sanitizeSearch(url.searchParams.get("q"));
+        const query = parseAdminQuery(url, liveSessionsQuerySchema, [
+          "limit",
+          "offset",
+          "status",
+          "userId",
+          "q",
+        ]);
+        const limit = query.limit ?? parseLimit(null);
+        const offset = query.offset ?? parseOffset(null);
+        const status = query.status;
+        const userId = query.userId;
+        const q = sanitizeSearch(query.q ?? null);
 
         // Sessions are "stale" if there's been no recorder activity
         // (Deepgram key mint, tracked event, etc.) in 5 minutes —
@@ -43,7 +51,7 @@ export function liveSessionEndpoints(deps: AdminDeps) {
         const staleCutoff = new Date(Date.now() - STALE_AFTER_MS);
 
         const conditions: ReturnType<typeof eq>[] = [];
-        if (userId && SAFE_ID_RE.test(userId)) conditions.push(eq(liveSession.userId, userId));
+        if (userId) conditions.push(eq(liveSession.userId, userId));
         if (status === "active") {
           conditions.push(isNull(liveSession.endedAt));
           conditions.push(gte(liveSession.lastSeenAt, staleCutoff));
@@ -130,9 +138,7 @@ export function liveSessionEndpoints(deps: AdminDeps) {
           throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const id = url.searchParams.get("id") ?? "";
-        if (!SAFE_ID_RE.test(id))
-          throw new APIError("BAD_REQUEST", { message: "Invalid id" });
+        const { id } = parseAdminQuery(url, requiredIdQuerySchema, ["id"]);
 
         const [row] = await db.select().from(liveSession).where(eq(liveSession.id, id));
         if (!row) throw new APIError("NOT_FOUND", { message: "Session not found" });

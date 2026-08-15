@@ -3,10 +3,9 @@
 import { and, count, desc, eq, like } from "drizzle-orm";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { savedNote, user, userInterviewContext } from "../../../db/schema";
-import { adminUserInterviewContextQuerySchema } from "../../../schemas/interview-context";
-import { SAFE_ID_RE } from "../constants";
-import { parseLimit, parseOffset, sanitizeSearch } from "../helpers";
+import { parseLimit, parseOffset, parseAdminQuery, sanitizeSearch } from "../helpers";
 import { adminDeleteNoteSchema } from "../schemas";
+import { listNotesQuerySchema, requiredUserIdQuerySchema } from "../query-schemas";
 import type { AdminDeps } from "../types";
 
 export function notesEndpoints(deps: AdminDeps) {
@@ -20,17 +19,18 @@ export function notesEndpoints(deps: AdminDeps) {
           throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const limit = parseLimit(url.searchParams.get("limit"));
-        const offset = parseOffset(url.searchParams.get("offset"));
-        const q = sanitizeSearch(url.searchParams.get("q"));
-        const userId = url.searchParams.get("userId");
+        const query = parseAdminQuery(url, listNotesQuerySchema, ["limit", "offset", "q", "userId"]);
+        const limit = query.limit ?? parseLimit(null);
+        const offset = query.offset ?? parseOffset(null);
+        const q = sanitizeSearch(query.q ?? null);
+        const userId = query.userId;
 
         const conditions: ReturnType<typeof eq>[] = [];
         if (q) {
           const safeQ = q.replace(/%/g, "\\%").replace(/_/g, "\\_");
           conditions.push(like(savedNote.content, `%${safeQ}%`));
         }
-        if (userId && SAFE_ID_RE.test(userId)) conditions.push(eq(savedNote.userId, userId));
+        if (userId) conditions.push(eq(savedNote.userId, userId));
 
         const where = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -97,13 +97,7 @@ export function notesEndpoints(deps: AdminDeps) {
           throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const parsed = adminUserInterviewContextQuerySchema.safeParse({
-          userId: url.searchParams.get("userId"),
-        });
-        if (!parsed.success) {
-          throw new APIError("BAD_REQUEST", { message: "Invalid userId" });
-        }
-        const { userId } = parsed.data;
+        const { userId } = parseAdminQuery(url, requiredUserIdQuerySchema, ["userId"]);
 
         const [row] = await db
           .select()

@@ -3,13 +3,13 @@
 import { and, asc, count, desc, eq, isNull, like, or } from "drizzle-orm";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { supportMessage } from "../../../db/schema";
-import { SAFE_ID_RE } from "../constants";
-import { parseLimit, parseOffset, sanitizeSearch } from "../helpers";
+import { parseLimit, parseOffset, parseAdminQuery, sanitizeSearch } from "../helpers";
 import {
   supportDeleteSchema,
   supportReplySchema,
   supportUpdateStatusSchema,
 } from "../schemas";
+import { requiredIdQuerySchema, supportThreadsQuerySchema } from "../query-schemas";
 import type { AdminDeps } from "../types";
 
 export function supportEndpoints(deps: AdminDeps) {
@@ -23,19 +23,27 @@ export function supportEndpoints(deps: AdminDeps) {
           throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const limit = parseLimit(url.searchParams.get("limit"));
-        const offset = parseOffset(url.searchParams.get("offset"));
-        const statusRaw = url.searchParams.get("status");
-        const unreadOnly = url.searchParams.get("unreadOnly") === "true";
-        const userId = url.searchParams.get("userId");
-        const q = sanitizeSearch(url.searchParams.get("q"));
+        const query = parseAdminQuery(url, supportThreadsQuerySchema, [
+          "limit",
+          "offset",
+          "status",
+          "unreadOnly",
+          "userId",
+          "q",
+        ]);
+        const limit = query.limit ?? parseLimit(null);
+        const offset = query.offset ?? parseOffset(null);
+        const statusRaw = query.status;
+        const unreadOnly = query.unreadOnly ?? false;
+        const userId = query.userId;
+        const q = sanitizeSearch(query.q ?? null);
 
         const conditions: ReturnType<typeof eq>[] = [isNull(supportMessage.parentId)];
-        if (statusRaw && /^(open|pending|resolved)$/.test(statusRaw)) {
+        if (statusRaw) {
           conditions.push(eq(supportMessage.status, statusRaw));
         }
         if (unreadOnly) conditions.push(eq(supportMessage.unreadByAdmin, 1));
-        if (userId && SAFE_ID_RE.test(userId)) {
+        if (userId) {
           conditions.push(eq(supportMessage.userId, userId));
         }
         if (q) {
@@ -104,10 +112,7 @@ export function supportEndpoints(deps: AdminDeps) {
         if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const id = url.searchParams.get("id") ?? "";
-        if (!SAFE_ID_RE.test(id)) {
-          throw new APIError("BAD_REQUEST", { message: "Invalid id" });
-        }
+        const { id } = parseAdminQuery(url, requiredIdQuerySchema, ["id"]);
 
         const [root] = await db
           .select()

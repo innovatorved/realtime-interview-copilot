@@ -12,6 +12,8 @@ import {
 
 const safeIdSchema = z.string().min(1).max(128).regex(/^[a-zA-Z0-9_-]+$/);
 
+export { safeIdSchema };
+
 export const updateUserSchema = z.object({
   userId: safeIdSchema,
   isApproved: z.boolean().optional(),
@@ -40,8 +42,8 @@ export const updateConfigSchema = z.object({
 export const deleteConfigSchema = z.object({ key: configKeyEnum });
 
 export const testModelSchema = z.object({
-  modelName: z.string().min(1).max(200),
-  baseUrl: z.string().url().max(500),
+  modelName: z.string().min(1).max(200).optional(),
+  baseUrl: z.string().url().max(500).optional(),
   apiKey: z.string().max(4000).optional(),
 });
 
@@ -53,7 +55,7 @@ export const testModelSchema = z.object({
  *  api.openai.com so a dashboard "Add OpenAI" button with just an API key
  *  works out of the box. */
 export const openaiConfigSchema = z.object({
-  apiKey: z.string().min(1).max(4000),
+  apiKey: z.string().min(1).max(4000).optional(),
   baseUrl: z.string().url().max(500).optional(),
   model: z.string().min(1).max(200).optional(),
 });
@@ -203,3 +205,7 @@ export const announcementUpdateSchema = z.object({
 });
 
 export const announcementIdSchema = z.object({ id: safeIdSchema });
+
+export const adminSetDbAdminsSchema = z.object({
+  emails: z.array(z.string().email().max(254)).max(50),
+});

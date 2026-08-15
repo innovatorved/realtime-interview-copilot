@@ -3,8 +3,12 @@
 import { and, count, desc, eq, like, or } from "drizzle-orm";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { auditEvent, securityEvent } from "../../../db/schema";
-import { SAFE_ID_RE } from "../constants";
-import { parseLimit, parseOffset, sanitizeSearch } from "../helpers";
+import { parseLimit, parseOffset, parseAdminQuery, sanitizeSearch } from "../helpers";
+import {
+  activityQuerySchema,
+  auditLogsQuerySchema,
+  securityEventsQuerySchema,
+} from "../query-schemas";
 import type { AdminDeps } from "../types";
 
 export function auditEndpoints(deps: AdminDeps) {
@@ -18,14 +22,21 @@ export function auditEndpoints(deps: AdminDeps) {
           throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const limit = parseLimit(url.searchParams.get("limit"));
-        const offset = parseOffset(url.searchParams.get("offset"));
-        const eventType = url.searchParams.get("eventType");
-        const userId = url.searchParams.get("userId");
-        const q = sanitizeSearch(url.searchParams.get("q"));
+        const query = parseAdminQuery(url, auditLogsQuerySchema, [
+          "limit",
+          "offset",
+          "eventType",
+          "userId",
+          "q",
+        ]);
+        const limit = query.limit ?? parseLimit(null);
+        const offset = query.offset ?? parseOffset(null);
+        const eventType = query.eventType;
+        const userId = query.userId;
+        const q = sanitizeSearch(query.q ?? null);
         const conditions: ReturnType<typeof eq>[] = [];
         if (eventType) conditions.push(eq(auditEvent.eventType, eventType));
-        if (userId && SAFE_ID_RE.test(userId)) conditions.push(eq(auditEvent.userId, userId));
+        if (userId) conditions.push(eq(auditEvent.userId, userId));
         if (q) {
           const safeQ = q.replace(/%/g, "\\%").replace(/_/g, "\\_");
           conditions.push(or(like(auditEvent.userEmail, `%${safeQ}%`), like(auditEvent.ipAddress, `%${safeQ}%`))!);
@@ -51,10 +62,16 @@ export function auditEndpoints(deps: AdminDeps) {
           throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const limit = parseLimit(url.searchParams.get("limit"));
-        const offset = parseOffset(url.searchParams.get("offset"));
-        const eventType = url.searchParams.get("eventType");
-        const q = sanitizeSearch(url.searchParams.get("q"));
+        const query = parseAdminQuery(url, securityEventsQuerySchema, [
+          "limit",
+          "offset",
+          "eventType",
+          "q",
+        ]);
+        const limit = query.limit ?? parseLimit(null);
+        const offset = query.offset ?? parseOffset(null);
+        const eventType = query.eventType;
+        const q = sanitizeSearch(query.q ?? null);
         const conditions: ReturnType<typeof eq>[] = [];
         if (eventType) conditions.push(eq(securityEvent.eventType, eventType));
         if (q) {
@@ -82,7 +99,8 @@ export function auditEndpoints(deps: AdminDeps) {
           throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const limit = parseLimit(url.searchParams.get("limit"));
+        const query = parseAdminQuery(url, activityQuerySchema, ["limit"]);
+        const limit = query.limit ?? parseLimit(null);
         const rows = await db.select().from(auditEvent).orderBy(desc(auditEvent.createdAt)).limit(limit);
         return ctx.json({ events: rows });
       },

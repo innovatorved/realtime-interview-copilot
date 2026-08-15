@@ -3,11 +3,12 @@
 import { and, count, desc, eq, like, or } from "drizzle-orm";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { session, user } from "../../../db/schema";
-import { parseLimit, parseOffset, sanitizeSearch } from "../helpers";
+import { parseLimit, parseOffset, parseAdminQuery, sanitizeSearch } from "../helpers";
 import {
   revokeAllSessionsSchema,
   revokeSessionSchema,
 } from "../schemas";
+import { listSessionsQuerySchema } from "../query-schemas";
 import type { AdminDeps } from "../types";
 
 export function sessionEndpoints(deps: AdminDeps) {
@@ -21,9 +22,10 @@ export function sessionEndpoints(deps: AdminDeps) {
           throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const limit = parseLimit(url.searchParams.get("limit"));
-        const offset = parseOffset(url.searchParams.get("offset"));
-        const q = sanitizeSearch(url.searchParams.get("q"));
+        const query = parseAdminQuery(url, listSessionsQuerySchema, ["limit", "offset", "q"]);
+        const limit = query.limit ?? parseLimit(null);
+        const offset = query.offset ?? parseOffset(null);
+        const q = sanitizeSearch(query.q ?? null);
 
         const baseSelect = {
           id: session.id,

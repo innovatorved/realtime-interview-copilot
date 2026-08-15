@@ -18,8 +18,7 @@ import {
   getQuotaForUser,
   toQuotaSummary,
 } from "../../../services/quota.service";
-import { SAFE_ID_RE } from "../constants";
-import { parseLimit, parseOffset, sanitizeSearch } from "../helpers";
+import { parseLimit, parseOffset, parseAdminQuery, sanitizeSearch } from "../helpers";
 import {
   bulkApproveSchema,
   bulkBanSchema,
@@ -27,6 +26,7 @@ import {
   deleteUserSchema,
   updateUserSchema,
 } from "../schemas";
+import { listUsersQuerySchema, requiredUserIdQuerySchema } from "../query-schemas";
 import type { AdminDeps } from "../types";
 
 export function userEndpoints(deps: AdminDeps) {
@@ -40,10 +40,11 @@ export function userEndpoints(deps: AdminDeps) {
           throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const limit = parseLimit(url.searchParams.get("limit"));
-        const offset = parseOffset(url.searchParams.get("offset"));
-        const q = sanitizeSearch(url.searchParams.get("q"));
-        const filter = url.searchParams.get("filter");
+        const query = parseAdminQuery(url, listUsersQuerySchema, ["limit", "offset", "q", "filter"]);
+        const limit = query.limit ?? parseLimit(null);
+        const offset = query.offset ?? parseOffset(null);
+        const q = sanitizeSearch(query.q ?? null);
+        const filter = query.filter;
 
         const baseSelect = {
           id: user.id,
@@ -211,9 +212,7 @@ export function userEndpoints(deps: AdminDeps) {
           throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const userId = url.searchParams.get("userId");
-        if (!userId || !SAFE_ID_RE.test(userId))
-          throw new APIError("BAD_REQUEST", { message: "Invalid userId" });
+        const { userId } = parseAdminQuery(url, requiredUserIdQuerySchema, ["userId"]);
 
         const [targetUser] = await db.select().from(user).where(eq(user.id, userId));
         if (!targetUser) throw new APIError("NOT_FOUND", { message: "User not found" });

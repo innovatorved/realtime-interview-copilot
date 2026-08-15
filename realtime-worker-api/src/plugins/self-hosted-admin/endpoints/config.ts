@@ -1,14 +1,14 @@
 /** Admin config CRUD, secret reveal, model test, admin allow-list. */
 
 import { eq } from "drizzle-orm";
-import { z } from "zod";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { adminConfig } from "../../../db/schema";
 import adminCfg from "../../../config.json";
 import { validateOutboundUrl } from "../../../url-guard";
 import { ADMIN_FETCH_TIMEOUT_MS, THINKING_BUDGETS } from "../constants";
-import { isSecretConfigKey, maskSecret } from "../helpers";
+import { isDisplayMaskedSecret, isSecretConfigKey, maskSecret } from "../helpers";
 import {
+  adminSetDbAdminsSchema,
   deleteConfigSchema,
   openaiConfigSchema,
   revealConfigSchema,
@@ -34,10 +34,6 @@ const OPENAI_CONFIG_KEYS = {
   baseUrl: "custom_base_url",
   apiKey: "custom_api_key",
 } as const;
-
-function isDisplayMaskedSecret(value: string): boolean {
-  return value.includes("…") || value.includes("...");
-}
 
 async function resolveStoredOpenaiConfig(db: ReturnType<AdminDeps["opts"]["getDb"]>) {
   const rows = await db.select().from(adminConfig);
@@ -104,6 +100,12 @@ export function configEndpoints(deps: AdminDeps) {
         if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const { key, value } = ctx.body;
+
+        if (isSecretConfigKey(key) && isDisplayMaskedSecret(value)) {
+          throw new APIError("BAD_REQUEST", {
+            message: "Cannot save a masked placeholder; enter the full secret",
+          });
+        }
 
         if (key === "custom_base_url") {
           const check = validateOutboundUrl(value);
@@ -313,7 +315,7 @@ export function configEndpoints(deps: AdminDeps) {
     /**
      * Atomically write the three OpenAI-compatible config rows.
      *
-     *  - `apiKey`     (required)
+     *  - `apiKey`     (optional on update — omitted/masked keeps stored key)
      *  - `baseUrl`    (optional, defaults to api.openai.com/v1)
      *  - `model`      (optional, defaults to gpt-4o-mini)
      *
@@ -333,9 +335,21 @@ export function configEndpoints(deps: AdminDeps) {
         const adminEmail = ctx.context.session.user.email;
         if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
 
-        const apiKey = ctx.body.apiKey;
-        const baseUrl = ctx.body.baseUrl ?? OPENAI_DEFAULT_BASE_URL;
-        const model = ctx.body.model ?? OPENAI_DEFAULT_MODEL;
+        const db = opts.getDb();
+        const stored = await resolveStoredOpenaiConfig(db);
+        const apiKeyFromBody = ctx.body.apiKey?.trim();
+        const apiKey =
+          apiKeyFromBody && !isDisplayMaskedSecret(apiKeyFromBody)
+            ? apiKeyFromBody
+            : stored.apiKey;
+        if (!apiKey) {
+          throw new APIError("BAD_REQUEST", {
+            message: "apiKey is required on first save",
+          });
+        }
+
+        const baseUrl = ctx.body.baseUrl?.trim() || stored.baseUrl || OPENAI_DEFAULT_BASE_URL;
+        const model = ctx.body.model?.trim() || stored.model || OPENAI_DEFAULT_MODEL;
 
         const ssrf = validateOutboundUrl(baseUrl);
         if (!ssrf.ok) {
@@ -344,7 +358,6 @@ export function configEndpoints(deps: AdminDeps) {
           });
         }
 
-        const db = opts.getDb();
         const now = new Date();
         const writes: Array<[string, string]> = [
           [OPENAI_CONFIG_KEYS.model, model],
@@ -424,9 +437,7 @@ export function configEndpoints(deps: AdminDeps) {
       {
         method: "POST",
         use: [sessionMiddleware],
-        body: z.object({
-          emails: z.array(z.string().email().max(254)).max(50),
-        }),
+        body: adminSetDbAdminsSchema,
       },
       async (ctx) => {
         const adminEmail = ctx.context.session.user.email;

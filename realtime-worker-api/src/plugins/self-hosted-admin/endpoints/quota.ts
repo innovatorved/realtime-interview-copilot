@@ -9,13 +9,13 @@ import {
   getQuotaTierCatalog,
   toQuotaSummary,
 } from "../../../services/quota.service";
-import { SAFE_ID_RE } from "../constants";
-import { parseLimit, parseOffset, sanitizeSearch } from "../helpers";
+import { parseLimit, parseOffset, parseAdminQuery } from "../helpers";
 import {
   quotaListQuerySchema,
   quotaResetCycleSchema,
   quotaUpsertSchema,
 } from "../schemas";
+import { requiredUserIdQuerySchema } from "../query-schemas";
 import type { AdminDeps } from "../types";
 
 export function quotaEndpoints(deps: AdminDeps) {
@@ -30,10 +30,7 @@ export function quotaEndpoints(deps: AdminDeps) {
           throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const userId = url.searchParams.get("userId");
-        if (!userId || !SAFE_ID_RE.test(userId)) {
-          throw new APIError("BAD_REQUEST", { message: "Invalid userId" });
-        }
+        const { userId } = parseAdminQuery(url, requiredUserIdQuerySchema, ["userId"]);
 
         await ensureQuotaRow(db, userId);
         const row = await getQuotaForUser(db, userId);
@@ -171,19 +168,11 @@ export function quotaEndpoints(deps: AdminDeps) {
           throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const parsed = quotaListQuerySchema.safeParse({
-          limit: url.searchParams.get("limit") ?? undefined,
-          offset: url.searchParams.get("offset") ?? undefined,
-          q: url.searchParams.get("q") ?? undefined,
-          tier: url.searchParams.get("tier") ?? undefined,
-        });
-        if (!parsed.success) {
-          throw new APIError("BAD_REQUEST", { message: "Invalid query" });
-        }
-        const limit = parseLimit(String(parsed.data.limit ?? 50));
-        const offset = parseOffset(String(parsed.data.offset ?? 0));
-        const q = sanitizeSearch(parsed.data.q ?? null);
-        const tierFilter = parsed.data.tier?.trim();
+        const query = parseAdminQuery(url, quotaListQuerySchema, ["limit", "offset", "q", "tier"]);
+        const limit = query.limit ?? parseLimit(null);
+        const offset = query.offset ?? parseOffset(null);
+        const q = query.q?.trim() || null;
+        const tierFilter = query.tier?.trim();
 
         const conditions = [];
         if (q) {

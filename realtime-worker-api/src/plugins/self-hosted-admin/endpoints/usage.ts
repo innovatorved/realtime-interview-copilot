@@ -9,8 +9,14 @@ import {
   getUsageTimeseries,
   getUserUsageSummary,
 } from "../../../usage";
-import { SAFE_ID_RE } from "../constants";
-import { parseLimit, parseOffset, resolveUsageWindow } from "../helpers";
+import { parseLimit, parseOffset, parseAdminQuery, resolveUsageWindow } from "../helpers";
+import {
+  usageByUserQuerySchema,
+  usageEventsQuerySchema,
+  usageSummaryQuerySchema,
+  usageTimeseriesQuerySchema,
+  usageUserDetailQuerySchema,
+} from "../query-schemas";
 import type { AdminDeps } from "../types";
 
 export function usageEndpoints(deps: AdminDeps) {
@@ -24,7 +30,8 @@ export function usageEndpoints(deps: AdminDeps) {
           throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const { since, window: w } = resolveUsageWindow(url.searchParams.get("window"));
+        const query = parseAdminQuery(url, usageSummaryQuerySchema, ["window"]);
+        const { since, window: w } = resolveUsageWindow(query.window ?? null);
 
         const summary = await getSystemUsageSummary(db, since);
         return ctx.json({
@@ -44,9 +51,10 @@ export function usageEndpoints(deps: AdminDeps) {
           throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const { since, window: w } = resolveUsageWindow(url.searchParams.get("window"));
-        const limit = parseLimit(url.searchParams.get("limit"));
-        const offset = parseOffset(url.searchParams.get("offset"));
+        const query = parseAdminQuery(url, usageByUserQuerySchema, ["window", "limit", "offset"]);
+        const { since, window: w } = resolveUsageWindow(query.window ?? null);
+        const limit = query.limit ?? parseLimit(null);
+        const offset = query.offset ?? parseOffset(null);
 
         const rows = await getTopUsersByUsage(db, since, limit, offset);
         return ctx.json({ window: w, since: since.toISOString(), users: rows });
@@ -61,11 +69,9 @@ export function usageEndpoints(deps: AdminDeps) {
           throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const userId = url.searchParams.get("userId");
-        if (!userId || !SAFE_ID_RE.test(userId)) {
-          throw new APIError("BAD_REQUEST", { message: "Invalid userId" });
-        }
-        const { since, window: w } = resolveUsageWindow(url.searchParams.get("window"));
+        const query = parseAdminQuery(url, usageUserDetailQuerySchema, ["userId", "window"]);
+        const { userId } = query;
+        const { since, window: w } = resolveUsageWindow(query.window ?? null);
 
         const [targetUser] = await db
           .select({
@@ -105,16 +111,23 @@ export function usageEndpoints(deps: AdminDeps) {
           throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const limit = parseLimit(url.searchParams.get("limit"));
-        const offset = parseOffset(url.searchParams.get("offset"));
-        const userId = url.searchParams.get("userId");
-        const action = url.searchParams.get("action");
-        const status = url.searchParams.get("status");
+        const query = parseAdminQuery(url, usageEventsQuerySchema, [
+          "limit",
+          "offset",
+          "userId",
+          "action",
+          "status",
+        ]);
+        const limit = query.limit ?? parseLimit(null);
+        const offset = query.offset ?? parseOffset(null);
+        const userId = query.userId;
+        const action = query.action;
+        const status = query.status;
 
         const conditions: ReturnType<typeof eq>[] = [];
-        if (userId && SAFE_ID_RE.test(userId)) conditions.push(eq(usageEvent.userId, userId));
-        if (action && /^[a-z_]{1,40}$/.test(action)) conditions.push(eq(usageEvent.action, action));
-        if (status && /^[a-z_]{1,20}$/.test(status)) conditions.push(eq(usageEvent.status, status));
+        if (userId) conditions.push(eq(usageEvent.userId, userId));
+        if (action) conditions.push(eq(usageEvent.action, action));
+        if (status) conditions.push(eq(usageEvent.status, status));
         const where = conditions.length > 0 ? and(...conditions) : undefined;
 
         const baseSelect = {
@@ -153,11 +166,9 @@ export function usageEndpoints(deps: AdminDeps) {
         if (!(await isAdmin(ctx.context.session.user.email)))
           throw new APIError("FORBIDDEN");
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const { since, window: w } = resolveUsageWindow(url.searchParams.get("window"));
-        const userId = url.searchParams.get("userId");
-        if (userId && !SAFE_ID_RE.test(userId)) {
-          throw new APIError("BAD_REQUEST", { message: "Invalid userId" });
-        }
+        const query = parseAdminQuery(url, usageTimeseriesQuerySchema, ["window", "userId"]);
+        const { since, window: w } = resolveUsageWindow(query.window ?? null);
+        const userId = query.userId ?? null;
         const windowMs = Date.now() - since.getTime();
         const bucketSeconds = Math.max(60, Math.floor(windowMs / 1000 / 30));
         const series = await getUsageTimeseries(opts.d1, since, bucketSeconds, userId);
@@ -179,7 +190,8 @@ export function usageEndpoints(deps: AdminDeps) {
           throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const { since } = resolveUsageWindow(url.searchParams.get("window"));
+        const query = parseAdminQuery(url, usageSummaryQuerySchema, ["window"]);
+        const { since } = resolveUsageWindow(query.window ?? null);
 
         const rows = await db
           .select({

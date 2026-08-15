@@ -3,8 +3,12 @@
 import { and, asc, count, desc, eq, gte, inArray, like, lte, or, sql } from "drizzle-orm";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { usageEvent } from "../../../db/schema";
-import { IMPORTANT_EVENT_ACTIONS, SAFE_ID_RE } from "../constants";
-import { parseLimit, parseOffset, sanitizeSearch } from "../helpers";
+import { IMPORTANT_EVENT_ACTIONS } from "../constants";
+import { parseLimit, parseOffset, parseAdminQuery, sanitizeSearch } from "../helpers";
+import {
+  importantEventsQuerySchema,
+  resolveImportantEventActions,
+} from "../query-schemas";
 import type { AdminDeps } from "../types";
 
 export function importantEventsEndpoints(deps: AdminDeps) {
@@ -18,38 +22,38 @@ export function importantEventsEndpoints(deps: AdminDeps) {
           throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const limit = parseLimit(url.searchParams.get("limit"));
-        const offset = parseOffset(url.searchParams.get("offset"));
+        const query = parseAdminQuery(url, importantEventsQuerySchema, [
+          "limit",
+          "offset",
+          "userId",
+          "status",
+          "sessionId",
+          "q",
+          "start",
+          "end",
+          "sort",
+          "actions",
+        ]);
+        const limit = query.limit ?? parseLimit(null);
+        const offset = query.offset ?? parseOffset(null);
+        const userId = query.userId;
+        const status = query.status;
+        const sessionId = query.sessionId;
+        const q = sanitizeSearch(query.q ?? null);
+        const startRaw = query.start;
+        const endRaw = query.end;
+        const sort = query.sort ?? "desc";
 
-        const userId = url.searchParams.get("userId");
-        const status = url.searchParams.get("status");
-        const sessionId = url.searchParams.get("sessionId");
-        const q = sanitizeSearch(url.searchParams.get("q"));
-        const startRaw = url.searchParams.get("start");
-        const endRaw = url.searchParams.get("end");
-        const sort = url.searchParams.get("sort") === "asc" ? "asc" : "desc";
-
-        const actionsRaw = (url.searchParams.get("actions") ?? "")
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean);
-        const actions =
-          actionsRaw.length > 0
-            ? actionsRaw.filter((a) =>
-                (IMPORTANT_EVENT_ACTIONS as readonly string[]).includes(a),
-              )
-            : (IMPORTANT_EVENT_ACTIONS as readonly string[]);
-
+        const actions = resolveImportantEventActions(query.actions);
         if (actions.length === 0) {
           throw new APIError("BAD_REQUEST", { message: "No valid actions in filter" });
         }
 
         const conditions: ReturnType<typeof eq>[] = [];
         conditions.push(inArray(usageEvent.action, actions as string[]));
-        if (userId && SAFE_ID_RE.test(userId)) conditions.push(eq(usageEvent.userId, userId));
-        if (status && /^[a-z_]{1,20}$/.test(status))
-          conditions.push(eq(usageEvent.status, status));
-        if (sessionId && SAFE_ID_RE.test(sessionId)) {
+        if (userId) conditions.push(eq(usageEvent.userId, userId));
+        if (status) conditions.push(eq(usageEvent.status, status));
+        if (sessionId) {
           conditions.push(like(usageEvent.metadata, `%"sessionId":"${sessionId}"%`));
         }
         if (q) {
@@ -64,16 +68,10 @@ export function importantEventsEndpoints(deps: AdminDeps) {
           );
         }
         if (startRaw) {
-          const t = Date.parse(startRaw);
-          if (!Number.isFinite(t))
-            throw new APIError("BAD_REQUEST", { message: "Invalid start date" });
-          conditions.push(gte(usageEvent.createdAt, new Date(t)));
+          conditions.push(gte(usageEvent.createdAt, new Date(Date.parse(startRaw))));
         }
         if (endRaw) {
-          const t = Date.parse(endRaw);
-          if (!Number.isFinite(t))
-            throw new APIError("BAD_REQUEST", { message: "Invalid end date" });
-          conditions.push(lte(usageEvent.createdAt, new Date(t)));
+          conditions.push(lte(usageEvent.createdAt, new Date(Date.parse(endRaw))));
         }
 
         const where = and(...conditions);

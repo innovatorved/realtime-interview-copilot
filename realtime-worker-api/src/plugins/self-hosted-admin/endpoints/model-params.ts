@@ -4,12 +4,14 @@ import { eq } from "drizzle-orm";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { adminConfig, user, userModelParams } from "../../../db/schema";
 import adminCfg from "../../../config.json";
-import { SAFE_ID_RE, THINKING_BUDGETS } from "../constants";
+import { THINKING_BUDGETS } from "../constants";
 import {
   modelParamsBodySchema,
   userModelParamsBodySchema,
   userModelParamsDeleteSchema,
 } from "../schemas";
+import { requiredUserIdQuerySchema } from "../query-schemas";
+import { parseAdminQuery } from "../helpers";
 import type { AdminDeps } from "../types";
 
 export function modelParamsEndpoints(deps: AdminDeps) {
@@ -122,10 +124,7 @@ export function modelParamsEndpoints(deps: AdminDeps) {
           throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const userId = url.searchParams.get("userId");
-        if (!userId || !SAFE_ID_RE.test(userId)) {
-          throw new APIError("BAD_REQUEST", { message: "Invalid userId" });
-        }
+        const { userId } = parseAdminQuery(url, requiredUserIdQuerySchema, ["userId"]);
 
         const [row] = await db
           .select()

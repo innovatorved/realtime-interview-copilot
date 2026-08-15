@@ -9,6 +9,7 @@ import {
   SECRET_KEY_SUFFIXES,
   USAGE_WINDOW_MS,
 } from "./constants";
+import { usageWindowQuerySchema } from "./query-schemas";
 
 export function getUserAgentStr(headers: Headers | undefined): string | null {
   return headers?.get("user-agent") ?? null;
@@ -39,7 +40,8 @@ export function resolveUsageWindow(raw: string | null): {
   window: string;
   since: Date;
 } {
-  const key = (raw ?? "30d").trim();
+  const windowParsed = usageWindowQuerySchema.safeParse(raw ?? undefined);
+  const key = windowParsed.success && windowParsed.data ? windowParsed.data : (raw ?? "30d").trim();
   const ms = USAGE_WINDOW_MS[key];
   if (!ms) {
     throw new APIError("BAD_REQUEST", {
@@ -64,4 +66,32 @@ export function maskSecret(value: string): string {
   if (!value) return "";
   if (value.length <= 8) return "••••";
   return `${value.slice(0, 4)}…${value.slice(-4)}`;
+}
+
+/** Detect masked placeholders (from GET /config or the admin UI) so we never
+ *  persist them as real secrets. */
+export function isDisplayMaskedSecret(value: string): boolean {
+  return value.includes("…") || value.includes("...");
+}
+
+function formatZodError(error: import("zod").ZodError): string {
+  return error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
+}
+
+/** Parse and validate admin GET query params with Zod. Throws BAD_REQUEST on failure. */
+export function parseAdminQuery<T extends import("zod").ZodTypeAny>(
+  url: URL,
+  schema: T,
+  fields: readonly string[],
+): import("zod").infer<T> {
+  const input: Record<string, string | undefined> = {};
+  for (const field of fields) {
+    const raw = url.searchParams.get(field);
+    input[field] = raw === null || raw === "" ? undefined : raw;
+  }
+  const parsed = schema.safeParse(input);
+  if (!parsed.success) {
+    throw new APIError("BAD_REQUEST", { message: formatZodError(parsed.error) });
+  }
+  return parsed.data;
 }

@@ -3,13 +3,13 @@
 import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { appAnnouncement, appAnnouncementDismissal, user } from "../../../db/schema";
-import { SAFE_ID_RE } from "../constants";
-import { parseLimit, parseOffset } from "../helpers";
+import { parseLimit, parseOffset, parseAdminQuery } from "../helpers";
 import {
   announcementCreateSchema,
   announcementIdSchema,
   announcementUpdateSchema,
 } from "../schemas";
+import { announcementsListQuerySchema, requiredIdQuerySchema } from "../query-schemas";
 import type { AdminDeps } from "../types";
 
 export function announcementEndpoints(deps: AdminDeps) {
@@ -23,16 +23,22 @@ export function announcementEndpoints(deps: AdminDeps) {
           throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const limit = parseLimit(url.searchParams.get("limit"));
-        const offset = parseOffset(url.searchParams.get("offset"));
-        const statusRaw = url.searchParams.get("status");
-        const kindRaw = url.searchParams.get("kind");
+        const query = parseAdminQuery(url, announcementsListQuerySchema, [
+          "limit",
+          "offset",
+          "status",
+          "kind",
+        ]);
+        const limit = query.limit ?? parseLimit(null);
+        const offset = query.offset ?? parseOffset(null);
+        const statusRaw = query.status;
+        const kindRaw = query.kind;
 
         const conditions: ReturnType<typeof eq>[] = [];
-        if (statusRaw && /^(active|paused|archived)$/.test(statusRaw)) {
+        if (statusRaw) {
           conditions.push(eq(appAnnouncement.status, statusRaw));
         }
-        if (kindRaw && /^(banner|popup|toast)$/.test(kindRaw)) {
+        if (kindRaw) {
           conditions.push(eq(appAnnouncement.kind, kindRaw));
         }
         const where = conditions.length > 0 ? and(...conditions) : undefined;
@@ -215,10 +221,7 @@ export function announcementEndpoints(deps: AdminDeps) {
           throw new APIError("FORBIDDEN");
         const db = opts.getDb();
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const id = url.searchParams.get("id") ?? "";
-        if (!SAFE_ID_RE.test(id)) {
-          throw new APIError("BAD_REQUEST", { message: "Invalid id" });
-        }
+        const { id } = parseAdminQuery(url, requiredIdQuerySchema, ["id"]);
 
         const [{ dismissed }] = await db
           .select({ dismissed: count() })

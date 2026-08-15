@@ -5,10 +5,16 @@ import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api
 import { user } from "../../../db/schema";
 import {
   AI_GATEWAY_LOG_QUERY_KEYS,
-  SAFE_ID_RE,
   SUMMARY_WINDOW_MS,
 } from "../constants";
-import { sanitizeSearch } from "../helpers";
+import { parseAdminQuery, sanitizeSearch } from "../helpers";
+import {
+  AI_GATEWAY_LOGS_QUERY_FIELDS,
+  aiGatewayLogDetailQuerySchema,
+  aiGatewayLogsQuerySchema,
+  aiGatewaySummaryQuerySchema,
+  providersHealthQuerySchema,
+} from "../query-schemas";
 import { healthCacheKey } from "../internal/health-cache";
 import type { AdminDeps } from "../types";
 
@@ -36,15 +42,15 @@ export function aiGatewayEndpoints(deps: AdminDeps) {
 
         const cf = await resolveCfConfig();
         const url = new URL(ctx.request?.url ?? "http://localhost");
+        const query = parseAdminQuery(url, aiGatewayLogsQuerySchema, AI_GATEWAY_LOGS_QUERY_FIELDS);
 
         const forwarded = new URLSearchParams();
         const forwardedFilters: Record<string, string> = {};
         for (const key of AI_GATEWAY_LOG_QUERY_KEYS) {
-          const raw = url.searchParams.get(key);
-          if (raw === null) continue;
+          const raw = query[key];
+          if (!raw) continue;
           const trimmed = raw.trim();
           if (!trimmed) continue;
-          if (trimmed.length > 200) continue;
 
           if (key === "per_page") {
             const n = Math.min(50, Math.max(1, Number.parseInt(trimmed, 10) || 20));
@@ -64,14 +70,10 @@ export function aiGatewayEndpoints(deps: AdminDeps) {
         if (!forwarded.has("order_by_direction"))
           forwarded.set("order_by_direction", "desc");
 
-        const filterUserIdRaw = url.searchParams.get("userId");
-        const filterUserEmailRaw = url.searchParams.get("userEmail");
+        let filterUserId: string | null = query.userId ?? null;
 
-        let filterUserId: string | null =
-          filterUserIdRaw && SAFE_ID_RE.test(filterUserIdRaw) ? filterUserIdRaw : null;
-
-        if (!filterUserId && filterUserEmailRaw) {
-          const emailQ = sanitizeSearch(filterUserEmailRaw)?.toLowerCase() ?? null;
+        if (!filterUserId && query.userEmail) {
+          const emailQ = sanitizeSearch(query.userEmail)?.toLowerCase() ?? null;
           if (emailQ) {
             const db = opts.getDb();
             const [row] = await db.select({ id: user.id }).from(user).where(eq(user.email, emailQ));
@@ -136,9 +138,7 @@ export function aiGatewayEndpoints(deps: AdminDeps) {
         if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
 
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const id = url.searchParams.get("id") ?? "";
-        if (!SAFE_ID_RE.test(id))
-          throw new APIError("BAD_REQUEST", { message: "Invalid log id" });
+        const { id } = parseAdminQuery(url, aiGatewayLogDetailQuerySchema, ["id"]);
 
         const cf = await resolveCfConfig();
         const { ok, status, body } = await fetchAiGateway(cf, `/logs/${encodeURIComponent(id)}`);
@@ -157,12 +157,14 @@ export function aiGatewayEndpoints(deps: AdminDeps) {
         if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
 
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const windowKey = url.searchParams.get("window") ?? "24h";
+        const query = parseAdminQuery(url, aiGatewaySummaryQuerySchema, ["window"]);
+        const windowKey = query.window ?? "24h";
         const windowMs = SUMMARY_WINDOW_MS[windowKey];
-        if (!windowMs)
+        if (!windowMs) {
           throw new APIError("BAD_REQUEST", {
             message: "window must be one of 1h, 24h, 7d, 30d",
           });
+        }
 
         const cf = await resolveCfConfig();
         const now = new Date();
@@ -282,8 +284,8 @@ export function aiGatewayEndpoints(deps: AdminDeps) {
           throw new APIError("FORBIDDEN");
 
         const url = new URL(ctx.request?.url ?? "http://localhost");
-        const deep =
-          url.searchParams.get("deep") === "1" || url.searchParams.get("deep") === "true";
+        const query = parseAdminQuery(url, providersHealthQuerySchema, ["deep"]);
+        const deep = query.deep === "1" || query.deep === "true";
 
         const [ai, cf] = await Promise.all([resolveActiveAiConfig(), resolveCfConfig()]);
 
