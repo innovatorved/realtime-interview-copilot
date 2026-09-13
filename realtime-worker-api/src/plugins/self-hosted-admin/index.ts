@@ -186,7 +186,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
               });
             }
 
-            if (ip) {
+            if (ip && maxSignups > 0) {
               const rl = await checkRateLimit(`signup:${ip}`, maxSignups);
               if (!rl.allowed) {
                 await recordSecurity({
@@ -209,7 +209,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
             const ip = getClientIpFromHeaders(ctx.headers);
             const loginEmail = (ctx.body as { email?: string } | undefined)?.email;
 
-            if (ip) {
+            if (ip && maxLogins > 0) {
               const rl = await checkRateLimit(`login:${ip}`, maxLogins);
               if (!rl.allowed) {
                 await recordSecurity({

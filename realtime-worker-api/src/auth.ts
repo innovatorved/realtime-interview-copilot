@@ -66,8 +66,8 @@ export const auth = (env: Env & { CONFIG_KV?: KVNamespace }) => {
         adminEmails,
         onConfigChange: () => invalidateConfigCache(env),
         sentinel: {
-          maxLoginAttemptsPerHour: 10,
-          maxSignupsPerHour: 5,
+          maxLoginAttemptsPerHour: 0,
+          maxSignupsPerHour: 0,
           blockDisposableEmails: true,
         },
         runtimeInfo: () => ({

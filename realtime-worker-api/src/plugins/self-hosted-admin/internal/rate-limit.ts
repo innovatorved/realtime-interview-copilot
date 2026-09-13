@@ -17,6 +17,9 @@ type DbHandle = DrizzleD1Database<typeof schemaTypes>;
 
 export function createCheckRateLimit(getDb: () => DbHandle, d1: D1Database) {
   return async function checkRateLimit(key: string, maxAttempts: number) {
+    if (maxAttempts <= 0) {
+      return { allowed: true, count: 0 };
+    }
     try {
       const now = new Date();
       const nowSec = Math.floor(now.getTime() / 1000);
