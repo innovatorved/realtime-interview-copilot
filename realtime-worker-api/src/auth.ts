@@ -30,6 +30,7 @@ export const auth = (env: Env & { CONFIG_KV?: KVNamespace }) => {
     .filter((e) => e.length > 0);
 
   return betterAuth({
+    baseURL: env.BETTER_AUTH_URL || "https://realtime-worker-api-prod.vedgupta.in",
     database: drizzleAdapter(db, {
       provider: "sqlite",
       schema: schema,

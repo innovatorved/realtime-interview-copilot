@@ -132,6 +132,11 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
           ipAddress: { type: "string", required: false },
           userAgent: { type: "string", required: false },
           metadata: { type: "string", required: false },
+          createdAt: {
+            type: "date",
+            required: false,
+            defaultValue: () => new Date(),
+          },
         },
       },
       securityEvent: {
@@ -141,6 +146,11 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
           userEmail: { type: "string", required: false },
           action: { type: "string" },
           metadata: { type: "string", required: false },
+          createdAt: {
+            type: "date",
+            required: false,
+            defaultValue: () => new Date(),
+          },
         },
       },
       rateLimitEntry: {

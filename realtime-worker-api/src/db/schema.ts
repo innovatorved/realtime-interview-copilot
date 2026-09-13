@@ -159,7 +159,9 @@ export const auditEvent = sqliteTable(
     ipAddress: text("ipAddress"),
     userAgent: text("userAgent"),
     metadata: text("metadata"),
-    createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+    createdAt: integer("createdAt", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
   },
   (table) => [
     index("audit_event_type_idx").on(table.eventType),
@@ -177,7 +179,9 @@ export const securityEvent = sqliteTable(
     userEmail: text("userEmail"),
     action: text("action").notNull(),
     metadata: text("metadata"),
-    createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+    createdAt: integer("createdAt", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
   },
   (table) => [
     index("security_event_type_idx").on(table.eventType),
@@ -197,6 +201,8 @@ export const rateLimitEntry = sqliteTable(
   },
   (table) => [index("rate_limit_key_idx").on(table.key)],
 );
+export const rate_limit = rateLimitEntry;
+export const rateLimit = rateLimitEntry;
 
 export const adminConfig = sqliteTable("admin_config", {
   key: text("key").primaryKey(),
