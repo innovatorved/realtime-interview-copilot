@@ -19,6 +19,12 @@ brew tap innovatorved/tap
 brew install --cask realtime-interview-copilot
 ```
 
+If an older version is already present in `/Applications`, run with `--force`:
+
+```bash
+brew install --cask --force realtime-interview-copilot
+```
+
 To update an existing Homebrew install:
 
 ```bash

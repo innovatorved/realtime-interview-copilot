@@ -147,8 +147,7 @@ cask "${HOMEBREW.cask}" do
   version "${version}"
   sha256 "${sha256}"
 
-  url "https://github.com/${SOURCE.owner}/${SOURCE.repo}/releases/download/v#{version}/Realtime.Interview.Copilot.Beta-#{version}-mac-arm64.dmg",
-      verified: "github.com/${SOURCE.owner}/${SOURCE.repo}/"
+  url "https://github.com/${SOURCE.owner}/${SOURCE.repo}/releases/download/v#{version}/Realtime.Interview.Copilot.Beta-#{version}-mac-arm64.dmg"
   name "${displayName}"
   desc "Real-time AI copilot for interviews (beta)"
   homepage "https://github.com/${SOURCE.owner}/${SOURCE.repo}"
@@ -163,11 +162,9 @@ cask "${HOMEBREW.cask}" do
 
   app "${appBundleName}"
 
-  postflight do
-    system_command "/usr/bin/xattr",
-                   args:  ["-dr", "com.apple.quarantine",
-                           "#{appdir}/${appBundleName}"],
-                   sudo:  false
+  postflight_steps do
+    run "/usr/bin/xattr",
+        args: ["-dr", "com.apple.quarantine", "{{appdir}}/${appBundleName}"]
   end
 
   uninstall quit: "com.realtime.interview.copilot.beta"
