@@ -235,15 +235,14 @@ export function AuthWizard({
             onClick={() => setModalOpen(false)}
             style={{
               backgroundColor: TOKEN.accent,
-              color: "#ffffff",
+              color: "#0a0a0a",
               border: "none",
               padding: "8px 16px",
               borderRadius: 8,
               fontSize: 13,
               fontWeight: 600,
               cursor: "pointer",
-              boxShadow:
-                "0 0 0 1px rgba(34, 197, 94, 0.30), 0 0 16px rgba(34, 197, 94, 0.20)",
+              boxShadow: `0 0 0 1px ${TOKEN.accentBorder}, 0 0 16px ${TOKEN.accentRing}`,
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.backgroundColor = TOKEN.accentHover;
@@ -274,10 +273,10 @@ export function AuthWizard({
           <div
             className="flex h-7 w-7 items-center justify-center"
             style={{
-              background: "linear-gradient(135deg, #22c55e, #10b981, #059669)",
-              color: "#ffffff",
+              background: "linear-gradient(135deg, #34d399, #10b981, #059669)",
+              color: "#0a0a0a",
               borderRadius: 7,
-              boxShadow: "0 0 12px rgba(34, 197, 94, 0.28)",
+              boxShadow: `0 0 12px ${TOKEN.accentRing}`,
             }}
           >
             <Mic className="h-3.5 w-3.5" />

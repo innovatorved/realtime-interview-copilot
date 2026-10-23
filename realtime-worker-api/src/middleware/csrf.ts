@@ -24,7 +24,12 @@ export function csrfCheck(request: Request): CsrfFailureReason | null {
 
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/$/, "");
-  if (path.startsWith("/api/") && !path.startsWith("/api/auth")) {
+  const requiresClientHeader =
+    (path.startsWith("/api/") && !path.startsWith("/api/auth")) ||
+    path === "/completion" ||
+    path === "/deepgram" ||
+    path === "/deepgram/ask";
+  if (requiresClientHeader) {
     const clientHeader = request.headers.get("X-Requested-With");
     if (clientHeader !== RIC_CLIENT_HEADER) {
       return "missing_client_header";

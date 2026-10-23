@@ -142,7 +142,7 @@ export async function checkQuota(
   db: Db,
   env: Env,
   userId: string,
-  _action: QuotaAction,
+  action: QuotaAction,
 ): Promise<{ allowed: true } | { allowed: false; resetAt: Date }> {
   if (!quotaFlags(env).enforce) return { allowed: true };
 
@@ -157,12 +157,16 @@ export async function checkQuota(
   const unlimited = secondsCap == null && completionsCap == null;
   if (unlimited || fresh.overageAllowed) return { allowed: true };
 
-  const secondsOk =
-    secondsCap == null || fresh.consumedSeconds < secondsCap;
-  const completionsOk =
-    completionsCap == null || fresh.consumedCompletions < completionsCap;
+  if (action === "completion") {
+    const completionsOk =
+      completionsCap == null || fresh.consumedCompletions < completionsCap;
+    if (completionsOk) return { allowed: true };
+  } else {
+    const secondsOk =
+      secondsCap == null || fresh.consumedSeconds < secondsCap;
+    if (secondsOk) return { allowed: true };
+  }
 
-  if (secondsOk && completionsOk) return { allowed: true };
   return { allowed: false, resetAt: fresh.cycleResetAt };
 }
 
@@ -180,6 +184,10 @@ export async function consumeQuota(
   if (deltaSeconds === 0 && deltaCompletions === 0) return;
 
   await ensureQuotaRow(db, userId);
+  const existing = await getQuotaForUser(db, userId);
+  if (existing) {
+    await maybeResetCycle(db, existing);
+  }
 
   await db
     .update(quotaBalance)

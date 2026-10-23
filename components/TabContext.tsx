@@ -53,16 +53,24 @@ export function TabProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (compactMode) return;
+      if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
 
-      if (e.altKey && e.code === "KeyC") {
+      if (e.code === "KeyC") {
         e.preventDefault();
         setActiveTab("copilot");
-      }
-      if (e.altKey && e.code === "KeyA") {
+      } else if (e.code === "KeyA") {
         e.preventDefault();
         setActiveTab("ask-ai");
-      }
-      if (e.altKey && e.code === "KeyN") {
+      } else if (e.code === "KeyN") {
         e.preventDefault();
         setActiveTab("notes");
       }

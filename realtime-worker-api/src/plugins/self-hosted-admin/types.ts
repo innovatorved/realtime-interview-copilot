@@ -38,6 +38,7 @@ export type SecurityEventType =
 export interface SelfHostedAdminOptions {
   getDb: () => DrizzleD1Database<typeof schemaTypes>;
   d1: D1Database;
+  env?: import("../../env").Env;
   adminEmails: string[];
   sentinel?: {
     maxLoginAttemptsPerHour?: number;

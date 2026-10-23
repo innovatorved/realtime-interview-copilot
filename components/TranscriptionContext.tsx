@@ -110,6 +110,7 @@ export function TranscriptionProvider({ children }: { children: ReactNode }) {
 
     const handle = await startDeepgramSession({
       isElectron: !!isElectron,
+      initialText: transcribedTextRef.current,
       nextSegmentId: () => `segment-${segmentCounterRef.current++}`,
       onState: (s) => {
         // Ignore state updates from an older session that was stopped
@@ -148,7 +149,9 @@ export function TranscriptionProvider({ children }: { children: ReactNode }) {
   const flushTranscriptPersist = useCallback(() => {
     if (!persistDirtyRef.current) return;
     persistDirtyRef.current = false;
-    persistSegments(transcriptionSegmentsRef.current);
+    persistSegments(
+      transcriptionSegmentsRef.current.filter((s) => s.isFinal !== false),
+    );
   }, []);
 
   useEffect(() => {

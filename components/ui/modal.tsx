@@ -19,11 +19,30 @@ export function Modal({
   children,
   className,
 }: ModalProps) {
+  const titleId = React.useId();
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
     <div
       data-clickable
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={title ? titleId : undefined}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
       className="fixed inset-0 z-[110] flex items-center justify-center bg-surface-base/80 p-4 animate-fade-in-scale"
     >
       <div
@@ -34,7 +53,10 @@ export function Modal({
       >
         <div className="mb-2 flex items-start justify-between gap-3">
           {title && (
-            <h2 className="m-0 text-sm font-semibold leading-snug tracking-tight text-text-primary">
+            <h2
+              id={titleId}
+              className="m-0 text-sm font-semibold leading-snug tracking-tight text-text-primary"
+            >
               {title}
             </h2>
           )}

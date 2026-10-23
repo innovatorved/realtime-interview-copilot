@@ -12,7 +12,6 @@ import { DEFAULT_GEMINI_MODEL, invalidateConfigCache } from "./config-cache";
  * Access-Control-Allow-Origin response never disagree.
  */
 export const TRUSTED_ORIGINS = [
-  "null",
   "file://",
   "http://localhost:3000",
   "http://localhost:3001",
@@ -63,6 +62,7 @@ export const auth = (env: Env & { CONFIG_KV?: KVNamespace }) => {
       selfHostedAdmin({
         getDb: () => db,
         d1: env.DB,
+        env,
         adminEmails,
         onConfigChange: () => invalidateConfigCache(env),
         sentinel: {

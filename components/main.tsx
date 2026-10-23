@@ -49,11 +49,17 @@ export default function MainPage() {
   const { isExporting, error: exportError, exportNotes } = useExport();
   const [saveNoteError, setSaveNoteError] = useState<string | null>(null);
   const [captureError, setCaptureError] = useState<string | null>(null);
-  const [dismissedError, setDismissedError] = useState(false);
+  const [dismissedErrorText, setDismissedErrorText] = useState<string | null>(
+    null,
+  );
   const topError =
     saveNoteError ?? captureError ?? notesError ?? exportError ?? null;
-  useEffect(() => {
-    if (topError) setDismissedError(false);
+  const visibleTopError =
+    topError && topError !== dismissedErrorText ? topError : null;
+  const handleDismissTopError = useCallback(() => {
+    setSaveNoteError(null);
+    setCaptureError(null);
+    setDismissedErrorText(topError);
   }, [topError]);
 
   useLayoutEffect(() => {
@@ -185,10 +191,10 @@ export default function MainPage() {
         </header>
       )}
 
-      {topError && !dismissedError && (
+      {visibleTopError && (
         <AlertBanner
-          message={topError}
-          onDismiss={() => setDismissedError(true)}
+          message={visibleTopError}
+          onDismiss={handleDismissTopError}
           className="mx-3 mt-2 rounded-md"
         />
       )}

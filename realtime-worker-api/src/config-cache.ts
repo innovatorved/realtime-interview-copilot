@@ -187,9 +187,18 @@ async function loadFromD1(env: ConfigCacheEnv): Promise<ResolvedConfig> {
   }
 }
 
+const MEMORY_CONFIG_TTL_MS = 30_000;
+let memoryConfigCache: { ts: number; cfg: ResolvedConfig } | null = null;
+
 export async function getCachedConfig(env: ConfigCacheEnv): Promise<ResolvedConfig> {
+  if (memoryConfigCache && Date.now() - memoryConfigCache.ts < MEMORY_CONFIG_TTL_MS) {
+    return memoryConfigCache.cfg;
+  }
+
   if (!env.CONFIG_KV) {
-    return loadFromD1(env);
+    const fresh = await loadFromD1(env);
+    memoryConfigCache = { ts: Date.now(), cfg: fresh };
+    return fresh;
   }
 
   const key = KV.adminConfig();
@@ -214,7 +223,7 @@ export async function getCachedConfig(env: ConfigCacheEnv): Promise<ResolvedConf
   if (cachedNonSecret) {
     // We always hit D1 for the secret columns so they never live in KV.
     const fresh = await loadFromD1(env);
-    return {
+    const merged: ResolvedConfig = {
       ...fresh,
       geminiModel: cachedNonSecret.geminiModel,
       customModelName: cachedNonSecret.customModelName,
@@ -228,6 +237,8 @@ export async function getCachedConfig(env: ConfigCacheEnv): Promise<ResolvedConf
       modelTopP: cachedNonSecret.modelTopP,
       modelThinkingBudget: cachedNonSecret.modelThinkingBudget,
     };
+    memoryConfigCache = { ts: Date.now(), cfg: merged };
+    return merged;
   }
 
   const fresh = await loadFromD1(env);
@@ -251,6 +262,7 @@ export async function getCachedConfig(env: ConfigCacheEnv): Promise<ResolvedConf
   } catch (err) {
     console.warn("[config-cache] KV write failed:", err);
   }
+  memoryConfigCache = { ts: Date.now(), cfg: fresh };
   return fresh;
 }
 
@@ -259,6 +271,7 @@ export async function getCachedConfig(env: ConfigCacheEnv): Promise<ResolvedConf
  * next request sees fresh values instead of waiting for the TTL.
  */
 export async function invalidateConfigCache(env: ConfigCacheEnv): Promise<void> {
+  memoryConfigCache = null;
   if (!env.CONFIG_KV) return;
   try {
     await env.CONFIG_KV.delete(KV.adminConfig());
@@ -280,8 +293,9 @@ export async function invalidateConfigCache(env: ConfigCacheEnv): Promise<void> 
 export async function getEffectiveModelParams(
   env: ConfigCacheEnv,
   userId: string | null | undefined,
+  resolvedCfg?: ResolvedConfig,
 ): Promise<ModelParams> {
-  const cfg = await getCachedConfig(env);
+  const cfg = resolvedCfg ?? (await getCachedConfig(env));
   const globals: ModelParams = {
     maxOutputTokens: cfg.modelMaxOutputTokens,
     temperature: cfg.modelTemperature,

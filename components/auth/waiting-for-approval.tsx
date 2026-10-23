@@ -48,7 +48,7 @@ function PrimaryButton({
         transition: "background-color 150ms ease",
         boxShadow: isOff
           ? "none"
-          : "0 1px 2px rgba(0,0,0,0.4), 0 0 0 1px rgba(34, 197, 94, 0.30), 0 0 16px rgba(34, 197, 94, 0.16)",
+          : `0 1px 2px rgba(0,0,0,0.4), 0 0 0 1px ${TOKEN.accentBorder}, 0 0 16px ${TOKEN.accentRing}`,
         ...(rest.style ?? {}),
       }}
       onMouseEnter={(e) => {
@@ -470,7 +470,7 @@ export function WaitingForApproval({ email }: { email?: string }) {
                                   borderRadius: 9999,
                                   backgroundColor: TOKEN.accent,
                                   display: "inline-block",
-                                  boxShadow: "0 0 6px rgba(34, 197, 94, 0.65)",
+                                  boxShadow: `0 0 6px ${TOKEN.accent}`,
                                 }}
                               />
                             )}

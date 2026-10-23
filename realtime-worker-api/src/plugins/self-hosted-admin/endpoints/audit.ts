@@ -3,7 +3,7 @@
 import { and, count, desc, eq, like, or } from "drizzle-orm";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { auditEvent, securityEvent } from "../../../db/schema";
-import { parseLimit, parseOffset, parseAdminQuery, sanitizeSearch } from "../helpers";
+import { likeEscaped, parseLimit, parseOffset, parseAdminQuery, sanitizeSearch } from "../helpers";
 import {
   activityQuerySchema,
   auditLogsQuerySchema,
@@ -38,8 +38,7 @@ export function auditEndpoints(deps: AdminDeps) {
         if (eventType) conditions.push(eq(auditEvent.eventType, eventType));
         if (userId) conditions.push(eq(auditEvent.userId, userId));
         if (q) {
-          const safeQ = q.replace(/%/g, "\\%").replace(/_/g, "\\_");
-          conditions.push(or(like(auditEvent.userEmail, `%${safeQ}%`), like(auditEvent.ipAddress, `%${safeQ}%`))!);
+          conditions.push(or(likeEscaped(auditEvent.userEmail, q), likeEscaped(auditEvent.ipAddress, q))!);
         }
         const where = conditions.length > 0 ? and(...conditions) : undefined;
         const [rows, [{ total }]] = await Promise.all([
@@ -75,8 +74,7 @@ export function auditEndpoints(deps: AdminDeps) {
         const conditions: ReturnType<typeof eq>[] = [];
         if (eventType) conditions.push(eq(securityEvent.eventType, eventType));
         if (q) {
-          const safeQ = q.replace(/%/g, "\\%").replace(/_/g, "\\_");
-          conditions.push(or(like(securityEvent.userEmail, `%${safeQ}%`), like(securityEvent.ipAddress, `%${safeQ}%`))!);
+          conditions.push(or(likeEscaped(securityEvent.userEmail, q), likeEscaped(securityEvent.ipAddress, q))!);
         }
         const where = conditions.length > 0 ? and(...conditions) : undefined;
         const [rows, [{ total }]] = await Promise.all([

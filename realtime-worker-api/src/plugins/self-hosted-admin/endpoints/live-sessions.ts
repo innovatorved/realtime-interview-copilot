@@ -15,7 +15,7 @@ import {
 import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { liveSession, session, usageEvent, user } from "../../../db/schema";
 import { ADMIN_FETCH_TIMEOUT_MS } from "../constants";
-import { parseLimit, parseOffset, parseAdminQuery, sanitizeSearch } from "../helpers";
+import { likeEscaped, parseLimit, parseOffset, parseAdminQuery, sanitizeSearch } from "../helpers";
 import { liveSessionTerminateSchema } from "../schemas";
 import { liveSessionsQuerySchema, requiredIdQuerySchema } from "../query-schemas";
 import type { AdminDeps } from "../types";
@@ -45,9 +45,9 @@ export function liveSessionEndpoints(deps: AdminDeps) {
         const q = sanitizeSearch(query.q ?? null);
 
         // Sessions are "stale" if there's been no recorder activity
-        // (Deepgram key mint, tracked event, etc.) in 5 minutes —
-        // likely a browser tab crash.
-        const STALE_AFTER_MS = 5 * 60_000;
+        // (Deepgram key mint, heartbeat, tracked event, etc.) in 30 minutes —
+        // likely a browser tab or process crash.
+        const STALE_AFTER_MS = 30 * 60_000;
         const staleCutoff = new Date(Date.now() - STALE_AFTER_MS);
 
         const conditions: ReturnType<typeof eq>[] = [];
@@ -62,11 +62,10 @@ export function liveSessionEndpoints(deps: AdminDeps) {
           conditions.push(isNotNull(liveSession.endedAt));
         }
         if (q) {
-          const safeQ = q.replace(/%/g, "\\%").replace(/_/g, "\\_");
           conditions.push(
             or(
-              like(liveSession.userEmail, `%${safeQ}%`),
-              like(liveSession.ipAddress, `%${safeQ}%`),
+              likeEscaped(liveSession.userEmail, q),
+              likeEscaped(liveSession.ipAddress, q),
             )!,
           );
         }
@@ -171,7 +170,7 @@ export function liveSessionEndpoints(deps: AdminDeps) {
         return ctx.json({
           session: row,
           events,
-          staleAfterMs: 5 * 60_000,
+          staleAfterMs: 30 * 60_000,
         });
       },
     ),

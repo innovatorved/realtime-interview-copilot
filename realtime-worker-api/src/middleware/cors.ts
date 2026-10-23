@@ -13,12 +13,14 @@ export const TRUSTED_ORIGINS: ReadonlySet<string> = new Set<string>(
   AUTH_TRUSTED_ORIGINS,
 );
 
+const DEFAULT_ALLOW_ORIGIN = "https://copilot.vedgupta.in";
+
 function buildCorsHeaders(request: Request) {
   const origin = request.headers.get("Origin");
   const allowOrigin =
-    origin && TRUSTED_ORIGINS.has(origin)
+    origin && origin !== "null" && TRUSTED_ORIGINS.has(origin)
       ? origin
-      : (TRUSTED_ORIGINS.values().next().value as string);
+      : DEFAULT_ALLOW_ORIGIN;
 
   return {
     "Access-Control-Allow-Origin": allowOrigin,

@@ -9,6 +9,7 @@ import {
 } from "electron";
 import * as fs from "fs";
 import * as path from "path";
+import { pathToFileURL } from "url";
 
 import { installSingleInstanceAndDeepLinks } from "./deepLink";
 import { registerAppIpc } from "./ipc/app";
@@ -39,8 +40,8 @@ function getMainWindow(): BrowserWindow | null {
   return mainWindow;
 }
 
-// Hide from screen share and screen recording on macOS
-if (process.platform === "darwin") {
+// Disable Windows MediaFoundation video capture when problematic on older drivers
+if (process.platform === "win32") {
   app.commandLine.appendSwitch(
     "disable-features",
     "MediaFoundationVideoCapture",
@@ -193,16 +194,8 @@ async function createWindow() {
     if (isDev) {
       const devUrl = `http://localhost:${devPort}`;
       await mainWindow.loadURL(devUrl);
-
-      setTimeout(() => {
-        mainWindow?.webContents.reloadIgnoringCache();
-      }, 200);
     } else {
       await mainWindow.loadFile(indexFile);
-
-      setTimeout(() => {
-        mainWindow?.webContents.reloadIgnoringCache();
-      }, 200);
     }
     if (debugMode) {
       mainWindow.webContents.openDevTools({ mode: "detach" });
@@ -218,7 +211,7 @@ async function createWindow() {
     // transient failure (e.g. `next dev` not up yet) is recoverable in-app.
     const retryTarget = isDev
       ? `http://localhost:${devPort}`
-      : `file://${indexFile}`;
+      : pathToFileURL(indexFile).href;
     mainWindow.loadURL(
       `data:text/html;charset=utf-8,${encodeURIComponent(
         `<!doctype html><html><body style="font-family:system-ui;background:#141210;color:#edeceb;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0"><div style="text-align:center;max-width:32rem;padding:2rem"><h1 style="font-size:1.1rem;margin:0 0 .5rem">Error loading application</h1><p style="opacity:.7;font-size:.85rem;margin:0 0 1.25rem">${safeMsg}</p><button onclick="location.href='${retryTarget}'" style="background:#34d399;color:#0a0a0a;border:none;padding:.55rem 1.1rem;border-radius:.5rem;font-weight:600;font-size:.85rem;cursor:pointer">Retry</button></div></body></html>`,

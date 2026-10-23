@@ -23,6 +23,7 @@ import posthog from "posthog-js";
 import { ricFetch } from "@/lib/ric-fetch";
 import {
   endLiveSession,
+  heartbeatLiveSession,
   startLiveSession,
   trackEvent,
 } from "@/lib/session-tracking";
@@ -35,16 +36,20 @@ export type SessionState =
   | "live"
   | "reconnecting";
 
+const SESSION_HEARTBEAT_INTERVAL_MS = 2 * 60_000;
+
 interface DeepgramWord {
   word: string;
   punctuated_word?: string;
   start?: number;
   end?: number;
   confidence?: number;
+  speaker?: number;
 }
 
 export interface DeepgramSessionCallbacks {
   isElectron: boolean;
+  initialText?: string;
   nextSegmentId: () => string;
   onState: (state: SessionState) => void;
   onError: (message: string) => void;
@@ -79,6 +84,7 @@ export async function startDeepgramSession(
 ): Promise<DeepgramSessionHandle> {
   const {
     isElectron,
+    initialText = "",
     nextSegmentId,
     onState,
     onError,
@@ -94,7 +100,10 @@ export async function startDeepgramSession(
   let currentState: SessionState = "idle";
   let reconnectAttempt = 0;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   let recordingStarted = false;
+  let finalizedText = initialText.trim();
+  let currentInterimId: string | null = null;
 
   function setState(s: SessionState) {
     currentState = s;
@@ -106,6 +115,22 @@ export async function startDeepgramSession(
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
     }
+  }
+
+  function clearHeartbeatTimer() {
+    if (heartbeatTimer !== null) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+  }
+
+  function startHeartbeatTimer() {
+    clearHeartbeatTimer();
+    heartbeatTimer = setInterval(() => {
+      if (!stale && liveSessionId) {
+        void heartbeatLiveSession(liveSessionId);
+      }
+    }, SESSION_HEARTBEAT_INTERVAL_MS);
   }
 
   function teardownMedia() {
@@ -133,6 +158,7 @@ export async function startDeepgramSession(
 
   function teardown() {
     clearReconnectTimer();
+    clearHeartbeatTimer();
     teardownMedia();
     teardownConnection();
     setState("idle");
@@ -141,6 +167,7 @@ export async function startDeepgramSession(
   function stop() {
     stale = true;
     clearReconnectTimer();
+    clearHeartbeatTimer();
     teardown();
   }
 
@@ -158,14 +185,30 @@ export async function startDeepgramSession(
       const words: DeepgramWord[] = alt.words;
       const caption = words
         .map((word) => word.punctuated_word ?? word.word)
-        .join(" ");
+        .join(" ")
+        .trim();
 
       if (caption === "") return;
 
-      onTranscribedText((prev) => (prev ? prev + " " + caption : caption));
+      const isFinal = Boolean(data.is_final);
+      const segmentId = isFinal
+        ? (currentInterimId ?? nextSegmentId())
+        : (currentInterimId ??= nextSegmentId());
+
+      if (isFinal) {
+        finalizedText = finalizedText ? `${finalizedText} ${caption}` : caption;
+        currentInterimId = null;
+        onTranscribedText(() => finalizedText);
+      } else {
+        const combined = finalizedText
+          ? `${finalizedText} ${caption}`
+          : caption;
+        onTranscribedText(() => combined);
+      }
 
       const startTime = words.length > 0 ? (words[0].start ?? 0) : 0;
       const endTime = words.length > 0 ? (words[words.length - 1].end ?? 0) : 0;
+      const primarySpeaker = words[0]?.speaker ?? data.channel?.speaker;
 
       const wordsData: TranscriptionWord[] = words.map((word) => ({
         word: word.word,
@@ -173,11 +216,11 @@ export async function startDeepgramSession(
         start: word.start,
         end: word.end,
         confidence: word.confidence,
-        speaker: data.channel?.speaker,
+        speaker: word.speaker ?? data.channel?.speaker,
       }));
 
       const segment: TranscriptionSegment = {
-        id: nextSegmentId(),
+        id: segmentId,
         text: caption,
         words: wordsData,
         startTime,
@@ -187,8 +230,8 @@ export async function startDeepgramSession(
             ? words.reduce((acc, w) => acc + (w.confidence ?? 0), 0) /
               words.length
             : 0,
-        speaker: data.channel?.speaker,
-        isFinal: data.is_final ?? false,
+        speaker: primarySpeaker,
+        isFinal,
         timestamp: new Date().toISOString(),
       };
       onSegment(segment);
@@ -261,6 +304,7 @@ export async function startDeepgramSession(
       reconnectAttempt = 0;
       setState("live");
       startRecorderIfNeeded(media);
+      startHeartbeatTimer();
     });
 
     conn.on("close", () => {
@@ -317,8 +361,12 @@ export async function startDeepgramSession(
     }
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
+    const isWin =
+      typeof window !== "undefined" && window.electronAPI?.platform === "win32";
     const hint = isElectron
-      ? "Grant Screen Recording permission in System Settings, then try again."
+      ? isWin
+        ? "Ensure audio playback is active and Sound permissions are enabled in Windows Settings, then try again."
+        : "Grant Screen Recording permission in System Settings, then try again."
       : 'Pick the tab or window playing audio and enable "Share audio".';
     onError(`Could not capture system audio. ${hint} (${msg})`);
     setState("idle");

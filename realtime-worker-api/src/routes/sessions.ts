@@ -285,3 +285,51 @@ export async function handleSessionEndAll(
 
   return jsonResponse({ ok: true, endedCount: ids.length });
 }
+
+/**
+ * Lightweight heartbeat ping from active desktop/web recorders so long
+ * interviews don't age out past the stale session cutoff between Deepgram
+ * key mints.
+ */
+export async function handleSessionHeartbeat(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<Response> {
+  const authResult = await getAuthenticatedUser(request, env, ctx);
+  if (!isAuthed(authResult)) return authErrorResponse(authResult.error);
+
+  let body: SessionMutationBody;
+  try {
+    body = (await request.json()) as SessionMutationBody;
+  } catch {
+    return jsonResponse({ error: "Invalid JSON" }, 400);
+  }
+  const sessionId = typeof body?.sessionId === "string" ? body.sessionId : "";
+  if (!SAFE_SESSION_ID_RE.test(sessionId)) {
+    return jsonResponse({ error: "Invalid sessionId" }, 400);
+  }
+
+  const db = getDb(env);
+  const [row] = await db
+    .select({
+      id: liveSession.id,
+      userId: liveSession.userId,
+      endedAt: liveSession.endedAt,
+    })
+    .from(liveSession)
+    .where(eq(liveSession.id, sessionId))
+    .limit(1);
+  if (!row) return jsonResponse({ error: "Session not found" }, 404);
+  if (row.userId !== authResult.id)
+    return jsonResponse({ error: "Forbidden" }, 403);
+  if (row.endedAt) return jsonResponse({ ok: false, ended: true }, 410);
+
+  const now = new Date();
+  await db
+    .update(liveSession)
+    .set({ lastSeenAt: now })
+    .where(eq(liveSession.id, sessionId));
+
+  return jsonResponse({ ok: true, lastSeenAt: now.toISOString() });
+}

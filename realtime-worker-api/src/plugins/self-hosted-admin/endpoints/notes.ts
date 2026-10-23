@@ -3,7 +3,7 @@
 import { and, count, desc, eq, like } from "drizzle-orm";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { savedNote, user, userInterviewContext } from "../../../db/schema";
-import { parseLimit, parseOffset, parseAdminQuery, sanitizeSearch } from "../helpers";
+import { likeEscaped, parseLimit, parseOffset, parseAdminQuery, sanitizeSearch } from "../helpers";
 import { adminDeleteNoteSchema } from "../schemas";
 import { listNotesQuerySchema, requiredUserIdQuerySchema } from "../query-schemas";
 import type { AdminDeps } from "../types";
@@ -27,8 +27,7 @@ export function notesEndpoints(deps: AdminDeps) {
 
         const conditions: ReturnType<typeof eq>[] = [];
         if (q) {
-          const safeQ = q.replace(/%/g, "\\%").replace(/_/g, "\\_");
-          conditions.push(like(savedNote.content, `%${safeQ}%`));
+          conditions.push(likeEscaped(savedNote.content, q));
         }
         if (userId) conditions.push(eq(savedNote.userId, userId));
 

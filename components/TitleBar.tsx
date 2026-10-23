@@ -12,6 +12,8 @@ import {
   Plus,
   Rows3,
   Download,
+  EyeOff,
+  Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { authClient, signOutAndTrack } from "@/lib/auth-client";
@@ -26,6 +28,7 @@ import { APP_DISPLAY_NAME } from "@/lib/constant";
 export default function TitleBar() {
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(true);
   const [isMaximized, setIsMaximized] = useState(false);
+  const [isStealth, setIsStealth] = useState(false);
   const [isElectron, setIsElectron] = useState(false);
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const [updateStatus, setUpdateStatus] = useState<string | null>(null);
@@ -115,6 +118,13 @@ export default function TitleBar() {
     }
   };
 
+  const handleToggleStealth = async () => {
+    if (!window.electronAPI?.windowSetFocusable) return;
+    const nextStealth = !isStealth;
+    await window.electronAPI.windowSetFocusable(!nextStealth);
+    setIsStealth(nextStealth);
+  };
+
   const handleBackdropChange = (delta: number) => {
     if (window.electronAPI) {
       adjustBackdropOpacity(delta);
@@ -137,6 +147,14 @@ export default function TitleBar() {
     return null;
   }
 
+  const isApprovedUser = Boolean(
+    session?.user &&
+      !(session.user as { isBanned?: boolean; isApproved?: boolean })
+        .isBanned &&
+      (session.user as { isBanned?: boolean; isApproved?: boolean })
+        .isApproved !== false,
+  );
+
   const noDragStyle = { WebkitAppRegion: "no-drag" } as React.CSSProperties;
 
   return (
@@ -146,7 +164,7 @@ export default function TitleBar() {
       className="titlebar-chrome fixed left-0 right-0 top-0 z-50 flex h-8 select-none flex-col"
       style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
     >
-      {!compactMode && <SignalStrip activeTab={activeTab} />}
+      {isApprovedUser && !compactMode && <SignalStrip activeTab={activeTab} />}
       <div className="flex min-h-0 flex-1 items-center justify-between px-3">
         <div className="flex min-w-0 items-center gap-2">
           <span className="relative flex h-1.5 w-1.5 shrink-0" aria-hidden>
@@ -157,7 +175,7 @@ export default function TitleBar() {
             {APP_DISPLAY_NAME}
           </span>
 
-          {!compactMode && (
+          {isApprovedUser && !compactMode && (
             <WorkspaceTabs
               activeTab={activeTab}
               onTabChange={setActiveTab}
@@ -260,6 +278,24 @@ export default function TitleBar() {
           <Button
             size="icon"
             variant="ghost"
+            className={cn("h-6 w-6", isStealth && "text-accent-text")}
+            onClick={() => void handleToggleStealth()}
+            title={
+              isStealth
+                ? "Stealth mode ON (window won't steal focus when clicked)"
+                : "Enable stealth mode (prevent focus stealing)"
+            }
+          >
+            {isStealth ? (
+              <EyeOff className="h-3 w-3" />
+            ) : (
+              <Eye className="h-3 w-3" />
+            )}
+          </Button>
+
+          <Button
+            size="icon"
+            variant="ghost"
             className={cn("h-6 w-6", isAlwaysOnTop && "text-info")}
             onClick={handleToggleAlwaysOnTop}
             title={
@@ -320,7 +356,11 @@ export default function TitleBar() {
               className="shrink-0 rounded-md bg-accent px-2 py-1 text-[10px] font-semibold text-accent-foreground hover:opacity-90"
               onClick={() => {
                 setUpdateToast(null);
-                void window.electronAPI?.appRelaunch();
+                if (window.electronAPI?.updaterInstall) {
+                  void window.electronAPI.updaterInstall();
+                } else {
+                  void window.electronAPI?.appRelaunch();
+                }
               }}
             >
               Restart

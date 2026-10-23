@@ -35,7 +35,7 @@ export function renderMarkdownToHtml(md: string): string {
       .replace(/`([^`]+)`/g, "<code>$1</code>")
       .replace(
         /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
-        '<a href="$1" rel="noopener noreferrer nofollow">$2</a>',
+        '<a href="$2" rel="noopener noreferrer nofollow">$1</a>',
       )
       .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
       .replace(/__([^_]+)__/g, "<strong>$1</strong>")

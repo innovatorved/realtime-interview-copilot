@@ -9,7 +9,7 @@ import {
   getQuotaTierCatalog,
   toQuotaSummary,
 } from "../../../services/quota.service";
-import { parseLimit, parseOffset, parseAdminQuery } from "../helpers";
+import { likeEscaped, parseLimit, parseOffset, parseAdminQuery } from "../helpers";
 import {
   quotaListQuerySchema,
   quotaResetCycleSchema,
@@ -37,7 +37,7 @@ export function quotaEndpoints(deps: AdminDeps) {
         return ctx.json({
           userId,
           row,
-          summary: toQuotaSummary(row, {} as import("../../../env").Env),
+          summary: toQuotaSummary(row, (opts.env ?? {}) as import("../../../env").Env),
         });
       },
     ),
@@ -114,7 +114,7 @@ export function quotaEndpoints(deps: AdminDeps) {
         });
 
         const row = await getQuotaForUser(db, userId);
-        return ctx.json({ ok: true, row, summary: toQuotaSummary(row, {} as import("../../../env").Env) });
+        return ctx.json({ ok: true, row, summary: toQuotaSummary(row, (opts.env ?? {}) as import("../../../env").Env) });
       },
     ),
 
@@ -176,9 +176,8 @@ export function quotaEndpoints(deps: AdminDeps) {
 
         const conditions = [];
         if (q) {
-          const safeQ = q.replace(/%/g, "\\%").replace(/_/g, "\\_");
           conditions.push(
-            or(like(user.email, `%${safeQ}%`), like(user.name, `%${safeQ}%`))!,
+            or(likeEscaped(user.email, q), likeEscaped(user.name, q))!,
           );
         }
         if (tierFilter) {

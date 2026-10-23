@@ -18,7 +18,7 @@ import {
   getQuotaForUser,
   toQuotaSummary,
 } from "../../../services/quota.service";
-import { parseLimit, parseOffset, parseAdminQuery, sanitizeSearch } from "../helpers";
+import { likeEscaped, parseLimit, parseOffset, parseAdminQuery, sanitizeSearch } from "../helpers";
 import {
   bulkApproveSchema,
   bulkBanSchema,
@@ -61,8 +61,7 @@ export function userEndpoints(deps: AdminDeps) {
 
         const conditions: ReturnType<typeof eq>[] = [];
         if (q) {
-          const safeQ = q.replace(/%/g, "\\%").replace(/_/g, "\\_");
-          conditions.push(or(like(user.email, `%${safeQ}%`), like(user.name, `%${safeQ}%`))!);
+          conditions.push(or(likeEscaped(user.email, q), likeEscaped(user.name, q))!);
         }
         if (filter === "pending") conditions.push(eq(user.isApproved, false));
         if (filter === "banned") conditions.push(eq(user.isBanned, true));
@@ -168,6 +167,9 @@ export function userEndpoints(deps: AdminDeps) {
         }
 
         await db.update(user).set(updates).where(eq(user.id, userId));
+        if (isBanned === true) {
+          await db.delete(session).where(eq(session.userId, userId));
+        }
         return ctx.json({ ok: true });
       },
     ),
@@ -264,7 +266,7 @@ export function userEndpoints(deps: AdminDeps) {
           hasInterviewContext: !!interviewContext[0],
           recentAuditEvents: recentAudit,
           modelParamsOverride,
-          quota: toQuotaSummary(quotaRow, {} as import("../../../env").Env),
+          quota: toQuotaSummary(quotaRow, (opts.env ?? {}) as import("../../../env").Env),
           usage: {
             window: "30d",
             since: usageSince.toISOString(),

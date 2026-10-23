@@ -24,7 +24,7 @@ import {
 } from "../lib/prompt";
 import { recordUsage, startUsage } from "../usage";
 import { getDb } from "../db";
-import { consumeQuota } from "../services/quota.service";
+import { checkQuota, consumeQuota } from "../services/quota.service";
 import { recordSecurityEvent } from "../lib/security-log";
 import type { Env } from "../env";
 import {
@@ -143,6 +143,28 @@ export async function handleCompletion(
     }
   }
 
+  const quotaCheck = await checkQuota(
+    getDb(env),
+    env,
+    trackedUser.id,
+    "completion",
+  );
+  if (!quotaCheck.allowed) {
+    recordUsage(env, ctx, request, trackedUser, "completion", {
+      status: "rate_limited",
+      errorCode: "quota_exceeded",
+      flag: typeof payload.flag === "string" ? payload.flag : null,
+      promptChars: basePrompt.length,
+    });
+    return jsonResponse(
+      {
+        error: "Monthly completion quota exceeded.",
+        resetAt: quotaCheck.resetAt.toISOString(),
+      },
+      429,
+    );
+  }
+
   const wireMessages = buildWireMessages(payload, hasChatHistory, basePrompt);
 
   const promptChars = wireMessages.reduce((sum, m) => sum + m.text.length, 0);
@@ -237,6 +259,7 @@ export async function handleCompletion(
   const modelParams = await getEffectiveModelParams(
     env,
     trackedUser?.id ?? null,
+    cfg,
   );
 
   // Live interview features need the first token FAST — a thinking phase

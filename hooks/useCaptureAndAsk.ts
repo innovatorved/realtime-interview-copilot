@@ -37,8 +37,13 @@ export function useCaptureAndAsk({
         const result = await api.screen.capture();
         if (!result.success) {
           console.error("Screen capture failed:", result.error);
+          const isWin =
+            typeof navigator !== "undefined" &&
+            /win/i.test(navigator.userAgent || navigator.platform || "");
           onError?.(
-            "Screenshot capture failed. Check Screen Recording permission in System Settings, then try again.",
+            isWin
+              ? "Screenshot capture failed. Please check display permissions and try again."
+              : "Screenshot capture failed. Check Screen Recording permission in System Settings, then try again.",
           );
           return;
         }

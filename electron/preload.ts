@@ -37,6 +37,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     options?: { forward?: boolean },
   ) => ipcRenderer.invoke("window-set-ignore-mouse-events", ignore, options),
   windowFocus: () => ipcRenderer.invoke("window-focus"),
+  windowSetFocusable: (focusable: boolean) =>
+    ipcRenderer.invoke("window-set-focusable", focusable),
   onWindowFocus: (callback: () => void) => {
     const handler = () => callback();
     ipcRenderer.on("window:focus", handler);
@@ -47,6 +49,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   updaterGetVersion: () => ipcRenderer.invoke("updater:get-version"),
   updaterGetStatus: () => ipcRenderer.invoke("updater:get-status"),
   updaterCheck: () => ipcRenderer.invoke("updater:check"),
+  updaterInstall: () => ipcRenderer.invoke("updater:install"),
   onUpdaterStatus: (callback: (status: UpdaterStatusPayload) => void) => {
     const handler = (
       _event: Electron.IpcRendererEvent,
@@ -90,12 +93,14 @@ export interface ElectronAPI {
     options?: { forward?: boolean },
   ) => Promise<void>;
   windowFocus: () => Promise<void>;
+  windowSetFocusable?: (focusable: boolean) => Promise<boolean>;
   onWindowFocus?: (callback: () => void) => () => void;
   appQuit: () => Promise<void>;
   appRelaunch: () => Promise<void>;
   updaterGetVersion: () => Promise<string>;
   updaterGetStatus: () => Promise<UpdaterStatusPayload>;
   updaterCheck: () => Promise<void>;
+  updaterInstall?: () => Promise<void>;
   onUpdaterStatus: (
     callback: (status: UpdaterStatusPayload) => void,
   ) => () => void;

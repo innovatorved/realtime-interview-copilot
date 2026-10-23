@@ -83,6 +83,21 @@ export async function endLiveSession(
 }
 
 /**
+ * Send a lightweight heartbeat for an active live session so long-running
+ * interviews without UI button clicks are never reaped as stale.
+ */
+export async function heartbeatLiveSession(sessionId: string): Promise<void> {
+  try {
+    await ricFetch("/api/sessions/heartbeat", {
+      method: "POST",
+      body: JSON.stringify({ sessionId }),
+    });
+  } catch {
+    // Best-effort heartbeat.
+  }
+}
+
+/**
  * End every active live_session row owned by the signed-in user.
  *
  * Used in two places:

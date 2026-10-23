@@ -293,9 +293,14 @@ export function useAskMic(options: UseAskMicOptions = {}): UseAskMicReturn {
       const isPermission =
         err instanceof Error &&
         (err.name === "NotAllowedError" || err.name === "SecurityError");
+      const isWin =
+        typeof navigator !== "undefined" &&
+        /win/i.test(navigator.userAgent || navigator.platform || "");
       setError(
         isPermission
-          ? "Microphone permission denied. Allow mic access in System Settings → Privacy & Security → Microphone, then try again."
+          ? isWin
+            ? "Microphone permission denied. Allow mic access in Windows Settings → Privacy & security → Microphone, then try again."
+            : "Microphone permission denied. Allow mic access in System Settings → Privacy & Security → Microphone, then try again."
           : `Could not access microphone: ${msg}`,
       );
       setState("idle");

@@ -111,30 +111,32 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement;
-      const isTypingInInput =
-        target.tagName === "INPUT" || target.tagName === "TEXTAREA";
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      const isInteractive =
+        !!target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.tagName === "BUTTON" ||
+          target.tagName === "A" ||
+          target.isContentEditable);
+      if (isInteractive) return;
 
       switch (event.key.toLowerCase()) {
         case "enter":
-          if (!isTypingInInput) {
-            event.preventDefault();
-            formRef.current?.dispatchEvent(
-              new Event("submit", { cancelable: true, bubbles: true }),
-            );
-          }
+          event.preventDefault();
+          formRef.current?.dispatchEvent(
+            new Event("submit", { cancelable: true, bubbles: true }),
+          );
           break;
         case "s":
-          if (!isTypingInInput) {
-            event.preventDefault();
-            setFlag(FLAGS.SUMMARIZER);
-          }
+          event.preventDefault();
+          setFlag(FLAGS.SUMMARIZER);
           break;
         case "c":
-          if (!isTypingInInput) {
-            event.preventDefault();
-            setFlag(FLAGS.COPILOT);
-          }
+          event.preventDefault();
+          setFlag(FLAGS.COPILOT);
           break;
       }
     },

@@ -17,5 +17,8 @@ function registerAppIpc() {
     });
     electron_1.ipcMain.handle("updater:get-version", () => (0, updater_1.getAppVersion)());
     electron_1.ipcMain.handle("updater:get-status", () => (0, updater_1.getUpdaterStatus)());
-    electron_1.ipcMain.handle("updater:check", () => (0, updater_1.checkForUpdates)());
+    electron_1.ipcMain.handle("updater:check", () => (0, updater_1.checkForUpdates)(true));
+    electron_1.ipcMain.handle("updater:install", () => {
+        (0, updater_1.installDownloadedUpdate)();
+    });
 }

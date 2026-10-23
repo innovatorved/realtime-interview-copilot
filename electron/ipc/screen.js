@@ -31,7 +31,7 @@ function registerScreenIpc(getWindow) {
             return true;
         }
         if (process.platform === "win32") {
-            await electron_1.shell.openExternal("ms-settings:privacy-broadfilesystemaccess");
+            await electron_1.shell.openExternal("ms-settings:sound");
             return true;
         }
         return false;
@@ -55,7 +55,11 @@ function registerScreenIpc(getWindow) {
         // one-shot frame grab; on macOS 13+ it does not engage the continuous
         // recording indicator for longer than the single frame.
         try {
-            const { width, height } = electron_1.screen.getPrimaryDisplay().size;
+            const w = getWindow();
+            const targetDisplay = w
+                ? electron_1.screen.getDisplayMatching(w.getBounds())
+                : electron_1.screen.getPrimaryDisplay();
+            const { width, height } = targetDisplay.size;
             const scale = 1; // 1:1, full native resolution
             const sources = await electron_1.desktopCapturer.getSources({
                 types: ["screen"],
@@ -64,7 +68,10 @@ function registerScreenIpc(getWindow) {
                     height: Math.round(height * scale),
                 },
             });
-            const primary = sources.find((s) => s.display_id) ?? sources[0];
+            const targetId = String(targetDisplay.id);
+            const primary = sources.find((s) => String(s.display_id) === targetId) ??
+                sources.find((s) => s.display_id) ??
+                sources[0];
             if (!primary || primary.thumbnail.isEmpty()) {
                 return { success: false, error: "No screen source available" };
             }

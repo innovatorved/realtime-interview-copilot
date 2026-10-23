@@ -37,5 +37,10 @@ export function getCachedHealth(key: string): HealthCheckResult | null {
 }
 
 export function setCachedHealth(key: string, result: HealthCheckResult) {
-  healthCache.set(key, { ts: Date.now(), result });
+  const entry = { ts: Date.now(), result };
+  healthCache.set(key, entry);
+  const prefix = key.split(":")[0];
+  if (prefix && prefix !== key) {
+    healthCache.set(prefix, entry);
+  }
 }

@@ -3,6 +3,9 @@
 import {
   ArrowDown,
   Camera,
+  Check,
+  Copy,
+  Download,
   Image as ImageIcon,
   MessageSquare,
   Mic,
@@ -55,6 +58,7 @@ export function QuestionAssistant({
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isElectron, setIsElectron] = useState(false);
+  const [copiedThread, setCopiedThread] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -285,6 +289,43 @@ export function QuestionAssistant({
     posthog.capture("ask_new_chat");
   }, [reset]);
 
+  const formatThreadMarkdown = useCallback(() => {
+    return messages
+      .filter((m) => m.text.trim())
+      .map(
+        (m) =>
+          `### ${m.role === "user" ? "Question" : "Answer"}\n\n${m.text.trim()}`,
+      )
+      .join("\n\n---\n\n");
+  }, [messages]);
+
+  const handleCopyThread = useCallback(async () => {
+    const md = formatThreadMarkdown();
+    if (!md || typeof navigator === "undefined") return;
+    try {
+      await navigator.clipboard.writeText(md);
+      setCopiedThread(true);
+      setTimeout(() => setCopiedThread(false), 1800);
+    } catch {
+      /* ignore clipboard error */
+    }
+  }, [formatThreadMarkdown]);
+
+  const handleExportThread = useCallback(() => {
+    const md = formatThreadMarkdown();
+    if (!md || typeof document === "undefined") return;
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ask-ai-thread-${stamp}.md`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, [formatThreadMarkdown]);
+
   useAskKeyboard({
     enabled: isActive,
     isMicActive: askMic.isActive,
@@ -308,7 +349,13 @@ export function QuestionAssistant({
       const isTypingInInput =
         target.tagName === "INPUT" || target.tagName === "TEXTAREA";
 
-      if (e.key.toLowerCase() === "k" && !isTypingInInput) {
+      if (
+        e.key.toLowerCase() === "k" &&
+        !isTypingInInput &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey
+      ) {
         e.preventDefault();
         inputRef.current?.focus();
       }
@@ -374,21 +421,49 @@ export function QuestionAssistant({
                 clutter the empty state. Mod+Shift+N is the global
                 keyboard equivalent, displayed in the tooltip below. */}
             {messages.length > 0 && (
-              <button
-                type="button"
-                onClick={handleNewChat}
-                aria-label="Start a new chat"
-                title={`Start a new chat (${formatShortcut(["Mod", "Shift", "N"])})`}
-                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border-subtle px-2 py-1 text-[10px] text-text-tertiary transition-colors hover:border-accent/30 hover:bg-accent-muted hover:text-accent-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Plus className="w-2.5 h-2.5" />
-                <span>New chat</span>
-                <Kbd
-                  keys={["Mod", "Shift", "N"]}
-                  size="xs"
-                  className="hidden md:inline-flex ml-0.5 text-neutral-500"
-                />
-              </button>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => void handleCopyThread()}
+                  aria-label="Copy thread as Markdown"
+                  title="Copy thread as Markdown"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border-subtle px-2 py-1 text-[10px] text-text-tertiary transition-colors hover:border-accent/30 hover:bg-accent-muted hover:text-accent-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {copiedThread ? (
+                    <Check className="w-2.5 h-2.5 text-emerald-400" />
+                  ) : (
+                    <Copy className="w-2.5 h-2.5" />
+                  )}
+                  <span className="hidden sm:inline">
+                    {copiedThread ? "Copied" : "Copy"}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportThread}
+                  aria-label="Export thread as Markdown"
+                  title="Export thread as Markdown (.md)"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border-subtle px-2 py-1 text-[10px] text-text-tertiary transition-colors hover:border-accent/30 hover:bg-accent-muted hover:text-accent-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Download className="w-2.5 h-2.5" />
+                  <span className="hidden sm:inline">Export</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNewChat}
+                  aria-label="Start a new chat"
+                  title={`Start a new chat (${formatShortcut(["Mod", "Shift", "N"])})`}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border-subtle px-2 py-1 text-[10px] text-text-tertiary transition-colors hover:border-accent/30 hover:bg-accent-muted hover:text-accent-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Plus className="w-2.5 h-2.5" />
+                  <span>New chat</span>
+                  <Kbd
+                    keys={["Mod", "Shift", "N"]}
+                    size="xs"
+                    className="hidden md:inline-flex ml-0.5 text-neutral-500"
+                  />
+                </button>
+              </div>
             )}
           </div>
 

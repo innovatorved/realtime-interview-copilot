@@ -153,7 +153,8 @@ export async function streamGeminiCompletion(
       .getReader();
 
     let buffer = "";
-    const SSERegex = /^data:\s*(.*)(?:\n\n|\r\r|\r\n\r\n)/;
+    const SSERegex = /^(?:(?::[^\r\n]*|event:[^\r\n]*|id:[^\r\n]*|retry:[^\r\n]*)(?:\r?\n|\r))*data:\s*(.*)(?:\n\n|\r\r|\r\n\r\n)/;
+    const LeadingCommentBlockRegex = /^(?::[^\r\n]*(?:\r?\n|\r))+(?:\r?\n|\r)/;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -162,6 +163,11 @@ export async function streamGeminiCompletion(
       buffer += value;
       if (buffer.length > SSE_BUFFER_MAX) {
         throw new Error(`SSE buffer exceeded ${SSE_BUFFER_MAX} bytes`);
+      }
+
+      let commentMatch;
+      while ((commentMatch = buffer.match(LeadingCommentBlockRegex)) !== null) {
+        buffer = buffer.substring(commentMatch[0].length);
       }
 
       let match;

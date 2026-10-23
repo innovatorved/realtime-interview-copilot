@@ -515,6 +515,15 @@ export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
   const regenerate = useCallback(async () => {
     const last = lastFailedSendRef.current;
     if (!last || controllerRef.current) return;
+    // Remove the trailing failed user message so `send(last)` does not
+    // duplicate it in the conversation thread.
+    const current = messagesRef.current;
+    const tail = current[current.length - 1];
+    if (tail && tail.role === "user" && tail.text === last.text) {
+      const trimmed = current.slice(0, -1);
+      messagesRef.current = trimmed;
+      setMessages(trimmed);
+    }
     await send(last);
   }, [send]);
 

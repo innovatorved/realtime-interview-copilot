@@ -19,6 +19,7 @@ const LATEST_RELEASE_URL =
 
 let status: UpdaterStatus = { type: "idle" };
 let getMainWindow: () => BrowserWindow | null = () => null;
+let manualCheckInProgress = false;
 
 function broadcastStatus(next: UpdaterStatus): void {
   status = next;
@@ -89,7 +90,11 @@ export function initAutoUpdater(
     console.error("[updater]", msg);
     broadcastStatus({ type: "error", message: msg });
 
-    if (process.platform === "darwin") {
+    // Only show the modal fallback dialog when the user explicitly clicked
+    // "Check for updates" in the TitleBar. Background 8h checks should fail
+    // quietly on unsigned macOS builds so they don't interrupt interviews.
+    if (process.platform === "darwin" && manualCheckInProgress) {
+      manualCheckInProgress = false;
       const win = getMainWindow();
       const fallbackOptions = {
         type: "warning" as const,
@@ -115,7 +120,7 @@ export function initAutoUpdater(
   });
 
   setTimeout(() => {
-    void checkForUpdates();
+    void checkForUpdates(false);
   }, 30_000);
 
   // Re-check periodically so long-running sessions (the app is meant to
@@ -124,17 +129,29 @@ export function initAutoUpdater(
   const RECHECK_INTERVAL_MS = 8 * 60 * 60 * 1000;
   setInterval(() => {
     if (status.type === "downloaded") return;
-    void checkForUpdates();
+    void checkForUpdates(false);
   }, RECHECK_INTERVAL_MS);
 }
 
-export async function checkForUpdates(): Promise<void> {
+export async function checkForUpdates(manual = true): Promise<void> {
   if (!app.isPackaged || process.env.DEV_PORT) return;
+  manualCheckInProgress = manual;
   try {
     await autoUpdater.checkForUpdates();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[updater] check failed:", msg);
     broadcastStatus({ type: "error", message: msg });
+  } finally {
+    manualCheckInProgress = false;
   }
+}
+
+export function installDownloadedUpdate(): void {
+  if (!app.isPackaged || process.env.DEV_PORT) {
+    app.relaunch();
+    app.exit(0);
+    return;
+  }
+  autoUpdater.quitAndInstall(false, true);
 }

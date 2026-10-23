@@ -20,7 +20,7 @@ import { getClientIp } from "../lib/ip";
 import { limitByIp } from "../lib/ip-rate-limit";
 import { SAFE_SESSION_ID_RE } from "../lib/ids";
 import { recordUsage, startUsage } from "../usage";
-import { consumeQuota } from "../services/quota.service";
+import { checkQuota, consumeQuota } from "../services/quota.service";
 import type { Env } from "../env";
 
 const DEEPGRAM_TIMEOUT_MS = 10_000;
@@ -103,6 +103,26 @@ export async function handleDeepgram(
       );
       return jsonResponse({ error: "Rate limiter unavailable" }, 503);
     }
+  }
+
+  const quotaCheck = await checkQuota(
+    getDb(env),
+    env,
+    authResult.id,
+    "deepgram_seconds",
+  );
+  if (!quotaCheck.allowed) {
+    recordUsage(env, ctx, request, authResult, "deepgram_key", {
+      status: "rate_limited",
+      errorCode: "quota_exceeded",
+    });
+    return jsonResponse(
+      {
+        error: "Monthly audio transcription quota exceeded.",
+        resetAt: quotaCheck.resetAt.toISOString(),
+      },
+      429,
+    );
   }
 
   const tracker = startUsage(env, ctx, request, authResult, "deepgram_key");
@@ -271,6 +291,27 @@ export async function handleDeepgramAsk(
       );
       return jsonResponse({ error: "Rate limiter unavailable" }, 503);
     }
+  }
+
+  const quotaCheck = await checkQuota(
+    getDb(env),
+    env,
+    authResult.id,
+    "deepgram_seconds",
+  );
+  if (!quotaCheck.allowed) {
+    recordUsage(env, ctx, request, authResult, "deepgram_key", {
+      status: "rate_limited",
+      errorCode: "quota_exceeded",
+      metadata: { source: "ask_mic" },
+    });
+    return jsonResponse(
+      {
+        error: "Monthly audio transcription quota exceeded.",
+        resetAt: quotaCheck.resetAt.toISOString(),
+      },
+      429,
+    );
   }
 
   const tracker = startUsage(env, ctx, request, authResult, "deepgram_key", {

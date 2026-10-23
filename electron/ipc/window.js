@@ -88,6 +88,21 @@ function registerWindowIpc(getWindow) {
             w.show();
         w.focus();
     });
+    electron_1.ipcMain.handle("window-set-focusable", (_, focusable) => {
+        const w = getWindow();
+        if (!w)
+            return true;
+        try {
+            w.setFocusable(!!focusable);
+            if (focusable) {
+                w.focus();
+            }
+            return !!focusable;
+        }
+        catch {
+            return true;
+        }
+    });
 }
 /** Notify renderer when the OS window gains focus (alt-tab back, etc.). */
 function attachWindowFocusNotifier(window) {

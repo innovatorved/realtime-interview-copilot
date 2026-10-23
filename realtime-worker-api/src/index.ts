@@ -28,6 +28,7 @@ import { handleUsageMe } from "./routes/usage-me";
 import {
   handleSessionEnd,
   handleSessionEndAll,
+  handleSessionHeartbeat,
   handleSessionStart,
 } from "./routes/sessions";
 import { handleEventTrack } from "./routes/events";
@@ -176,6 +177,10 @@ export default {
     // end ping never fired. Always idempotent.
     if (path === "/api/sessions/end-all" && request.method === "POST") {
       const response = await handleSessionEndAll(request, env, ctx);
+      return withCors(response, request);
+    }
+    if (path === "/api/sessions/heartbeat" && request.method === "POST") {
+      const response = await handleSessionHeartbeat(request, env, ctx);
       return withCors(response, request);
     }
     if (path === "/api/events/track" && request.method === "POST") {

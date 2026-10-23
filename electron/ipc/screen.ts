@@ -48,7 +48,7 @@ export function registerScreenIpc(getWindow: WindowAccessor): void {
       return true;
     }
     if (process.platform === "win32") {
-      await shell.openExternal("ms-settings:privacy-broadfilesystemaccess");
+      await shell.openExternal("ms-settings:sound");
       return true;
     }
     return false;
@@ -73,7 +73,11 @@ export function registerScreenIpc(getWindow: WindowAccessor): void {
     // one-shot frame grab; on macOS 13+ it does not engage the continuous
     // recording indicator for longer than the single frame.
     try {
-      const { width, height } = screen.getPrimaryDisplay().size;
+      const w = getWindow();
+      const targetDisplay = w
+        ? screen.getDisplayMatching(w.getBounds())
+        : screen.getPrimaryDisplay();
+      const { width, height } = targetDisplay.size;
       const scale = 1; // 1:1, full native resolution
       const sources = await desktopCapturer.getSources({
         types: ["screen"],
@@ -83,7 +87,11 @@ export function registerScreenIpc(getWindow: WindowAccessor): void {
         },
       });
 
-      const primary = sources.find((s) => s.display_id) ?? sources[0];
+      const targetId = String(targetDisplay.id);
+      const primary =
+        sources.find((s) => String(s.display_id) === targetId) ??
+        sources.find((s) => s.display_id) ??
+        sources[0];
       if (!primary || primary.thumbnail.isEmpty()) {
         return { success: false as const, error: "No screen source available" };
       }

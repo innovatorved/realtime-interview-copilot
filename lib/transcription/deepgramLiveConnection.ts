@@ -30,6 +30,7 @@ export async function connectDeepgramLive(
     model: options.model ?? "nova-2",
     interim_results: "true",
     smart_format: "true",
+    diarize: "true",
   });
   return conn as DeepgramLiveConnection;
 }
@@ -66,6 +67,7 @@ export interface DeepgramResultsMessage {
         start?: number;
         end?: number;
         confidence?: number;
+        speaker?: number;
       }>;
     }>;
   };

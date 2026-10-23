@@ -96,6 +96,20 @@ export function registerWindowIpc(getWindow: WindowAccessor): void {
     if (!w.isVisible()) w.show();
     w.focus();
   });
+
+  ipcMain.handle("window-set-focusable", (_, focusable: boolean) => {
+    const w = getWindow();
+    if (!w) return true;
+    try {
+      w.setFocusable(!!focusable);
+      if (focusable) {
+        w.focus();
+      }
+      return !!focusable;
+    } catch {
+      return true;
+    }
+  });
 }
 
 /** Notify renderer when the OS window gains focus (alt-tab back, etc.). */

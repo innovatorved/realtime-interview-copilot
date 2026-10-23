@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import posthog from "posthog-js";
 import { authClient } from "@/lib/auth-client";
@@ -10,15 +10,16 @@ const POSTHOG_HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST;
 
 let initialized = false;
 
-function initPostHog() {
-  if (initialized || typeof window === "undefined") return;
+function initPostHog(): boolean {
+  if (initialized) return true;
+  if (typeof window === "undefined") return false;
   if (!POSTHOG_KEY) {
     if (process.env.NODE_ENV === "development") {
       console.warn(
         "[posthog] NEXT_PUBLIC_POSTHOG_KEY not set — analytics disabled.",
       );
     }
-    return;
+    return false;
   }
   posthog.init(POSTHOG_KEY, {
     api_host: POSTHOG_HOST ?? "https://eu.i.posthog.com",
@@ -33,14 +34,15 @@ function initPostHog() {
     },
   });
   initialized = true;
+  return true;
 }
 
-function PostHogPageviewTracker() {
+function PostHogPageviewTracker({ ready }: { ready: boolean }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    if (!initialized || !pathname) return;
+    if (!ready || !pathname) return;
     const qs = searchParams?.toString() ?? "";
     const url = qs.length > 0 ? `${pathname}?${qs}` : pathname;
     posthog.capture("$pageview", {
@@ -48,16 +50,16 @@ function PostHogPageviewTracker() {
         typeof window !== "undefined" ? window.location.origin + url : url,
       pathname,
     });
-  }, [pathname, searchParams]);
+  }, [ready, pathname, searchParams]);
 
   return null;
 }
 
-function PostHogIdentifyOnSession() {
+function PostHogIdentifyOnSession({ ready }: { ready: boolean }) {
   const { data: session } = authClient.useSession();
 
   useEffect(() => {
-    if (!initialized) return;
+    if (!ready) return;
     const u = session?.user as
       | { id?: string; email?: string; name?: string }
       | undefined;
@@ -67,7 +69,7 @@ function PostHogIdentifyOnSession() {
       name: u.name,
       user_id: u.id,
     });
-  }, [session]);
+  }, [ready, session]);
 
   return null;
 }
@@ -77,9 +79,9 @@ function PostHogIdentifyOnSession() {
  * error triage can distinguish releases. Global error + unhandledrejection
  * capture is already enabled via `capture_exceptions` in posthog.init.
  */
-function PostHogAppVersionTagger() {
+function PostHogAppVersionTagger({ ready }: { ready: boolean }) {
   useEffect(() => {
-    if (!initialized || typeof window === "undefined") return;
+    if (!ready || typeof window === "undefined") return;
     window.electronAPI
       ?.updaterGetVersion?.()
       .then((version) => {
@@ -88,22 +90,26 @@ function PostHogAppVersionTagger() {
       .catch(() => {
         /* browser / older preload without updater IPC */
       });
-  }, []);
+  }, [ready]);
   return null;
 }
 
 export function PostHogProvider({ children }: { children: React.ReactNode }) {
+  const [ready, setReady] = useState(initialized);
+
   useEffect(() => {
-    initPostHog();
+    if (initPostHog()) {
+      setReady(true);
+    }
   }, []);
 
   return (
     <>
       <Suspense fallback={null}>
-        <PostHogPageviewTracker />
+        <PostHogPageviewTracker ready={ready} />
       </Suspense>
-      <PostHogIdentifyOnSession />
-      <PostHogAppVersionTagger />
+      <PostHogIdentifyOnSession ready={ready} />
+      <PostHogAppVersionTagger ready={ready} />
       {children}
     </>
   );

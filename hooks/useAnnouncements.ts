@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BACKEND_API_URL } from "@/lib/constant";
 import { ricFetch } from "@/lib/ric-fetch";
 import type { ActiveAnnouncementsResponse, AppAnnouncement } from "@/lib/types";
 
@@ -79,8 +78,7 @@ export function useAnnouncements(
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${BACKEND_API_URL}/api/announcements/active`, {
-        credentials: "include",
+      const res = await ricFetch("/api/announcements/active", {
         signal: abortRef.current.signal,
       });
       if (res.status === 401 || res.status === 403) {

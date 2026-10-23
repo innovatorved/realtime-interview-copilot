@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BACKEND_API_URL } from "@/lib/constant";
 import { ricFetch } from "@/lib/ric-fetch";
 import type {
   SupportMessage,
@@ -55,8 +54,7 @@ export function useSupportMessages(
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${BACKEND_API_URL}/api/support/messages`, {
-        credentials: "include",
+      const res = await ricFetch("/api/support/messages", {
         signal: abortRef.current.signal,
       });
       if (res.status === 401 || res.status === 403) {
@@ -110,9 +108,8 @@ export function useSupportMessages(
 
   const fetchThread = useCallback(async (threadId: string) => {
     try {
-      const res = await fetch(
-        `${BACKEND_API_URL}/api/support/messages?threadId=${encodeURIComponent(threadId)}`,
-        { credentials: "include" },
+      const res = await ricFetch(
+        `/api/support/messages?threadId=${encodeURIComponent(threadId)}`,
       );
       if (!res.ok) return null;
       return (await res.json()) as SupportThreadResponse;

@@ -28,8 +28,8 @@ const SEVERITY_STYLES: Record<
     icon: "text-emerald-300",
   },
   warning: {
-    wrap: "border-sky-500/30 bg-sky-500/10 text-sky-100",
-    icon: "text-sky-300",
+    wrap: "border-amber-500/30 bg-amber-500/10 text-amber-100",
+    icon: "text-amber-300",
   },
   error: {
     wrap: "border-red-500/30 bg-red-500/10 text-red-100",
@@ -252,17 +252,17 @@ function PopupQueue({
           </div>
           <div className="flex-1 min-w-0">
             {visible.title && (
-              <h2 className="text-base font-semibold text-white leading-tight mb-1">
+              <h2 className="text-base font-semibold text-text-primary leading-tight mb-1">
                 {visible.title}
               </h2>
             )}
-            <p className="text-sm text-neutral-200 whitespace-pre-wrap break-words leading-relaxed">
+            <p className="text-sm text-text-secondary whitespace-pre-wrap break-words leading-relaxed">
               {visible.body}
             </p>
             {visible.ctaLabel && isSafeUrl(visible.ctaUrl) && (
               <button
                 type="button"
-                className="mt-3 inline-flex items-center justify-center text-sm font-medium px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white"
+                className="mt-3 inline-flex items-center justify-center text-sm font-medium px-3 py-1.5 rounded-md bg-accent hover:bg-accent-hover text-accent-foreground"
                 onClick={() => {
                   openExternal(visible.ctaUrl!);
                   onAck(visible.id);
@@ -277,7 +277,7 @@ function PopupQueue({
               type="button"
               aria-label="Close"
               onClick={handleDismiss}
-              className="text-neutral-400 hover:text-white"
+              className="text-text-tertiary hover:text-text-primary"
               data-clickable
             >
               <X className="h-4 w-4" />
@@ -288,7 +288,7 @@ function PopupQueue({
           <div className="px-5 pb-4 flex justify-end">
             <button
               type="button"
-              className="text-xs font-medium px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-100"
+              className="text-xs font-medium px-3 py-1.5 rounded-md bg-surface-overlay hover:bg-surface-raised text-text-primary border border-border-subtle"
               onClick={handleDismiss}
             >
               Got it

@@ -3,7 +3,7 @@
 import { and, asc, count, desc, eq, isNull, like, or } from "drizzle-orm";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { supportMessage } from "../../../db/schema";
-import { parseLimit, parseOffset, parseAdminQuery, sanitizeSearch } from "../helpers";
+import { likeEscaped, parseLimit, parseOffset, parseAdminQuery, sanitizeSearch } from "../helpers";
 import {
   supportDeleteSchema,
   supportReplySchema,
@@ -47,13 +47,12 @@ export function supportEndpoints(deps: AdminDeps) {
           conditions.push(eq(supportMessage.userId, userId));
         }
         if (q) {
-          const safeQ = q.replace(/%/g, "\\%").replace(/_/g, "\\_");
           conditions.push(
             or(
-              like(supportMessage.body, `%${safeQ}%`),
-              like(supportMessage.subject, `%${safeQ}%`),
-              like(supportMessage.userEmail, `%${safeQ}%`),
-              like(supportMessage.userName, `%${safeQ}%`),
+              likeEscaped(supportMessage.body, q),
+              likeEscaped(supportMessage.subject, q),
+              likeEscaped(supportMessage.userEmail, q),
+              likeEscaped(supportMessage.userName, q),
             )!,
           );
         }

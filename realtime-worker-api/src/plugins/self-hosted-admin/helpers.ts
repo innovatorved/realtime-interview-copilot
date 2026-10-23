@@ -1,5 +1,6 @@
 /** Pure helpers (no closure deps) used across endpoints. */
 
+import { sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { APIError } from "better-auth/api";
 import {
   DEFAULT_LIMIT,
@@ -56,6 +57,15 @@ export function sanitizeSearch(q: string | null): string | null {
   const t = q.trim();
   if (t.length === 0) return null;
   return t.slice(0, MAX_QUERY_LEN);
+}
+
+/** SQLite LIKE with explicit ESCAPE '\\' so literal `%` and `_` in search queries do not act as wildcards or fail to match. */
+export function likeEscaped(column: AnyColumn, rawTerm: string): SQL {
+  const safe = rawTerm
+    .replace(/\\/g, "\\\\")
+    .replace(/%/g, "\\%")
+    .replace(/_/g, "\\_");
+  return sql`${column} LIKE ${`%${safe}%`} ESCAPE '\\'`;
 }
 
 export function isSecretConfigKey(key: string): boolean {

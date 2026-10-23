@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import { liveSession, rateLimitEntry, session } from "../db/schema";
 import type { Env } from "../env";
 
-const STALE_LIVE_SESSION_MS = 5 * 60_000;
+const STALE_LIVE_SESSION_MS = 30 * 60_000;
 
 export async function runScheduledMaintenance(env: Env) {
   const db = getDb(env);
