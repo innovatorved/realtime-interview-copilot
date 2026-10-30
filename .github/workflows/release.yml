@@ -22,7 +22,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          - os: macos-latest
             artifact_glob: "dist/*.dmg dist/*.zip dist/*.blockmap dist/*.yml"
           - os: windows-latest
             artifact_glob: "dist/*.exe dist/*.blockmap dist/*.yml"
@@ -72,7 +72,7 @@ jobs:
         run: bunx electron-builder --publish never
 
       - name: Verify macOS microphone entitlement
-        if: matrix.os == 'macos-14'
+        if: startsWith(matrix.os, 'macos')
         shell: bash
         run: |
           set -euo pipefail
