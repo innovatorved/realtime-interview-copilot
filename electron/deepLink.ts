@@ -33,6 +33,14 @@ function handleDeepLink(rawUrl: string | undefined, getWindow: WindowAccessor) {
   if (w) {
     if (!w.isVisible()) w.show();
     w.focus();
+    if (host === "auth-callback") {
+      const ticket = parsed.searchParams.get("ticket");
+      const error = parsed.searchParams.get("error");
+      w.webContents.send("auth:deep-link-callback", {
+        ticket: ticket && /^[A-Za-z0-9_-]{16,128}$/.test(ticket) ? ticket : null,
+        error: error ? error.slice(0, 120) : null,
+      });
+    }
   }
 }
 

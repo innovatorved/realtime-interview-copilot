@@ -16,6 +16,7 @@ import { getClientIp } from "../lib/ip";
 import { limitByIp } from "../lib/ip-rate-limit";
 import { jsonResponse } from "../lib/http";
 import { SAFE_RESOURCE_ID_RE } from "../lib/ids";
+import { resolveSupportAutoReplyConfig } from "../lib/support-auto-reply";
 import { recordUsage } from "../usage";
 import type { Env } from "../env";
 
@@ -109,6 +110,7 @@ export async function handleCreateSupportMessage(
 
   const db = getDb(env);
 
+  let isFirstTimeThread = false;
   if (parentId) {
     // Verify the user owns the parent thread before adding a reply.
     const [parent] = await db
@@ -164,10 +166,21 @@ export async function handleCreateSupportMessage(
         409,
       );
     }
+    isFirstTimeThread = threads === 0;
   }
+
+  const autoReplyCfg = !parentId
+    ? await resolveSupportAutoReplyConfig(db)
+    : null;
+  const shouldAutoReply = Boolean(
+    !parentId &&
+      autoReplyCfg?.enabled &&
+      (!autoReplyCfg.firstTimeOnly || isFirstTimeThread),
+  );
 
   const id = crypto.randomUUID();
   const now = new Date();
+  const replyNow = new Date(now.getTime() + 1);
 
   const insertPromise = db.insert(supportMessage).values({
     id,
@@ -183,12 +196,23 @@ export async function handleCreateSupportMessage(
     // when paginating the thread-roots list. Root rows go to 'open'.
     status: parentId ? "reply" : "open",
     unreadByAdmin: 1,
-    unreadByUser: 0,
+    unreadByUser: shouldAutoReply ? 1 : 0,
     ipAddress: getClientIp(request),
     userAgent: request.headers.get("user-agent")?.slice(0, 500) ?? null,
     createdAt: now,
-    updatedAt: now,
+    updatedAt: shouldAutoReply ? replyNow : now,
   });
+
+  let autoReplyMessage: {
+    id: string;
+    parentId: string;
+    body: string;
+    authorType: "admin";
+    authorEmail: string;
+    status: "reply";
+    createdAt: string;
+    updatedAt: string;
+  } | null = null;
 
   // If this was a reply, bump the parent thread's unread/updated state
   // and reopen it ("user followed up after admin reply").
@@ -204,13 +228,53 @@ export async function handleCreateSupportMessage(
         })
         .where(eq(supportMessage.id, parentId)),
     ]);
+  } else if (shouldAutoReply && autoReplyCfg) {
+    const autoReplyId = crypto.randomUUID();
+    const adminAuthorEmail =
+      env.ADMIN_EMAILS?.split(",")[0]?.trim() || "me@vedgupta.in";
+    await insertPromise;
+    try {
+      await db.insert(supportMessage).values({
+        id: autoReplyId,
+        userId: user.id,
+        userEmail: null,
+        userName: null,
+        parentId: id,
+        authorType: "admin",
+        authorEmail: adminAuthorEmail,
+        subject: null,
+        body: autoReplyCfg.body,
+        status: "reply",
+        unreadByAdmin: 0,
+        unreadByUser: 0,
+        createdAt: replyNow,
+        updatedAt: replyNow,
+      });
+      autoReplyMessage = {
+        id: autoReplyId,
+        parentId: id,
+        body: autoReplyCfg.body,
+        authorType: "admin",
+        authorEmail: adminAuthorEmail,
+        status: "reply",
+        createdAt: replyNow.toISOString(),
+        updatedAt: replyNow.toISOString(),
+      };
+    } catch (err) {
+      console.warn("[support] Failed to insert automatic first-time reply:", err);
+    }
   } else {
     await insertPromise;
   }
 
   recordUsage(env, ctx, request, user, "support_message_create", {
     promptChars: messageBody.length,
-    metadata: { messageId: id, parentId, hasSubject: Boolean(subject) },
+    metadata: {
+      messageId: id,
+      parentId,
+      hasSubject: Boolean(subject),
+      autoReplied: Boolean(autoReplyMessage),
+    },
   });
 
   return jsonResponse(
@@ -222,9 +286,12 @@ export async function handleCreateSupportMessage(
         body: messageBody,
         authorType: "user",
         status: parentId ? "reply" : "open",
+        unreadByAdmin: true,
+        unreadByUser: Boolean(autoReplyMessage),
         createdAt: now.toISOString(),
-        updatedAt: now.toISOString(),
+        updatedAt: (autoReplyMessage ? replyNow : now).toISOString(),
       },
+      autoReply: autoReplyMessage,
     },
     201,
   );

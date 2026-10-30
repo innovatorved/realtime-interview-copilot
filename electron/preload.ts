@@ -45,6 +45,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener("window:focus", handler);
   },
   appRelaunch: () => ipcRenderer.invoke("app-relaunch"),
+  openExternal: (url: string): Promise<boolean> =>
+    ipcRenderer.invoke("app:open-external", url),
+  onAuthCallback: (
+    callback: (payload: {
+      ticket?: string | null;
+      error?: string | null;
+    }) => void,
+  ) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      payload: { ticket?: string | null; error?: string | null },
+    ) => callback(payload);
+    ipcRenderer.on("auth:deep-link-callback", handler);
+    return () =>
+      ipcRenderer.removeListener("auth:deep-link-callback", handler);
+  },
   updaterGetVersion: () => ipcRenderer.invoke("updater:get-version"),
   updaterCheck: () => ipcRenderer.invoke("updater:check"),
   updaterInstall: () => ipcRenderer.invoke("updater:install"),

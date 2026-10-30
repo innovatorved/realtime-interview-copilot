@@ -42,6 +42,11 @@ import {
   handleActiveAnnouncements,
   handleDismissAnnouncement,
 } from "./routes/announcements";
+import {
+  handleDesktopSsoComplete,
+  handleDesktopSsoExchange,
+  handleDesktopSsoStart,
+} from "./routes/sso-desktop";
 import type { Env } from "./env";
 import { runScheduledMaintenance } from "./lib/maintenance";
 
@@ -225,6 +230,38 @@ export default {
         const response = await handleAckAnnouncement(request, env, ctx, m[1]);
         return withCors(response, request);
       }
+    }
+
+    if (path === "/api/sso/desktop/start" && request.method === "GET") {
+      const response = await handleDesktopSsoStart(request, env);
+      return withCors(response, request);
+    }
+    if (path === "/api/sso/desktop/complete" && request.method === "GET") {
+      const response = await handleDesktopSsoComplete(request, env);
+      return withCors(response, request);
+    }
+    if (path === "/api/sso/desktop/exchange" && request.method === "POST") {
+      const response = await handleDesktopSsoExchange(request, env);
+      return withCors(response, request);
+    }
+
+    if (
+      path === "/api/auth/sign-in/email" ||
+      path === "/api/auth/sign-up/email" ||
+      path === "/api/auth/forget-password" ||
+      path === "/api/auth/reset-password"
+    ) {
+      return withCors(
+        jsonResponse(
+          {
+            error:
+              "This version of Realtime Interview Copilot is no longer supported. Please update to the latest version and sign in with VedGupta SSO (sso.vedgupta.in).",
+            code: "LEGACY_AUTH_DISABLED",
+          },
+          403,
+        ),
+        request,
+      );
     }
 
     if (path.startsWith("/api/auth")) {

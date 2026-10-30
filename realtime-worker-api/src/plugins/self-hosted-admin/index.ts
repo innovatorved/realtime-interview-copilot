@@ -115,6 +115,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
     schema: {
       user: {
         fields: {
+          role: { type: "string", required: false, defaultValue: "user" },
           isBanned: { type: "boolean", required: false, defaultValue: false },
           banReason: { type: "string", required: false },
           lastActiveAt: { type: "date", required: false },
@@ -272,7 +273,9 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
           }),
         },
         {
-          matcher: (ctx) => ctx.path === "/sign-in/email",
+          matcher: (ctx) =>
+            ctx.path === "/sign-in/email" ||
+            Boolean(ctx.path?.startsWith("/oauth2/callback/")),
           handler: createAuthMiddleware(async (ctx) => {
             const s = ctx.context.newSession;
             if (s) {
@@ -284,6 +287,11 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
                 userAgent: getUserAgentStr(ctx.headers),
               });
               try {
+                await ensureQuotaRow(opts.getDb(), s.user.id);
+              } catch (e) {
+                console.warn("[SelfHostedAdmin] ensureQuotaRow on login failed:", e);
+              }
+              try {
                 const db = opts.getDb();
                 await db
                   .update(user)
@@ -292,6 +300,7 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
               } catch {
                 /* non-critical */
               }
+              invalidateAdminSetCache();
             } else if (ctx.context.returned instanceof APIError) {
               await recordAudit({
                 eventType: "security_blocked",

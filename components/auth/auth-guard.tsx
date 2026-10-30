@@ -42,7 +42,7 @@ function AuthLoadingShell() {
 }
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { data: session, isPending, error } = authClient.useSession();
+  const { data: session, isPending, error, refetch } = authClient.useSession();
   const { compactMode } = useTab();
   const [mounted, setMounted] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
@@ -194,7 +194,14 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   if (!loggedIn) {
-    return <AuthWizard onSuccess={() => setAuthenticated(true)} />;
+    return (
+      <AuthWizard
+        onSuccess={() => {
+          void refetch();
+          setAuthenticated(true);
+        }}
+      />
+    );
   }
 
   // Better Auth's generated user type doesn't include our custom

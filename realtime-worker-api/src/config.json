@@ -77,7 +77,10 @@
     "model_max_output_tokens",
     "model_temperature",
     "model_top_p",
-    "model_thinking_budget"
+    "model_thinking_budget",
+    "support_auto_reply_enabled",
+    "support_auto_reply_first_only",
+    "support_auto_reply_body"
   ],
   "modelParams": {
     "defaults": {

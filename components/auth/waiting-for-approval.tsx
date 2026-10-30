@@ -153,6 +153,31 @@ function focusOff(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) {
   e.currentTarget.style.boxShadow = "none";
 }
 
+function renderBodyWithLinks(text: string) {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+  return parts.map((part, idx) => {
+    if (/^https?:\/\/[^\s]+$/.test(part)) {
+      return (
+        <a
+          key={idx}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            color: TOKEN.sky,
+            textDecoration: "underline",
+            wordBreak: "break-all",
+          }}
+        >
+          {part}
+        </a>
+      );
+    }
+    return part;
+  });
+}
+
 export function WaitingForApproval({ email }: { email?: string }) {
   const {
     threads,
@@ -251,8 +276,8 @@ export function WaitingForApproval({ email }: { email?: string }) {
     setSubject("");
     setBody("");
     setSentBanner(true);
-    setView("home");
     void refresh();
+    void handleOpenThread(created.id);
   };
 
   const handleSendReply = async () => {
@@ -395,6 +420,18 @@ export function WaitingForApproval({ email }: { email?: string }) {
                 <SecondaryButton onClick={handleCheckStatus}>
                   <RefreshCw className="h-3.5 w-3.5" />
                   Check status
+                </SecondaryButton>
+                <SecondaryButton
+                  onClick={() => {
+                    const url = "https://sso.vedgupta.in/pending";
+                    if (window.electronAPI?.openExternal) {
+                      void window.electronAPI.openExternal(url);
+                    } else {
+                      window.open(url, "_blank", "noopener,noreferrer");
+                    }
+                  }}
+                >
+                  SSO Portal
                 </SecondaryButton>
               </div>
 
@@ -756,7 +793,7 @@ export function WaitingForApproval({ email }: { email?: string }) {
                           margin: 0,
                         }}
                       >
-                        {m.body}
+                        {renderBodyWithLinks(m.body)}
                       </p>
                     </div>
                   );

@@ -44,6 +44,13 @@ export interface ElectronAPI {
   windowSetFocusable?: (focusable: boolean) => Promise<boolean>;
   onWindowFocus?: (callback: () => void) => () => void;
   appRelaunch: () => Promise<void>;
+  openExternal?: (url: string) => Promise<boolean>;
+  onAuthCallback?: (
+    callback: (payload: {
+      ticket?: string | null;
+      error?: string | null;
+    }) => void,
+  ) => () => void;
   updaterGetVersion?: () => Promise<string>;
   updaterCheck?: () => Promise<void>;
   updaterInstall?: () => Promise<void>;

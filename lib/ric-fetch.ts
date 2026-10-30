@@ -3,8 +3,12 @@
  * Sends X-Requested-With so the worker CSRF gate can distinguish our client
  * from cross-site form posts.
  */
-import { BACKEND_API_URL } from "@/lib/constant";
+import {
+  clearStoredSessionToken,
+  getStoredSessionToken,
+} from "@/lib/auth-client";
 import { notifySessionExpired } from "@/lib/auth-events";
+import { BACKEND_API_URL } from "@/lib/constant";
 
 export const RIC_CLIENT_HEADER = "RIC-Desktop";
 
@@ -16,6 +20,10 @@ export function ricFetch(
 ): Promise<Response> {
   const method = (init.method ?? "GET").toUpperCase();
   const headers = new Headers(init.headers);
+  const bearerToken = getStoredSessionToken();
+  if (bearerToken && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${bearerToken}`);
+  }
   if (
     MUTATING.has(method) &&
     path.startsWith("/api/") &&
@@ -34,6 +42,7 @@ export function ricFetch(
     // A 401 outside the auth endpoints means the session expired
     // mid-use — tell the AuthGuard so the user lands on sign-in.
     if (res.status === 401 && !path.startsWith("/api/auth")) {
+      clearStoredSessionToken();
       notifySessionExpired();
     }
     return res;

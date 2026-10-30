@@ -31,6 +31,10 @@ migrations_dir = "drizzle"
 binding = "CONFIG_KV"
 id = "6a114e2cb0504aed86bc71df3df45c7b"
 
+[[services]]
+binding = "SSO_SERVICE"
+service = "vedgupta-sso"
+
 [[unsafe.bindings]]
 name = "COMPLETION_LIMITER"
 type = "ratelimit"
@@ -41,3 +45,6 @@ simple = { limit = 30, period = 60 }
 [vars]
 QUOTA_ENFORCEMENT = "false"
 QUOTA_RECORD_CONSUMPTION = "true"
+ADMIN_EMAILS = "admin@vedgupta.in"
+SSO_BASE_URL = "https://sso.vedgupta.in"
+SSO_CLIENT_ID = "realtime-interview-copilot-app"

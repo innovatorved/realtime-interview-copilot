@@ -1,10 +1,17 @@
 /** Admin support inbox: threads list, thread detail, reply, status, delete. */
 
-import { and, asc, count, desc, eq, isNull, like, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, like, or } from "drizzle-orm";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
-import { supportMessage } from "../../../db/schema";
+import { adminConfig, supportMessage } from "../../../db/schema";
+import {
+  DEFAULT_SUPPORT_AUTO_REPLY_BODY,
+  resolveSupportAutoReplyConfig,
+  SUPPORT_AUTO_REPLY_KEYS,
+} from "../../../lib/support-auto-reply";
 import { likeEscaped, parseLimit, parseOffset, parseAdminQuery, sanitizeSearch } from "../helpers";
 import {
+  supportAutoReplyConfigSchema,
+  supportBulkReplySchema,
   supportDeleteSchema,
   supportReplySchema,
   supportUpdateStatusSchema,
@@ -278,6 +285,185 @@ export function supportEndpoints(deps: AdminDeps) {
           metadata: { action: "support_delete", threadId },
         });
         return ctx.json({ ok: true });
+      },
+    ),
+
+    adminSupportGetAutoReply: createAuthEndpoint(
+      "/self-hosted-admin/support/auto-reply",
+      { method: "GET", use: [sessionMiddleware] },
+      async (ctx) => {
+        const adminEmail = ctx.context.session.user.email;
+        if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
+        const db = opts.getDb();
+        const cfg = await resolveSupportAutoReplyConfig(db);
+        return ctx.json(cfg);
+      },
+    ),
+
+    adminSupportSaveAutoReply: createAuthEndpoint(
+      "/self-hosted-admin/support/auto-reply",
+      {
+        method: "POST",
+        use: [sessionMiddleware],
+        body: supportAutoReplyConfigSchema,
+      },
+      async (ctx) => {
+        const adminEmail = ctx.context.session.user.email;
+        if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
+        const db = opts.getDb();
+        const { enabled, firstTimeOnly, body } = ctx.body;
+        const now = new Date();
+
+        const upserts: { key: string; value: string }[] = [];
+        if (enabled !== undefined) {
+          upserts.push({
+            key: SUPPORT_AUTO_REPLY_KEYS.enabled,
+            value: enabled ? "true" : "false",
+          });
+        }
+        if (firstTimeOnly !== undefined) {
+          upserts.push({
+            key: SUPPORT_AUTO_REPLY_KEYS.firstTimeOnly,
+            value: firstTimeOnly ? "true" : "false",
+          });
+        }
+        if (body !== undefined) {
+          upserts.push({
+            key: SUPPORT_AUTO_REPLY_KEYS.body,
+            value: body.trim() || DEFAULT_SUPPORT_AUTO_REPLY_BODY,
+          });
+        }
+
+        for (const u of upserts) {
+          await db
+            .insert(adminConfig)
+            .values({ key: u.key, value: u.value, updatedAt: now })
+            .onConflictDoUpdate({
+              target: adminConfig.key,
+              set: { value: u.value, updatedAt: now },
+            });
+        }
+
+        const updated = await resolveSupportAutoReplyConfig(db);
+
+        await recordAudit({
+          eventType: "admin_action",
+          userEmail: adminEmail,
+          metadata: {
+            action: "support_auto_reply_config",
+            enabled: updated.enabled,
+            firstTimeOnly: updated.firstTimeOnly,
+            bodyLength: updated.body.length,
+          },
+        });
+
+        return ctx.json({ ok: true, config: updated });
+      },
+    ),
+
+    adminSupportBulkReply: createAuthEndpoint(
+      "/self-hosted-admin/support/bulk-reply",
+      {
+        method: "POST",
+        use: [sessionMiddleware],
+        body: supportBulkReplySchema,
+      },
+      async (ctx) => {
+        const adminEmail = ctx.context.session.user.email;
+        if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
+        const db = opts.getDb();
+        const cfg = await resolveSupportAutoReplyConfig(db);
+        const replyBody = ctx.body.body?.trim() || cfg.body;
+        const closeAfter = Boolean(ctx.body.closeAfter);
+        const onlyWithoutAdminReply = Boolean(ctx.body.onlyWithoutAdminReply);
+
+        const openRoots = await db
+          .select({
+            id: supportMessage.id,
+            userId: supportMessage.userId,
+          })
+          .from(supportMessage)
+          .where(
+            and(
+              isNull(supportMessage.parentId),
+              eq(supportMessage.status, "open"),
+            ),
+          )
+          .limit(500);
+
+        if (openRoots.length === 0) {
+          return ctx.json({ ok: true, repliedCount: 0 });
+        }
+
+        let targetRoots = openRoots;
+        if (onlyWithoutAdminReply) {
+          const rootIds = openRoots.map((r) => r.id);
+          const existingAdminReplies = await db
+            .select({ parentId: supportMessage.parentId })
+            .from(supportMessage)
+            .where(
+              and(
+                inArray(supportMessage.parentId, rootIds),
+                eq(supportMessage.authorType, "admin"),
+              ),
+            );
+          const alreadyRepliedSet = new Set(
+            existingAdminReplies
+              .map((r) => r.parentId)
+              .filter((id): id is string => Boolean(id)),
+          );
+          targetRoots = openRoots.filter((r) => !alreadyRepliedSet.has(r.id));
+        }
+
+        if (targetRoots.length === 0) {
+          return ctx.json({ ok: true, repliedCount: 0 });
+        }
+
+        const now = new Date();
+        for (const root of targetRoots) {
+          const replyId = crypto.randomUUID();
+          await db.insert(supportMessage).values({
+            id: replyId,
+            userId: root.userId,
+            userEmail: null,
+            userName: null,
+            parentId: root.id,
+            authorType: "admin",
+            authorEmail: adminEmail,
+            subject: null,
+            body: replyBody,
+            status: "reply",
+            unreadByAdmin: 0,
+            unreadByUser: 0,
+            createdAt: now,
+            updatedAt: now,
+          });
+          await db
+            .update(supportMessage)
+            .set({
+              status: closeAfter ? "resolved" : "pending",
+              unreadByUser: 1,
+              unreadByAdmin: 0,
+              updatedAt: now,
+            })
+            .where(eq(supportMessage.id, root.id));
+        }
+
+        await recordAudit({
+          eventType: "admin_action",
+          userEmail: adminEmail,
+          metadata: {
+            action: "support_bulk_reply",
+            repliedCount: targetRoots.length,
+            closeAfter,
+            onlyWithoutAdminReply,
+          },
+        });
+
+        return ctx.json({
+          ok: true,
+          repliedCount: targetRoots.length,
+        });
       },
     ),
   };

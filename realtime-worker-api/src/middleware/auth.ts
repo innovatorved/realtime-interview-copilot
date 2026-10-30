@@ -38,26 +38,46 @@ export async function getAuthenticatedUser(
   if (!session?.user) return { error: "unauthorized" };
 
   const userId = session.user.id;
+  const sessionUser = session.user as {
+    id: string;
+    email: string;
+    name: string;
+    role?: string | null;
+    isApproved?: boolean | null;
+    isBanned?: boolean | null;
+  };
 
-  let flags: { isApproved: boolean | null; isBanned: boolean | null } | null =
-    null;
-  try {
-    const rows = await getDb(env)
-      .select({
-        isApproved: userTable.isApproved,
-        isBanned: userTable.isBanned,
-      })
-      .from(userTable)
-      .where(eq(userTable.id, userId))
-      .limit(1);
-    flags = rows[0] ?? null;
-  } catch (e) {
-    console.warn("[Worker] flag lookup failed:", e);
-    return { error: "unauthorized" };
+  let isApproved =
+    sessionUser.isApproved === true ||
+    sessionUser.role === "admin" ||
+    sessionUser.email?.toLowerCase() === "admin@vedgupta.in";
+  let isBanned = sessionUser.isBanned === true;
+
+  if (sessionUser.isApproved === undefined && sessionUser.isBanned === undefined) {
+    try {
+      const rows = await getDb(env)
+        .select({
+          isApproved: userTable.isApproved,
+          isBanned: userTable.isBanned,
+          role: userTable.role,
+        })
+        .from(userTable)
+        .where(eq(userTable.id, userId))
+        .limit(1);
+      const flags = rows[0] ?? null;
+      isBanned = flags?.isBanned === true;
+      isApproved =
+        flags?.isApproved === true ||
+        flags?.role === "admin" ||
+        sessionUser.email?.toLowerCase() === "admin@vedgupta.in";
+    } catch (e) {
+      console.warn("[Worker] flag lookup failed:", e);
+      return { error: "unauthorized" };
+    }
   }
 
-  if (flags?.isBanned === true) return { error: "banned" };
-  if (flags?.isApproved !== true) return { error: "pending_approval" };
+  if (isBanned) return { error: "banned" };
+  if (!isApproved) return { error: "pending_approval" };
 
   // KV-backed throttle so lastActiveAt writes happen at most every 5 minutes
   // per user, consistent across isolates.
@@ -128,25 +148,31 @@ export async function getAuthenticatedUserAllowPending(
   if (!session?.user) return { error: "unauthorized" };
 
   const userId = session.user.id;
+  const sessionUser = session.user as {
+    id: string;
+    email: string;
+    name: string;
+    isBanned?: boolean | null;
+  };
 
-  let flags: { isApproved: boolean | null; isBanned: boolean | null } | null =
-    null;
-  try {
-    const rows = await getDb(env)
-      .select({
-        isApproved: userTable.isApproved,
-        isBanned: userTable.isBanned,
-      })
-      .from(userTable)
-      .where(eq(userTable.id, userId))
-      .limit(1);
-    flags = rows[0] ?? null;
-  } catch (e) {
-    console.warn("[Worker] flag lookup failed:", e);
-    return { error: "unauthorized" };
+  let isBanned = sessionUser.isBanned === true;
+  if (sessionUser.isBanned === undefined) {
+    try {
+      const rows = await getDb(env)
+        .select({
+          isBanned: userTable.isBanned,
+        })
+        .from(userTable)
+        .where(eq(userTable.id, userId))
+        .limit(1);
+      isBanned = rows[0]?.isBanned === true;
+    } catch (e) {
+      console.warn("[Worker] flag lookup failed:", e);
+      return { error: "unauthorized" };
+    }
   }
 
-  if (flags?.isBanned === true) return { error: "banned" };
+  if (isBanned) return { error: "banned" };
 
   return {
     id: userId,

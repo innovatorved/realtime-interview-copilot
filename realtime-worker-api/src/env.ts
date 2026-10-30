@@ -9,6 +9,14 @@ export interface Env {
   BETTER_AUTH_URL: string;
   /** Comma-separated emails allowed to use /api/admin/* (self-hosted dashboard). */
   ADMIN_EMAILS?: string;
+  /** VedGupta SSO base URL (defaults to https://sso.vedgupta.in). */
+  SSO_BASE_URL?: string;
+  /** OAuth 2.1 client_id registered on sso.vedgupta.in. */
+  SSO_CLIENT_ID?: string;
+  /** Optional confidential client secret if configured on sso.vedgupta.in. */
+  SSO_CLIENT_SECRET?: string;
+  /** Cloudflare Service Binding to vedgupta-sso worker for zero-hop token exchange. */
+  SSO_SERVICE?: Fetcher;
   /** Cloudflare account id that owns the AI Gateway (fallback when not set via admin dashboard). */
   CF_ACCOUNT_ID?: string;
   /** Cloudflare AI Gateway id (fallback when not set via admin dashboard). */
