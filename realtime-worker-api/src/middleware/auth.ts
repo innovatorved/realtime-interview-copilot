@@ -44,16 +44,25 @@ export async function getAuthenticatedUser(
     name: string;
     role?: string | null;
     isApproved?: boolean | null;
+    approved?: boolean | null;
     isBanned?: boolean | null;
+    banned?: boolean | null;
   };
+
+  const hasApprovedFlag =
+    sessionUser.isApproved !== undefined || sessionUser.approved !== undefined;
+  const hasBannedFlag =
+    sessionUser.isBanned !== undefined || sessionUser.banned !== undefined;
 
   let isApproved =
     sessionUser.isApproved === true ||
+    sessionUser.approved === true ||
     sessionUser.role === "admin" ||
     sessionUser.email?.toLowerCase() === "admin@vedgupta.in";
-  let isBanned = sessionUser.isBanned === true;
+  let isBanned =
+    sessionUser.isBanned === true || sessionUser.banned === true;
 
-  if (sessionUser.isApproved === undefined && sessionUser.isBanned === undefined) {
+  if (!hasApprovedFlag || !hasBannedFlag) {
     try {
       const rows = await getDb(env)
         .select({
@@ -65,11 +74,15 @@ export async function getAuthenticatedUser(
         .where(eq(userTable.id, userId))
         .limit(1);
       const flags = rows[0] ?? null;
-      isBanned = flags?.isBanned === true;
-      isApproved =
-        flags?.isApproved === true ||
-        flags?.role === "admin" ||
-        sessionUser.email?.toLowerCase() === "admin@vedgupta.in";
+      if (!hasBannedFlag) {
+        isBanned = flags?.isBanned === true;
+      }
+      if (!hasApprovedFlag) {
+        isApproved =
+          flags?.isApproved === true ||
+          flags?.role === "admin" ||
+          sessionUser.email?.toLowerCase() === "admin@vedgupta.in";
+      }
     } catch (e) {
       console.warn("[Worker] flag lookup failed:", e);
       return { error: "unauthorized" };
@@ -114,9 +127,15 @@ export async function getAuthenticatedUser(
 export function authErrorResponse(reason: AuthFailureReason): Response {
   switch (reason) {
     case "banned":
-      return jsonResponse({ error: "Account suspended" }, 403);
+      return jsonResponse(
+        { error: "Account suspended", code: "BANNED_USER" },
+        403,
+      );
     case "pending_approval":
-      return jsonResponse({ error: "Account pending approval" }, 403);
+      return jsonResponse(
+        { error: "Account pending approval", code: "PENDING_APPROVAL" },
+        403,
+      );
     case "unauthorized":
     default:
       return jsonResponse({ error: "Unauthorized" }, 401);
@@ -153,10 +172,12 @@ export async function getAuthenticatedUserAllowPending(
     email: string;
     name: string;
     isBanned?: boolean | null;
+    banned?: boolean | null;
   };
 
-  let isBanned = sessionUser.isBanned === true;
-  if (sessionUser.isBanned === undefined) {
+  let isBanned =
+    sessionUser.isBanned === true || sessionUser.banned === true;
+  if (sessionUser.isBanned === undefined && sessionUser.banned === undefined) {
     try {
       const rows = await getDb(env)
         .select({

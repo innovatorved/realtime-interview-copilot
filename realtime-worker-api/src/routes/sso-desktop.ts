@@ -3,18 +3,59 @@ import { auth } from "../auth";
 import { getDb } from "../db";
 import { verification } from "../db/schema";
 import type { Env } from "../env";
+import { escapeHtml } from "../lib/html";
 import { jsonResponse } from "../lib/http";
 
 const TICKET_PREFIX = "sso_desktop_ticket:";
 const TICKET_TTL_SECONDS = 180;
 
-function renderHtml(title: string, bodyHtml: string): Response {
+const ALLOWED_WEB_CALLBACK_ORIGINS = new Set([
+  "https://admin.copilot.vedgupta.in",
+  "https://interview-copilot-admin.vedgupta.in",
+  "https://copilot.vedgupta.in",
+  "http://localhost:3000",
+  "http://localhost:3001",
+]);
+
+export function resolveDesktopSsoCallbackUrl(
+  mode: string | null,
+  webCallback: string | null,
+  baseURL: string,
+): string {
+  const defaultCallback = `${baseURL}/api/sso/desktop/complete`;
+  if (mode !== "web" || !webCallback) {
+    return defaultCallback;
+  }
+  try {
+    const parsed = new URL(webCallback);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return defaultCallback;
+    }
+    const baseOrigin = new URL(baseURL).origin;
+    if (
+      ALLOWED_WEB_CALLBACK_ORIGINS.has(parsed.origin) ||
+      parsed.origin === baseOrigin
+    ) {
+      return parsed.toString();
+    }
+  } catch {
+    // Fall back to default desktop complete URL
+  }
+  return defaultCallback;
+}
+
+export function renderHtml(
+  title: string,
+  bodyHtml: string,
+  status = 200,
+): Response {
+  const safeTitle = escapeHtml(title);
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${title}</title>
+  <title>${safeTitle}</title>
   <style>
     :root { color-scheme: dark; }
     body {
@@ -80,7 +121,7 @@ function renderHtml(title: string, bodyHtml: string): Response {
 </body>
 </html>`;
   return new Response(html, {
-    status: 200,
+    status,
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-store",
@@ -99,10 +140,7 @@ export async function handleDesktopSsoStart(
   const mode = reqUrl.searchParams.get("mode");
   const webCallback = reqUrl.searchParams.get("callbackURL");
 
-  const callbackURL =
-    mode === "web" && webCallback
-      ? webCallback
-      : `${baseURL}/api/sso/desktop/complete`;
+  const callbackURL = resolveDesktopSsoCallbackUrl(mode, webCallback, baseURL);
 
   const internalReq = new Request(`${baseURL}/api/auth/sign-in/social`, {
     method: "POST",
@@ -118,10 +156,13 @@ export async function handleDesktopSsoStart(
 
   const res = await auth(env).handler(internalReq);
   if (!res.ok) {
-    const errText = await res.text().catch(() => "Failed to start SSO");
+    const errText = escapeHtml(
+      await res.text().catch(() => "Failed to start SSO"),
+    );
     return renderHtml(
       "Sign-in Error",
-      `<h1>Could not start VedGupta SSO</h1><p>${errText}</p><a class="btn" href="${baseURL}/api/sso/desktop/start">Try Again</a>`,
+      `<h1>Could not start VedGupta SSO</h1><p>${errText}</p><a class="btn" href="${escapeHtml(baseURL)}/api/sso/desktop/start">Try Again</a>`,
+      500,
     );
   }
 
@@ -130,6 +171,7 @@ export async function handleDesktopSsoStart(
     return renderHtml(
       "Sign-in Error",
       `<h1>Invalid SSO redirect</h1><p>No authorization URL was returned.</p>`,
+      500,
     );
   }
 
@@ -154,14 +196,16 @@ export async function handleDesktopSsoComplete(
   const reqUrl = new URL(request.url);
   const errorParam = reqUrl.searchParams.get("error");
   if (errorParam) {
-    const desc =
+    const desc = escapeHtml(
       reqUrl.searchParams.get("error_description") ||
-      "Your account requires approval on sso.vedgupta.in before signing in.";
+        "Your account requires approval on sso.vedgupta.in before signing in.",
+    );
     return renderHtml(
       "Access Pending Approval",
       `<h1>Access Pending Approval</h1>
        <p>${desc}</p>
        <a class="btn" href="https://sso.vedgupta.in/pending">Check Status on VedGupta SSO</a>`,
+      400,
     );
   }
 
@@ -171,7 +215,23 @@ export async function handleDesktopSsoComplete(
       "Sign-in Incomplete",
       `<h1>Sign-in session not found</h1>
        <p>Please complete sign-in on VedGupta SSO and ensure your account is approved.</p>
-       <a class="btn" href="${baseURL}/api/sso/desktop/start">Sign in with VedGupta SSO</a>`,
+       <a class="btn" href="${escapeHtml(baseURL)}/api/sso/desktop/start">Sign in with VedGupta SSO</a>`,
+      401,
+    );
+  }
+
+  const sessionUser = session.user as {
+    id: string;
+    email: string;
+    isBanned?: boolean | null;
+    banned?: boolean | null;
+  };
+  if (sessionUser.isBanned === true || sessionUser.banned === true) {
+    return renderHtml(
+      "Account Suspended",
+      `<h1>Account Suspended</h1>
+       <p>Your account has been suspended. Please contact an administrator if you believe this is an error.</p>`,
+      403,
     );
   }
 
@@ -199,15 +259,16 @@ export async function handleDesktopSsoComplete(
   }
 
   const deepLink = `realtime-copilot://auth-callback?ticket=${encodeURIComponent(ticket)}`;
+  const safeEmail = escapeHtml(session.user.email);
 
   return renderHtml(
     "Signed in to Realtime Interview Copilot",
-    `<h1>Signed in as ${session.user.email}</h1>
+    `<h1>Signed in as ${safeEmail}</h1>
      <p>Redirecting back to the Realtime Interview Copilot desktop app…</p>
      <a class="btn" href="${deepLink}">Open Realtime Interview Copilot</a>
      <div class="code-box">
        If the desktop app did not open automatically, paste this one-time sign-in code in the app:
-       <code>${ticket}</code>
+       <code>${escapeHtml(ticket)}</code>
      </div>
      <script>
        window.location.href = ${JSON.stringify(deepLink)};

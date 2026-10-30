@@ -22,6 +22,12 @@ import {
   healthCacheKey,
   setCachedHealth,
 } from "./plugins/self-hosted-admin/internal/health-cache";
+import { authErrorResponse } from "./middleware/auth";
+import {
+  handleDesktopSsoComplete,
+  renderHtml,
+  resolveDesktopSsoCallbackUrl,
+} from "./routes/sso-desktop";
 import type { Env } from "./env";
 
 describe("renderMarkdownToHtml", () => {
@@ -172,5 +178,70 @@ describe("parseSupportAutoReplyMap", () => {
     assert.equal(cfg.enabled, false);
     assert.equal(cfg.firstTimeOnly, false);
     assert.equal(cfg.body, "Custom star prompt");
+  });
+});
+
+describe("sso-desktop security hardening & banned user handling", () => {
+  it("escapes error_description in handleDesktopSsoComplete to prevent reflected XSS", async () => {
+    const req = new Request(
+      "https://realtime-worker-api-prod.vedgupta.in/api/sso/desktop/complete?error=access_denied&error_description=%3Cscript%3Ealert(document.domain)%3C%2Fscript%3E",
+    );
+    const res = await handleDesktopSsoComplete(req, {} as Env);
+    assert.equal(res.status, 400);
+    const html = await res.text();
+    assert.ok(!html.includes("<script>alert(document.domain)</script>"));
+    assert.ok(html.includes("&lt;script&gt;alert(document.domain)&lt;/script&gt;"));
+  });
+
+  it("escapes title in renderHtml", async () => {
+    const res = renderHtml('</title><script>alert("xss")</script>', "<p>Body</p>", 403);
+    assert.equal(res.status, 403);
+    const html = await res.text();
+    assert.ok(!html.includes('</title><script>alert("xss")</script>'));
+    assert.ok(html.includes("&lt;/title&gt;&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;"));
+  });
+
+  it("validates webCallback against allowed web origins in resolveDesktopSsoCallbackUrl", () => {
+    const baseURL = "https://realtime-worker-api-prod.vedgupta.in";
+    assert.equal(
+      resolveDesktopSsoCallbackUrl(
+        "web",
+        "https://admin.copilot.vedgupta.in/dashboard",
+        baseURL,
+      ),
+      "https://admin.copilot.vedgupta.in/dashboard",
+    );
+    assert.equal(
+      resolveDesktopSsoCallbackUrl(
+        "web",
+        "https://evil.example.com/steal",
+        baseURL,
+      ),
+      `${baseURL}/api/sso/desktop/complete`,
+    );
+    assert.equal(
+      resolveDesktopSsoCallbackUrl(
+        "web",
+        "javascript:alert(1)",
+        baseURL,
+      ),
+      `${baseURL}/api/sso/desktop/complete`,
+    );
+    assert.equal(
+      resolveDesktopSsoCallbackUrl(
+        null,
+        "https://admin.copilot.vedgupta.in/dashboard",
+        baseURL,
+      ),
+      `${baseURL}/api/sso/desktop/complete`,
+    );
+  });
+
+  it("returns 403 BANNED_USER from authErrorResponse('banned')", async () => {
+    const res = authErrorResponse("banned");
+    assert.equal(res.status, 403);
+    const body = (await res.json()) as { error: string; code: string };
+    assert.equal(body.code, "BANNED_USER");
+    assert.equal(body.error, "Account suspended");
   });
 });

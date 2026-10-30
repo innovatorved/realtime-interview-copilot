@@ -275,10 +275,107 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
         {
           matcher: (ctx) =>
             ctx.path === "/sign-in/email" ||
-            Boolean(ctx.path?.startsWith("/oauth2/callback/")),
+            Boolean(
+              ctx.path?.startsWith("/oauth2/callback/") ||
+                ctx.path?.startsWith("/callback/"),
+            ),
           handler: createAuthMiddleware(async (ctx) => {
             const s = ctx.context.newSession;
             if (s) {
+              const db = opts.getDb();
+              const sessionUser = s.user as {
+                id: string;
+                email: string;
+                role?: string | null;
+                isBanned?: boolean | null;
+                banned?: boolean | null;
+                isApproved?: boolean | null;
+                approved?: boolean | null;
+              };
+
+              let isBanned =
+                sessionUser.isBanned === true || sessionUser.banned === true;
+              let banReason: string | null = null;
+              let isApproved =
+                sessionUser.isApproved === true ||
+                sessionUser.approved === true ||
+                sessionUser.role === "admin" ||
+                envAdmins.has(sessionUser.email.toLowerCase());
+
+              try {
+                const [targetUser] = await db
+                  .select({
+                    isBanned: user.isBanned,
+                    banReason: user.banReason,
+                    isApproved: user.isApproved,
+                    role: user.role,
+                  })
+                  .from(user)
+                  .where(eq(user.id, s.user.id));
+                if (targetUser) {
+                  if (targetUser.isBanned) {
+                    isBanned = true;
+                    banReason = targetUser.banReason ?? null;
+                  }
+                  if (
+                    sessionUser.isApproved === undefined &&
+                    sessionUser.approved === undefined
+                  ) {
+                    isApproved =
+                      targetUser.isApproved === true ||
+                      targetUser.role === "admin" ||
+                      envAdmins.has(sessionUser.email.toLowerCase());
+                  } else if (
+                    sessionUser.isApproved === false ||
+                    sessionUser.approved === false
+                  ) {
+                    isApproved = false;
+                  }
+                }
+              } catch {
+                /* fall back to sessionUser fields */
+              }
+
+              const baseURL = (
+                opts.env?.BETTER_AUTH_URL ||
+                ctx.context.baseURL?.replace(/\/api\/auth\/?$/, "") ||
+                "https://realtime-worker-api-prod.vedgupta.in"
+              ).replace(/\/$/, "");
+
+              if (isBanned) {
+                await recordAudit({
+                  eventType: "security_blocked",
+                  userId: s.user.id,
+                  userEmail: s.user.email,
+                  ipAddress: getClientIpFromHeaders(ctx.headers),
+                  userAgent: getUserAgentStr(ctx.headers),
+                  metadata: { reason: "banned", banReason },
+                });
+                try {
+                  await ctx.context.internalAdapter.deleteSession(
+                    s.session.token,
+                  );
+                } catch {
+                  /* ignore */
+                }
+                throw ctx.redirect(
+                  `${baseURL}/api/sso/desktop/complete?error=access_denied&error_description=${encodeURIComponent("This account has been suspended.")}`,
+                );
+              }
+
+              if (!isApproved) {
+                try {
+                  await ctx.context.internalAdapter.deleteSession(
+                    s.session.token,
+                  );
+                } catch {
+                  /* ignore */
+                }
+                throw ctx.redirect(
+                  `${baseURL}/api/sso/desktop/complete?error=pending_approval&error_description=${encodeURIComponent("Your account is pending administrator approval.")}`,
+                );
+              }
+
               await recordAudit({
                 eventType: "user_signed_in",
                 userId: s.user.id,
@@ -287,12 +384,11 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
                 userAgent: getUserAgentStr(ctx.headers),
               });
               try {
-                await ensureQuotaRow(opts.getDb(), s.user.id);
+                await ensureQuotaRow(db, s.user.id);
               } catch (e) {
                 console.warn("[SelfHostedAdmin] ensureQuotaRow on login failed:", e);
               }
               try {
-                const db = opts.getDb();
                 await db
                   .update(user)
                   .set({ lastActiveAt: new Date() })
