@@ -2,13 +2,8 @@
 
 import posthog from "posthog-js";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  humanizeError,
-  humanizeHttpStatus,
-  parseApiErrorResponse,
-} from "@/lib/api-errors";
+import { humanizeError, parseApiErrorResponse } from "@/lib/api-errors";
 import { ricFetch } from "@/lib/ric-fetch";
-import { dbg } from "@/lib/debug";
 import { parseSseStream } from "@/lib/sse";
 import { createStreamFlusher } from "@/lib/stream-flush";
 import { FLAGS } from "@/lib/types";
@@ -59,7 +54,7 @@ interface UseAskChatOptions {
 
 export interface UseAskChatHandle {
   messages: ChatMessage[];
-  /** True while an assistant message is being streamed in. */
+  /** True while an assistant message is still being streamed in. */
   isLoading: boolean;
   /** Convenience alias — same value as `isLoading`. */
   isStreaming: boolean;
@@ -287,10 +282,7 @@ export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
       // Single-stream-at-a-time. The button is disabled while loading so
       // this is mostly defensive against double-submits and Enter-key
       // races. Returning silently is friendlier than throwing here.
-      if (controllerRef.current) {
-        dbg("ask-chat", "send refused — already streaming");
-        return;
-      }
+      if (controllerRef.current) return;
       const trimmed = text.trim();
       const hasImages = !!images && images.length > 0;
       if (!trimmed && !hasImages) return;
@@ -327,12 +319,7 @@ export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
 
       const trimmedHistory = trimForServer(historyForWire, cap);
       // Backward-compatibility shim: include the legacy `prompt` / `image`
-      // fields alongside the new `messages` array. A worker that
-      // understands chat ignores them (it uses `messages`); a pre-chat
-      // worker version ignores `messages` and falls back to single-shot
-      // on the latest user turn, so the request still succeeds — the
-      // model just won't see the prior context. Avoids a hard 400 if the
-      // frontend gets deployed before the worker.
+      // fields alongside the new `messages` array.
       const legacyImage: string | string[] | undefined = hasImages
         ? images.length === 1
           ? images[0]
@@ -346,9 +333,6 @@ export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
         messages: trimmedHistory.map((m) => ({
           role: m.role,
           text: m.text,
-          // Only include images on user turns — some OpenAI-compatible
-          // providers reject image_url on assistant messages, and we
-          // never have model-generated images anyway.
           images:
             m.role === "user" && m.images && m.images.length > 0
               ? m.images
@@ -356,21 +340,8 @@ export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
         })),
       };
 
-      const t0 = performance.now();
-      let sseEvents = 0;
-      let firstTokenMs: number | null = null;
-
       const controller = new AbortController();
       controllerRef.current = controller;
-      dbg(
-        "ask-chat",
-        "POST /api/completion · turns:",
-        trimmedHistory.length,
-        "· last_prompt_len:",
-        trimmed.length,
-        "· images:",
-        hasImages ? images.length : 0,
-      );
 
       try {
         const res = await ricFetch("/api/completion", {
@@ -378,25 +349,10 @@ export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
           body: JSON.stringify(payload),
           signal: controller.signal,
         });
-        dbg(
-          "ask-chat",
-          "response status:",
-          res.status,
-          "· headers in",
-          Math.round(performance.now() - t0),
-          "ms",
-        );
         if (!res.ok) {
           throw new Error(await parseApiErrorResponse(res));
         }
 
-        // Shared SSE parser. Behavior matches the previous inline loop:
-        //   - carry-buffer for events split across reads (`{ stream: true }`)
-        //   - `[DONE]` skipped silently
-        //   - `{ error }` payloads bubble up as a thrown Error so the
-        //     outer catch handles them uniformly
-        //   - per-event JSON parse failures are logged via dbg() but
-        //     don't abort the stream
         let full = "";
         let streamError: string | null = null;
         // Apply streamed text to React state at a bounded rate — one
@@ -413,24 +369,12 @@ export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
             signal: controller.signal,
             onChunk: (delta) => {
               if (typeof delta.text === "string") {
-                sseEvents++;
-                if (firstTokenMs === null) {
-                  firstTokenMs = Math.round(performance.now() - t0);
-                  dbg("ask-chat", "first token at", firstTokenMs, "ms");
-                }
                 full += delta.text;
                 flusher.schedule();
               }
             },
             onError: (message) => {
               streamError = message;
-            },
-            onParseError: (parseErr) => {
-              dbg(
-                "ask-chat",
-                "SSE parse error:",
-                parseErr instanceof Error ? parseErr.message : String(parseErr),
-              );
             },
           });
           flusher.flush();
@@ -440,16 +384,6 @@ export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
         if (streamError) {
           throw new Error(streamError);
         }
-        dbg(
-          "ask-chat",
-          "stream done · events:",
-          sseEvents,
-          "· chars:",
-          full.length,
-          "· total:",
-          Math.round(performance.now() - t0),
-          "ms",
-        );
         // Finalize — clear `pending` so the UI removes the typing indicator.
         setMessages((prev) =>
           prev.map((msg) =>
@@ -460,14 +394,6 @@ export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
         setCanRegenerate(false);
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") {
-          dbg(
-            "ask-chat",
-            "aborted after",
-            Math.round(performance.now() - t0),
-            "ms (",
-            sseEvents,
-            "events received)",
-          );
           setMessages((prev) => {
             const placeholder = prev.find((m) => m.id === assistantMsg.id);
             if (!placeholder) return prev;
@@ -483,11 +409,6 @@ export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
         } else {
           const humanized =
             err instanceof Error ? humanizeError(err) : "Something went wrong.";
-          dbg(
-            "ask-chat",
-            "FAILED:",
-            humanized || (err instanceof Error ? err.message : String(err)),
-          );
           setError(humanized || "Something went wrong. Please try again.");
           lastFailedSendRef.current = {
             text: trimmed,

@@ -140,11 +140,12 @@ export function TranscriptionProvider({ children }: { children: ReactNode }) {
   }, [isElectron, stopHandle]);
 
   // Throttled persistence of finalized segments. Interim updates mutate
-  // constantly; a fixed 1s tick writes at most once per second regardless
-  // of speech rate, and stop/clear flush immediately.
+  // constantly; only mark dirty when finalized segments actually change,
+  // and stop/clear flush immediately.
   const transcriptionSegmentsRef = useRef(transcriptionSegments);
   transcriptionSegmentsRef.current = transcriptionSegments;
   const persistDirtyRef = useRef(false);
+  const lastFinalSignatureRef = useRef("");
 
   const flushTranscriptPersist = useCallback(() => {
     if (!persistDirtyRef.current) return;
@@ -155,8 +156,22 @@ export function TranscriptionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (transcriptionSegments.length > 0) {
+    let finalCount = 0;
+    let lastFinal: TranscriptionSegment | null = null;
+    for (const seg of transcriptionSegments) {
+      if (seg.isFinal !== false) {
+        finalCount++;
+        lastFinal = seg;
+      }
+    }
+    const signature = lastFinal
+      ? `${finalCount}:${lastFinal.id}:${lastFinal.text}`
+      : "";
+    if (signature && signature !== lastFinalSignatureRef.current) {
+      lastFinalSignatureRef.current = signature;
       persistDirtyRef.current = true;
+    } else if (!signature) {
+      lastFinalSignatureRef.current = "";
     }
   }, [transcriptionSegments]);
 

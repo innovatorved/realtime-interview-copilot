@@ -140,7 +140,8 @@ export default function TitleBar() {
   const handleLogout = () => void signOutAndTrack();
 
   const toggleCompactMode = () => {
-    void saveContext().finally(() => setCompactMode(!compactMode));
+    setCompactMode(!compactMode);
+    void saveContext();
   };
 
   if (!isElectron) {
@@ -187,7 +188,7 @@ export default function TitleBar() {
         </div>
 
         <div className="flex items-center gap-1" style={noDragStyle}>
-          {session?.user && (
+          {isApprovedUser && session?.user && (
             <UserMenu
               user={session.user}
               onLogout={() => void handleLogout()}

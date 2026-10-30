@@ -5,17 +5,13 @@ import { FLAGS } from "@/lib/types";
 
 const SSE_CLIENT_BUFFER_MAX = 1_000_000;
 
-export interface StreamCompletionParams {
+interface StreamCompletionParams {
   flag: FLAGS;
   bg: string;
   prompt: string;
   signal: AbortSignal;
   image?: string | string[];
   onChunk: (text: string) => void;
-  resolveErrorMessage?: (
-    response: Response,
-    defaultMessage: string,
-  ) => string | Promise<string>;
 }
 
 export async function streamCompletion({
@@ -24,7 +20,6 @@ export async function streamCompletion({
   prompt,
   signal,
   image,
-  resolveErrorMessage,
   onChunk,
 }: StreamCompletionParams): Promise<void> {
   const response = await ricFetch("/api/completion", {
@@ -39,10 +34,7 @@ export async function streamCompletion({
   });
 
   if (!response.ok) {
-    const defaultMessage = await parseApiErrorResponse(response);
-    const message = resolveErrorMessage
-      ? await resolveErrorMessage(response, defaultMessage)
-      : defaultMessage;
+    const message = await parseApiErrorResponse(response);
     throw new Error(message);
   }
 

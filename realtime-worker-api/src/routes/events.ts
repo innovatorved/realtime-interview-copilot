@@ -1,9 +1,8 @@
 /** /api/events/track — narrow client telemetry endpoint.
  *
  *  Allow-list driven so a compromised renderer cannot dump arbitrary
- *  rows into `usage_event`. Mirrors `IMPORTANT_EVENT_ACTIONS` in the
- *  admin plugin; the two have drifted historically and are tracked as a
- *  known design flaw. */
+ *  rows into `usage_event`. Shares `CLIENT_TRACKED_ACTIONS` with the
+ *  admin plugin's `IMPORTANT_EVENT_ACTIONS`. */
 
 import {
   authErrorResponse,
@@ -12,19 +11,11 @@ import {
 } from "../middleware/auth";
 import { jsonResponse } from "../lib/http";
 import { SAFE_SESSION_ID_RE } from "../lib/ids";
+import { CLIENT_TRACKED_ACTIONS } from "../plugins/self-hosted-admin/constants";
 import { recordUsage } from "../usage";
 import type { Env } from "../env";
 
-const ALLOWED_TRACKED_ACTIONS = new Set<string>([
-  "recording_start",
-  "recording_stop",
-  "screen_capture",
-  "question_asked",
-  "mode_switched",
-  "completion_saved",
-  "session_resumed",
-  "session_paused_by_user",
-]);
+const ALLOWED_TRACKED_ACTIONS = new Set<string>(CLIENT_TRACKED_ACTIONS);
 
 interface EventTrackBody {
   action?: unknown;

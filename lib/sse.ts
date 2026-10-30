@@ -19,12 +19,12 @@
  *     aborting the stream — a malformed chunk should not lose the
  *     remaining tokens. */
 
-export interface CompletionDelta {
+interface CompletionDelta {
   text?: string;
   error?: string;
 }
 
-export interface ParseSseStreamOptions {
+interface ParseSseStreamOptions {
   signal?: AbortSignal;
   /** Called for every successfully parsed `data:` payload (excluding
    *  `[DONE]`). Returning `false` stops iteration. */

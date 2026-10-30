@@ -6,7 +6,8 @@
     "electron/main.ts",
     "electron/preload.ts",
     "scripts/apply-app-constants.js",
-    "scripts/build-electron.js"
+    "scripts/build-electron.js",
+    "scripts/sync-distribution.js"
   ],
   "project": [
     "app/**/*.{ts,tsx}",

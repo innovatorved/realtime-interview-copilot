@@ -10,12 +10,14 @@ import {
 
 type WindowAccessor = () => BrowserWindow | null;
 
-export type ScreenAccessStatus =
+type ScreenAccessStatus =
   | "not-determined"
   | "granted"
   | "denied"
   | "restricted"
   | "unknown";
+
+const MAX_CAPTURE_EDGE = 1920;
 
 /** macOS gates screen capture behind a TCC permission; everywhere else
  *  capture is unconditionally allowed. We treat lookup failures as
@@ -78,12 +80,16 @@ export function registerScreenIpc(getWindow: WindowAccessor): void {
         ? screen.getDisplayMatching(w.getBounds())
         : screen.getPrimaryDisplay();
       const { width, height } = targetDisplay.size;
-      const scale = 1; // 1:1, full native resolution
+      const longEdge = Math.max(width, height, 1);
+      const scale =
+        longEdge > MAX_CAPTURE_EDGE ? MAX_CAPTURE_EDGE / longEdge : 1;
+      const targetW = Math.max(1, Math.round(width * scale));
+      const targetH = Math.max(1, Math.round(height * scale));
       const sources = await desktopCapturer.getSources({
         types: ["screen"],
         thumbnailSize: {
-          width: Math.round(width * scale),
-          height: Math.round(height * scale),
+          width: targetW,
+          height: targetH,
         },
       });
 
@@ -96,18 +102,8 @@ export function registerScreenIpc(getWindow: WindowAccessor): void {
         return { success: false as const, error: "No screen source available" };
       }
 
-      // Downscale to keep the payload reasonable for the LLM (max ~1600px long edge)
-      const maxLongEdge = 1600;
-      const longEdge = Math.max(width, height);
-      const img =
-        longEdge > maxLongEdge
-          ? primary.thumbnail.resize({
-              width: Math.round(width * (maxLongEdge / longEdge)),
-              height: Math.round(height * (maxLongEdge / longEdge)),
-            })
-          : primary.thumbnail;
-
-      const dataUrl = img.toDataURL(); // image/png base64
+      const jpegBuf = primary.thumbnail.toJPEG(82);
+      const dataUrl = `data:image/jpeg;base64,${jpegBuf.toString("base64")}`;
       return { success: true as const, dataUrl };
     } catch (err) {
       return {

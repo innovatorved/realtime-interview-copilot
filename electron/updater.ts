@@ -5,7 +5,7 @@ import {
   type UpdateInfo,
 } from "electron-updater";
 
-export type UpdaterStatus =
+type UpdaterStatus =
   | { type: "idle" }
   | { type: "checking" }
   | { type: "available"; version: string }
@@ -28,10 +28,6 @@ function broadcastStatus(next: UpdaterStatus): void {
       win.webContents.send("updater:status", next);
     }
   }
-}
-
-export function getUpdaterStatus(): UpdaterStatus {
-  return status;
 }
 
 export function getAppVersion(): string {

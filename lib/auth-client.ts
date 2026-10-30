@@ -1,5 +1,4 @@
 import { createAuthClient } from "better-auth/react";
-import { sendGTMEvent } from "@next/third-parties/google";
 import { BACKEND_API_URL } from "./constant";
 
 export const authClient = createAuthClient({
@@ -13,18 +12,11 @@ export const authClient = createAuthClient({
 });
 
 export async function signOutAndTrack(): Promise<void> {
-  const dispatchLogout = () => window.dispatchEvent(new Event("auth:logout"));
   try {
-    await authClient.signOut({
-      fetchOptions: {
-        onSuccess: () => {
-          sendGTMEvent({ event: "logout" });
-          dispatchLogout();
-        },
-      },
-    });
-    dispatchLogout();
+    await authClient.signOut();
   } catch {
-    dispatchLogout();
+    /* ignore sign-out network errors */
+  } finally {
+    window.dispatchEvent(new Event("auth:logout"));
   }
 }

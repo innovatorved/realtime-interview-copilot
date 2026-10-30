@@ -161,6 +161,7 @@ export function WaitingForApproval({ email }: { email?: string }) {
     refresh,
     send,
     fetchThread,
+    markThreadRead,
   } = useSupportMessages({ enabled: true, pollMs: 60_000 });
 
   const [view, setView] = useState<"home" | "compose" | "thread">("home");
@@ -197,9 +198,32 @@ export function WaitingForApproval({ email }: { email?: string }) {
           createdAt: m.createdAt,
         })),
       );
+      void markThreadRead(threadId);
     }
     setThreadLoading(false);
   };
+
+  useEffect(() => {
+    if (view !== "thread" || !activeThreadId) return;
+    const activeSummary = threads.find((t) => t.id === activeThreadId);
+    if (!activeSummary?.unreadByUser) return;
+    let cancelled = false;
+    void fetchThread(activeThreadId).then((data) => {
+      if (cancelled || !data?.messages) return;
+      setThreadMessages(
+        data.messages.map((m) => ({
+          id: m.id,
+          body: m.body,
+          authorType: m.authorType,
+          createdAt: m.createdAt,
+        })),
+      );
+      void markThreadRead(activeThreadId);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [view, activeThreadId, threads, fetchThread, markThreadRead]);
 
   const handleSend = async () => {
     setSendError(null);

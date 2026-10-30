@@ -2,11 +2,11 @@
 
 import { authClient } from "@/lib/auth-client";
 import { onSessionExpired } from "@/lib/auth-events";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AuthWizard } from "./auth-wizard";
 import { WaitingForApproval } from "./waiting-for-approval";
 import { AppAnnouncements } from "@/components/announcements/AppAnnouncements";
+import { useTab } from "@/components/TabContext";
 import { AlertTriangle, Ban, Loader2 } from "lucide-react";
 import posthog from "posthog-js";
 
@@ -42,13 +42,10 @@ function AuthLoadingShell() {
 }
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
   const { data: session, isPending, error } = authClient.useSession();
+  const { compactMode } = useTab();
   const [mounted, setMounted] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
-  // Mark the router as used so stricter lint rules don't drop it; we keep it
-  // for future redirects triggered from this component.
-  void router;
 
   useEffect(() => {
     setMounted(true);
@@ -289,26 +286,29 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
+  const announcementsOverlay = (
+    <div
+      className="fixed left-2 right-2 z-[80] pointer-events-none"
+      style={{ top: "calc(env(safe-area-inset-top, 0px) + 44px)" }}
+    >
+      <div className="pointer-events-auto max-w-3xl mx-auto">
+        <AppAnnouncements hideBanners={compactMode} />
+      </div>
+    </div>
+  );
+
   if (extendedUser && !extendedUser.isApproved) {
-    return <WaitingForApproval email={extendedUser.email} />;
+    return (
+      <>
+        {announcementsOverlay}
+        <WaitingForApproval email={extendedUser.email} />
+      </>
+    );
   }
 
   return (
     <>
-      {/*
-        Mounted once for every authenticated, approved user. Renders any
-        admin-pushed banners and popups. Banners stack at the top of the
-        window (below the OS title bar in Electron); popups render as a
-        full-screen modal at z-index 120.
-      */}
-      <div
-        className="fixed left-2 right-2 z-[80] pointer-events-none"
-        style={{ top: "calc(env(safe-area-inset-top, 0px) + 44px)" }}
-      >
-        <div className="pointer-events-auto max-w-3xl mx-auto">
-          <AppAnnouncements />
-        </div>
-      </div>
+      {announcementsOverlay}
       {children}
     </>
   );

@@ -143,12 +143,10 @@ export async function handleCompletion(
     }
   }
 
-  const quotaCheck = await checkQuota(
-    getDb(env),
-    env,
-    trackedUser.id,
-    "completion",
-  );
+  const [quotaCheck, cfg] = await Promise.all([
+    checkQuota(getDb(env), env, trackedUser.id, "completion"),
+    getCachedConfig(env),
+  ]);
   if (!quotaCheck.allowed) {
     recordUsage(env, ctx, request, trackedUser, "completion", {
       status: "rate_limited",
@@ -172,8 +170,6 @@ export async function handleCompletion(
     (sum, m) => sum + m.images.length,
     0,
   );
-
-  const cfg = await getCachedConfig(env);
 
   // When an admin-configured custom base URL is in use, reject the request
   // up-front if the URL targets internal / link-local / loopback hosts. This

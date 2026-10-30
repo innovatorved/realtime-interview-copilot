@@ -7,16 +7,12 @@
 import {
   createContext,
   useContext,
-  useEffect,
   useMemo,
   type ReactNode,
 } from "react";
 import { useInterviewContext } from "@/components/InterviewContextProvider";
 import { useAskChat, type UseAskChatHandle } from "@/hooks/useAskChat";
-import {
-  APP_SESSION_KEYS,
-  migrateLegacySessionKeys,
-} from "@/lib/app-session-storage";
+import { APP_SESSION_KEYS } from "@/lib/app-session-storage";
 import { buildContextBlock } from "@/lib/prompt-context";
 
 const ASK_AI_BACKGROUND =
@@ -25,10 +21,6 @@ const ASK_AI_BACKGROUND =
 const AskChatContext = createContext<UseAskChatHandle | null>(null);
 
 export function AskChatProvider({ children }: { children: ReactNode }) {
-  useEffect(() => {
-    migrateLegacySessionKeys();
-  }, []);
-
   const { interviewNotes, resumeText, jobDescription } = useInterviewContext();
 
   const background = useMemo(

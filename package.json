@@ -13,14 +13,12 @@
     "build:electron": "node scripts/build-electron.js",
     "electron:dev": "bun run build:electron && concurrently \"PORT=3000 bun run dev\" \"wait-on http://localhost:3000 && DEV_PORT=3000 electron .\"",
     "electron:debug": "ELECTRON_DEBUG=true bun run build:electron && concurrently \"PORT=3000 bun run dev\" \"wait-on http://localhost:3000 && DEV_PORT=3000 electron .\"",
-    "electron:build": "rm -f electron/DEBUG_BUILD && bun run build:electron && bun run build && node scripts/apply-app-constants.js && electron-builder",
-    "electron:build:debug": "bun run build:electron && bun run build && node scripts/apply-app-constants.js && printf 'debug build · %s\\n' \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\" > electron/DEBUG_BUILD && electron-builder",
+    "electron:build": "bun run build:electron && bun run build && node scripts/apply-app-constants.js && electron-builder",
     "electron:start": "bun run build:electron && electron .",
-    "clean": "rm -rf .next out dist electron/*.js electron/*.js.map electron/DEBUG_BUILD"
+    "clean": "rm -rf .next out dist electron/*.js electron/*.js.map"
   },
   "dependencies": {
     "@deepgram/sdk": "^5.15.0",
-    "@next/third-parties": "^16.4.2",
     "@radix-ui/react-label": "^2.1.17",
     "@radix-ui/react-slot": "^1.5.0",
     "@radix-ui/react-switch": "^1.4.1",
@@ -41,8 +39,7 @@
     "react-markdown": "^10.1.0",
     "rehype-sanitize": "^6.0.0",
     "remark-gfm": "^4.0.1",
-    "tailwind-merge": "^3.7.0",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwind-merge": "^3.7.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.2",
@@ -87,6 +84,7 @@
     "files": [
       "out/**/*",
       "electron/**/*",
+      "!electron/**/*.ts",
       "node_modules/**/*",
       "package.json",
       "lib/csp.mjs"

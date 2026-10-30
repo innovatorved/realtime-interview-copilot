@@ -5,7 +5,6 @@ import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { ArrowLeft, Loader2, Mic, MoveRight } from "lucide-react";
-import { sendGTMEvent } from "@next/third-parties/google";
 import posthog from "posthog-js";
 
 import { authTokens as TOKEN } from "@/lib/design-tokens";
@@ -134,7 +133,6 @@ export function AuthWizard({
         { email, password, name },
         {
           onSuccess: () => {
-            sendGTMEvent({ event: "signup", value: "email" });
             posthog.identify(email, { email, name });
             posthog.capture("user_signed_up", { method: "email", email });
             showModal(
@@ -145,7 +143,6 @@ export function AuthWizard({
             setTimeout(() => handleSuccess(), 1200);
           },
           onError: (ctx) => {
-            sendGTMEvent({ event: "signup_error", error: ctx.error.message });
             posthog.capture("signup_error", {
               error_message: ctx.error.message,
               email,
@@ -179,13 +176,11 @@ export function AuthWizard({
         { email, password },
         {
           onSuccess: () => {
-            sendGTMEvent({ event: "login", value: "email" });
             posthog.identify(email, { email });
             posthog.capture("user_signed_in", { method: "email", email });
             handleSuccess();
           },
           onError: (ctx) => {
-            sendGTMEvent({ event: "login_error", error: ctx.error.message });
             posthog.capture("signin_error", {
               error_message: ctx.error.message,
               email,

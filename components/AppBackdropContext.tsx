@@ -130,10 +130,8 @@ const WIN32_MIN_HIT_ALPHA = 0.01;
 
 export function AppBackdrop({
   clipToNavbar = false,
-  navbarHeightPx: _navbarHeightPx = 64,
 }: {
   clipToNavbar?: boolean;
-  navbarHeightPx?: number;
 }) {
   const { backdropOpacity, isElectron } = useAppBackdrop();
 

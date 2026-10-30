@@ -40,7 +40,6 @@ export const savedNote = sqliteTable(
       .references(() => user.id, { onDelete: "cascade" }),
     content: text("body").notNull(),
     tag: text("tag").notNull().default("Copilot"),
-    workspaceId: text("workspaceId"),
     createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
   },
   (table) => [
@@ -75,30 +74,6 @@ export const quotaBalance = sqliteTable("quota_balance", {
   createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
 });
-
-export const workspace = sqliteTable("workspace", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  ownerUserId: text("ownerUserId")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-  createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
-});
-
-export const workspaceMember = sqliteTable(
-  "workspace_member",
-  {
-    workspaceId: text("workspaceId")
-      .notNull()
-      .references(() => workspace.id, { onDelete: "cascade" }),
-    userId: text("userId")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-    role: text("role").notNull().default("member"),
-    joinedAt: integer("joinedAt", { mode: "timestamp" }).notNull(),
-  },
-  (table) => [primaryKey({ columns: [table.workspaceId, table.userId] })],
-);
 
 export const session = sqliteTable(
   "session",
@@ -202,7 +177,6 @@ export const rateLimitEntry = sqliteTable(
   (table) => [index("rate_limit_key_idx").on(table.key)],
 );
 export const rate_limit = rateLimitEntry;
-export const rateLimit = rateLimitEntry;
 
 export const adminConfig = sqliteTable("admin_config", {
   key: text("key").primaryKey(),
@@ -265,7 +239,6 @@ export const usageEvent = sqliteTable(
     ipAddress: text("ipAddress"),
     userAgent: text("userAgent"),
     metadata: text("metadata"),
-    workspaceId: text("workspaceId"),
     createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
   },
   (table) => [
@@ -424,7 +397,6 @@ export const liveSession = sqliteTable(
     deepgramProjectId: text("deepgramProjectId"),
     eventCount: integer("eventCount").notNull().default(0),
     metadata: text("metadata"),
-    workspaceId: text("workspaceId"),
   },
   (table) => [
     index("live_session_user_idx").on(table.userId),

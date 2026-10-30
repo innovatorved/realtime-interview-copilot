@@ -19,7 +19,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AskListeningBanner } from "@/components/ask/AskListeningBanner";
 import { useAskKeyboard } from "@/components/ask/useAskKeyboard";
 import { useAskScreenshotBridge } from "@/components/ask/useAskScreenshotBridge";
-import { AskMicDebugHud } from "@/components/ui/AskMicDebugHud";
 import { Button } from "@/components/ui/button";
 import { ChatThread } from "@/components/ui/ChatThread";
 import { Input } from "@/components/ui/input";
@@ -29,7 +28,6 @@ import { useSharedAskChat } from "@/components/AskChatProvider";
 import { useInterviewContext } from "@/components/InterviewContextProvider";
 import { useAskMic } from "@/hooks/useAskMic";
 import { useMicPushToTalk } from "@/hooks/useMicPushToTalk";
-import { dbg } from "@/lib/debug";
 import { hasAttachedContext } from "@/lib/prompt-context";
 import { trackEvent } from "@/lib/session-tracking";
 import { sessionDisplayName, sessionUserTitle } from "@/lib/session-display";
@@ -683,19 +681,6 @@ export function QuestionAssistant({
           {askMic.error && (
             <p className="mt-2 text-[11px] text-red-300/90">{askMic.error}</p>
           )}
-
-          {/* Debug HUD — auto-visible in dev / `?askmic_debug=1`. Lets the
-              user (and us) see exactly which stage of the mic pipeline is
-              broken: chunks flowing? events arriving? captioning anything?
-              This is the answer to "I speak and nothing appears" — the
-              counters tell you immediately whether the bug is mic, WS, or
-              Deepgram. */}
-          <AskMicDebugHud
-            state={askMic.state}
-            level={askMic.level}
-            stats={askMic.stats}
-            error={askMic.error}
-          />
         </div>
       </div>
 

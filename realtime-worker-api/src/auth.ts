@@ -20,7 +20,7 @@ export const TRUSTED_ORIGINS = [
   "https://realtime-worker-api-prod.vedgupta.in",
 ] as const;
 
-export const auth = (env: Env & { CONFIG_KV?: KVNamespace }) => {
+export const auth = (env: Env) => {
   const db = getDb(env);
 
   const adminEmails = (env.ADMIN_EMAILS?.trim() ?? "")
@@ -76,9 +76,9 @@ export const auth = (env: Env & { CONFIG_KV?: KVNamespace }) => {
           deepgramKey: env.DEEPGRAM_API_KEY?.trim() || "",
           geminiKeyConfigured: Boolean(env.GOOGLE_GENERATIVE_AI_API_KEY?.trim()),
           deepgramKeyConfigured: Boolean(env.DEEPGRAM_API_KEY?.trim()),
-          cfAccountId: (env as unknown as Record<string, string>).CF_ACCOUNT_ID?.trim() || "",
-          cfGatewayId: (env as unknown as Record<string, string>).CF_GATEWAY_ID?.trim() || "",
-          cfApiToken: (env as unknown as Record<string, string>).CF_API_TOKEN?.trim() || "",
+          cfAccountId: env.CF_ACCOUNT_ID?.trim() || "",
+          cfGatewayId: env.CF_GATEWAY_ID?.trim() || "",
+          cfApiToken: env.CF_API_TOKEN?.trim() || "",
         }),
       }),
     ],

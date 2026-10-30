@@ -197,10 +197,12 @@ export function userEndpoints(deps: AdminDeps) {
           userEmail: existing.email,
           metadata: { adminEmail },
         });
-        await db.delete(savedNote).where(eq(savedNote.userId, userId));
-        await db.delete(userInterviewContext).where(eq(userInterviewContext.userId, userId));
-        await db.delete(session).where(eq(session.userId, userId));
-        await db.delete(account).where(eq(account.userId, userId));
+        await Promise.all([
+          db.delete(savedNote).where(eq(savedNote.userId, userId)),
+          db.delete(userInterviewContext).where(eq(userInterviewContext.userId, userId)),
+          db.delete(session).where(eq(session.userId, userId)),
+          db.delete(account).where(eq(account.userId, userId)),
+        ]);
         await db.delete(user).where(eq(user.id, userId));
         return ctx.json({ ok: true });
       },
@@ -219,7 +221,16 @@ export function userEndpoints(deps: AdminDeps) {
         const [targetUser] = await db.select().from(user).where(eq(user.id, userId));
         if (!targetUser) throw new APIError("NOT_FOUND", { message: "User not found" });
 
-        const [sessions, notes, interviewContext, recentAudit, modelParamsRow] = await Promise.all([
+        const usageSince = new Date(Date.now() - 30 * 86_400_000);
+        const [
+          sessions,
+          notes,
+          interviewContext,
+          recentAudit,
+          modelParamsRow,
+          usageSummary,
+          existingQuota,
+        ] = await Promise.all([
           db
             .select({
               id: session.id,
@@ -236,6 +247,14 @@ export function userEndpoints(deps: AdminDeps) {
           db.select().from(userInterviewContext).where(eq(userInterviewContext.userId, userId)),
           db.select().from(auditEvent).where(eq(auditEvent.userId, userId)).orderBy(desc(auditEvent.createdAt)).limit(20),
           db.select().from(userModelParams).where(eq(userModelParams.userId, userId)),
+          getUserUsageSummary(db, userId, usageSince).catch((e) => {
+            console.warn("[admin] usage summary failed", e);
+            return {
+              totals: { events: 0, promptChars: 0, responseChars: 0, durationMs: 0, errors: 0 },
+              perAction: [],
+            };
+          }),
+          getQuotaForUser(db, userId),
         ]);
         const modelParamsOverride = modelParamsRow[0]
           ? {
@@ -247,17 +266,7 @@ export function userEndpoints(deps: AdminDeps) {
             }
           : null;
 
-        const usageSince = new Date(Date.now() - 30 * 86_400_000);
-        const usageSummary = await getUserUsageSummary(db, userId, usageSince).catch((e) => {
-          console.warn("[admin] usage summary failed", e);
-          return {
-            totals: { events: 0, promptChars: 0, responseChars: 0, durationMs: 0, errors: 0 },
-            perAction: [],
-          };
-        });
-
-        await ensureQuotaRow(db, userId);
-        const quotaRow = await getQuotaForUser(db, userId);
+        const quotaRow = existingQuota ?? (await ensureQuotaRow(db, userId));
 
         return ctx.json({
           user: targetUser,
@@ -377,10 +386,12 @@ export function userEndpoints(deps: AdminDeps) {
         if (userIds.includes(selfId))
           throw new APIError("BAD_REQUEST", { message: "Cannot delete your own account" });
 
-        await db.delete(savedNote).where(inArray(savedNote.userId, userIds));
-        await db.delete(userInterviewContext).where(inArray(userInterviewContext.userId, userIds));
-        await db.delete(session).where(inArray(session.userId, userIds));
-        await db.delete(account).where(inArray(account.userId, userIds));
+        await Promise.all([
+          db.delete(savedNote).where(inArray(savedNote.userId, userIds)),
+          db.delete(userInterviewContext).where(inArray(userInterviewContext.userId, userIds)),
+          db.delete(session).where(inArray(session.userId, userIds)),
+          db.delete(account).where(inArray(account.userId, userIds)),
+        ]);
         await db.delete(user).where(inArray(user.id, userIds));
 
         await recordAudit({

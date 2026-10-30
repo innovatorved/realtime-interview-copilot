@@ -89,7 +89,8 @@ export default function MainPage() {
 
   const setCompactModePersisted = useCallback(
     (next: boolean) => {
-      void saveContext().finally(() => setCompactMode(next));
+      setCompactMode(next);
+      void saveContext();
     },
     [saveContext, setCompactMode],
   );
@@ -130,7 +131,7 @@ export default function MainPage() {
         isElectron ? "bg-transparent" : "app-page-bg",
       )}
     >
-      <AppBackdrop clipToNavbar={compactMode} navbarHeightPx={80} />
+      <AppBackdrop clipToNavbar={compactMode} />
 
       {!isElectron && !compactMode && (
         <header className="sticky top-0 z-40 border-b border-border-subtle bg-surface-raised">
@@ -208,10 +209,6 @@ export default function MainPage() {
             )}
             aria-hidden={compactMode}
           >
-            {!isElectron && !compactMode && (
-              <SignalStrip activeTab={activeTab} className="sm:hidden" />
-            )}
-
             <div
               id="panel-copilot"
               role="tabpanel"
@@ -258,7 +255,6 @@ export default function MainPage() {
             >
               <div className="min-h-0 flex-1 overflow-hidden px-3 py-3 sm:px-4 sm:py-4">
                 <History
-                  variant="page"
                   notes={notes}
                   pagination={pagination}
                   isLoading={notesLoading}
@@ -289,16 +285,6 @@ export default function MainPage() {
       </main>
 
       <ScreenRecordingOnboard />
-
-      {!isElectron && !compactMode && (
-        <div className="border-t border-border-subtle bg-surface-raised px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 sm:hidden">
-          <WorkspaceTabs
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-            variant="mobile"
-          />
-        </div>
-      )}
     </div>
   );
 }

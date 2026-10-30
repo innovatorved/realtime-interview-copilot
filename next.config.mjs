@@ -1,4 +1,4 @@
-import { DEV_CSP } from "./scripts/csp.mjs";
+import { DEV_CSP } from "./lib/csp.mjs";
 
 const devSecurityHeaders = [
   {

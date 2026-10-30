@@ -3,7 +3,7 @@
  * surface that greets the user should fall back to email so nothing
  * renders blank or misleading.
  */
-export type SessionUserLike = {
+type SessionUserLike = {
   name?: string | null;
   email?: string | null;
 };

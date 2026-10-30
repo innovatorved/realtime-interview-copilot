@@ -15,7 +15,6 @@
  *  aborts the legacy single-shot generation controller. */
 
 import { useEffect } from "react";
-import { dbg } from "@/lib/debug";
 
 interface UseAskKeyboardArgs {
   /** Gate the handler — typically `isActive` on the full surface, or
@@ -47,20 +46,17 @@ export function useAskKeyboard({
       const modKey = e.ctrlKey || e.metaKey;
       if (modKey && e.shiftKey && e.key.toLowerCase() === "n") {
         e.preventDefault();
-        dbg("ask-ui", "Mod+Shift+N → reset Ask AI chat");
         onNewChat();
         return;
       }
       if (e.key !== "Escape") return;
       if (isMicActive) {
         e.preventDefault();
-        dbg("ask-ui", "Esc → cancel active mic recording");
         onMicCancel();
         return;
       }
       if (isChatStreaming) {
         e.preventDefault();
-        dbg("ask-ui", "Esc → abort in-flight chat stream");
         onChatAbort();
         return;
       }

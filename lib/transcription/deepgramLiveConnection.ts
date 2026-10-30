@@ -16,7 +16,7 @@ export interface DeepgramLiveConnection {
   close: () => void;
 }
 
-export interface DeepgramLiveOptions {
+interface DeepgramLiveOptions {
   model?: string;
 }
 

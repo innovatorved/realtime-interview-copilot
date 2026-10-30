@@ -1,6 +1,5 @@
 "use client";
 
-import { sendGTMEvent } from "@next/third-parties/google";
 import posthog from "posthog-js";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { ContextCard } from "@/components/copilot/ContextCard";
@@ -84,7 +83,6 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
     (checked: boolean) => {
       if (!checked) {
         setFlag(FLAGS.SUMMARIZER);
-        sendGTMEvent({ event: "switch_mode", mode: "summarizer" });
         posthog.capture("mode_switched", {
           mode: "summarizer",
           previous_mode: "copilot",
@@ -94,7 +92,6 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
         });
       } else {
         setFlag(FLAGS.COPILOT);
-        sendGTMEvent({ event: "switch_mode", mode: "copilot" });
         posthog.capture("mode_switched", {
           mode: "copilot",
           previous_mode: "summarizer",
@@ -153,10 +150,6 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
     addInSavedData({
       createdAt: new Date().toISOString(),
       data: completion,
-      tag: flag === FLAGS.COPILOT ? "Copilot" : "Summarizer",
-    });
-    sendGTMEvent({
-      event: "save_completion",
       tag: flag === FLAGS.COPILOT ? "Copilot" : "Summarizer",
     });
     posthog.capture("completion_saved", {

@@ -1,6 +1,6 @@
 /** Build the interview background block from notes + resume/JD. */
 
-export interface BuildContextBlockArgs {
+interface BuildContextBlockArgs {
   resumeText?: string | null;
   jobDescription?: string | null;
   existingBg?: string;

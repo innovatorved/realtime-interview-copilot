@@ -64,7 +64,7 @@ function openExternal(href: string) {
   window.open(href, "_blank", "noopener,noreferrer");
 }
 
-export interface AppAnnouncementsProps {
+interface AppAnnouncementsProps {
   /** Hide banners (e.g. in compact electron mode where space is tight). */
   hideBanners?: boolean;
   /** Hide popups (e.g. when another modal is already open). */
@@ -228,6 +228,11 @@ function PopupQueue({
     onDismiss(visible.id);
   };
 
+  const handleAckOnly = () => {
+    markSeen(visible.id);
+    onAck(visible.id);
+  };
+
   return (
     <div
       role="dialog"
@@ -265,6 +270,7 @@ function PopupQueue({
                 className="mt-3 inline-flex items-center justify-center text-sm font-medium px-3 py-1.5 rounded-md bg-accent hover:bg-accent-hover text-accent-foreground"
                 onClick={() => {
                   openExternal(visible.ctaUrl!);
+                  markSeen(visible.id);
                   onAck(visible.id);
                 }}
               >
@@ -284,17 +290,15 @@ function PopupQueue({
             </button>
           )}
         </div>
-        {visible.dismissable && (
-          <div className="px-5 pb-4 flex justify-end">
-            <button
-              type="button"
-              className="text-xs font-medium px-3 py-1.5 rounded-md bg-surface-overlay hover:bg-surface-raised text-text-primary border border-border-subtle"
-              onClick={handleDismiss}
-            >
-              Got it
-            </button>
-          </div>
-        )}
+        <div className="px-5 pb-4 flex justify-end">
+          <button
+            type="button"
+            className="text-xs font-medium px-3 py-1.5 rounded-md bg-surface-overlay hover:bg-surface-raised text-text-primary border border-border-subtle"
+            onClick={visible.dismissable ? handleDismiss : handleAckOnly}
+          >
+            Got it
+          </button>
+        </div>
       </div>
     </div>
   );

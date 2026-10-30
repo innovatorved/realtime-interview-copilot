@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.pickCsp = pickCsp;
 exports.installCsp = installCsp;
 exports.installOriginHeaderInjection = installOriginHeaderInjection;
+const electron_1 = require("electron");
 const { DEV_CSP, PROD_CSP } = require("../../lib/csp.mjs");
 /** Content-Security-Policy strings + wiring.
  *
@@ -51,16 +52,17 @@ function installCsp(s, csp) {
  *  errors. This is required because Electron sends "file://" or "null"
  *  as origin for local files. */
 function installOriginHeaderInjection(s) {
+    const origin = electron_1.app.isPackaged
+        ? "https://copilot.vedgupta.in"
+        : "http://localhost:3000";
     s.webRequest.onBeforeSendHeaders({
         urls: [
-            "https://realtime-worker-api.innovatorved.workers.dev/*",
             "https://realtime-worker-api-prod.vedgupta.in/*",
             "https://*.deepgram.com/*",
             "https://api.deepgram.com/*",
         ],
     }, (details, callback) => {
-        // Mimic development origin which is likely whitelisted server-side.
-        details.requestHeaders["Origin"] = "http://localhost:3000";
+        details.requestHeaders["Origin"] = origin;
         callback({ requestHeaders: details.requestHeaders });
     });
 }

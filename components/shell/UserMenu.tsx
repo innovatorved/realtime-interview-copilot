@@ -37,7 +37,7 @@ export function UserMenu({
     let cancelled = false;
     async function fetchQuota() {
       try {
-        const res = await ricFetch("/api/usage/me?window=30d");
+        const res = await ricFetch("/api/usage/me?only=quota");
         if (!res.ok) return;
         const data = (await res.json()) as { quota?: QuotaSummary };
         if (!cancelled && data.quota) {

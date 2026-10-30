@@ -140,6 +140,12 @@ export function useSupportMessages(
     void refresh();
     if (!enabled || pollMs <= 0) return;
     const id = window.setInterval(() => {
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState === "hidden"
+      ) {
+        return;
+      }
       void refresh();
     }, pollMs);
     return () => window.clearInterval(id);

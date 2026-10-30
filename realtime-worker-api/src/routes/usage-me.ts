@@ -31,6 +31,16 @@ export async function handleUsageMe(
   const authResult = await getAuthenticatedUser(request, env, ctx);
   if (!isAuthed(authResult)) return authErrorResponse(authResult.error);
 
+  const db = getDb(env);
+
+  if (url.searchParams.get("only") === "quota") {
+    const existingQuota = await getQuotaForUser(db, authResult.id);
+    const quotaRow = existingQuota ?? (await ensureQuotaRow(db, authResult.id));
+    return jsonResponse({
+      quota: toQuotaSummary(quotaRow, env),
+    });
+  }
+
   const windowKey = (url.searchParams.get("window") ?? "30d").trim();
   const windowMs = USAGE_WINDOWS[windowKey];
   if (!windowMs) {
@@ -41,23 +51,20 @@ export async function handleUsageMe(
   }
 
   const since = new Date(Date.now() - windowMs);
-  const db = getDb(env);
-
-  const summary = await getUserUsageSummary(db, authResult.id, since);
-
-  await ensureQuotaRow(db, authResult.id);
-  const quotaRow = await getQuotaForUser(db, authResult.id);
-  const quota = toQuotaSummary(quotaRow, env);
-
   // Choose a sensible bucket width so the chart has ~30 points regardless
   // of window size.
   const bucketSeconds = Math.max(60, Math.floor(windowMs / 1000 / 30));
-  const series = await getUsageTimeseries(
-    env.DB,
-    since,
-    bucketSeconds,
-    authResult.id,
-  );
+
+  const [summary, quotaRow, series] = await Promise.all([
+    getUserUsageSummary(db, authResult.id, since),
+    (async () => {
+      const existing = await getQuotaForUser(db, authResult.id);
+      return existing ?? (await ensureQuotaRow(db, authResult.id));
+    })(),
+    getUsageTimeseries(env.DB, since, bucketSeconds, authResult.id),
+  ]);
+
+  const quota = toQuotaSummary(quotaRow, env);
 
   return jsonResponse({
     window: windowKey,

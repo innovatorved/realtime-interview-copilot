@@ -1,7 +1,7 @@
 import { BookOpen, MessageSquare, Mic, type LucideIcon } from "lucide-react";
 import type { TabType } from "@/components/TabContext";
 
-export interface WorkspaceTab {
+interface WorkspaceTab {
   id: TabType;
   label: string;
   icon: LucideIcon;

@@ -43,18 +43,14 @@ export interface ElectronAPI {
   windowFocus?: () => Promise<void>;
   windowSetFocusable?: (focusable: boolean) => Promise<boolean>;
   onWindowFocus?: (callback: () => void) => () => void;
-  appQuit: () => Promise<void>;
   appRelaunch: () => Promise<void>;
   updaterGetVersion?: () => Promise<string>;
-  updaterGetStatus?: () => Promise<UpdaterStatusPayload>;
   updaterCheck?: () => Promise<void>;
   updaterInstall?: () => Promise<void>;
   onUpdaterStatus?: (
     callback: (status: UpdaterStatusPayload) => void,
   ) => () => void;
   platform: string;
-  isElectron: boolean;
-  supportsSystemAudio: boolean;
   screen: {
     getAccess: () => Promise<ScreenAccessStatus>;
     openSettings: () => Promise<boolean>;

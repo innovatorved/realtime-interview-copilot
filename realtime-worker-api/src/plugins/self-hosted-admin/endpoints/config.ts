@@ -1,6 +1,6 @@
 /** Admin config CRUD, secret reveal, model test, admin allow-list. */
 
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { z } from "zod";
 import { adminConfig } from "../../../db/schema";
@@ -152,12 +152,13 @@ export function configEndpoints(deps: AdminDeps) {
         }
 
         const now = new Date();
-        const existing = await db.select().from(adminConfig).where(eq(adminConfig.key, key));
-        if (existing.length > 0) {
-          await db.update(adminConfig).set({ value, updatedAt: now }).where(eq(adminConfig.key, key));
-        } else {
-          await db.insert(adminConfig).values({ key, value, updatedAt: now });
-        }
+        await db
+          .insert(adminConfig)
+          .values({ key, value, updatedAt: now })
+          .onConflictDoUpdate({
+            target: adminConfig.key,
+            set: { value, updatedAt: now },
+          });
 
         const isSecret = key.endsWith("_key") || key.endsWith("_token");
         const maskedValue = isSecret ? `${value.slice(0, 4)}...${value.slice(-4)}` : value;
@@ -465,9 +466,9 @@ export function configEndpoints(deps: AdminDeps) {
         const adminEmail = ctx.context.session.user.email;
         if (!(await isAdmin(adminEmail))) throw new APIError("FORBIDDEN");
         const db = opts.getDb();
-        for (const key of Object.values(OPENAI_CONFIG_KEYS)) {
-          await db.delete(adminConfig).where(eq(adminConfig.key, key));
-        }
+        await db
+          .delete(adminConfig)
+          .where(inArray(adminConfig.key, Object.values(OPENAI_CONFIG_KEYS)));
         await recordAudit({
           eventType: "admin_action",
           userEmail: adminEmail,

@@ -11,6 +11,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -25,7 +26,7 @@ import {
 import { ricFetch } from "@/lib/ric-fetch";
 import type { UserInterviewContext } from "@/lib/types";
 
-export interface InterviewContextFields {
+interface InterviewContextFields {
   interviewNotes?: string | null;
   resumeText?: string | null;
   resumeFileName?: string | null;
@@ -95,6 +96,34 @@ export function InterviewContextProvider({
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const lastSavedSnapshotRef = useRef<string | null>(null);
+
+  const extendedUser = session?.user as
+    | { id?: string; isBanned?: boolean; isApproved?: boolean }
+    | undefined;
+  const isApprovedUser = Boolean(
+    extendedUser?.id &&
+      !extendedUser.isBanned &&
+      extendedUser.isApproved !== false,
+  );
+
+  const resetLocalState = useCallback(() => {
+    abortRef.current?.abort();
+    lastSavedSnapshotRef.current = null;
+    setContext(EMPTY);
+    setInterviewNotes("");
+    setResumeText(null);
+    setResumeFileName(null);
+    setJobDescription("");
+    setIsHydrated(false);
+    setError(null);
+    writeAppSession(APP_SESSION_KEYS.interviewDraft, "");
+  }, []);
+
+  useEffect(() => {
+    const onLogout = () => resetLocalState();
+    window.addEventListener("auth:logout", onLogout);
+    return () => window.removeEventListener("auth:logout", onLogout);
+  }, [resetLocalState]);
 
   const fieldsSnapshot = useCallback(
     () =>
@@ -172,7 +201,7 @@ export function InterviewContextProvider({
   }, [interviewNotes, resumeText, resumeFileName, jobDescription, isHydrated]);
 
   useEffect(() => {
-    if (session?.user) {
+    if (isApprovedUser) {
       const raw = readAppSession(APP_SESSION_KEYS.interviewDraft);
       if (raw) {
         try {
@@ -194,18 +223,9 @@ export function InterviewContextProvider({
       setIsHydrated(false);
       void fetchContext();
     } else {
-      abortRef.current?.abort();
-      setContext(EMPTY);
-      setInterviewNotes("");
-      setResumeText(null);
-      setResumeFileName(null);
-      setJobDescription("");
-      setIsHydrated(false);
-      setError(null);
-      writeAppSession(APP_SESSION_KEYS.interviewDraft, "");
+      resetLocalState();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-hydrate when user id changes
-  }, [session?.user?.id, fetchContext]);
+  }, [extendedUser?.id, isApprovedUser, fetchContext, resetLocalState]);
 
   const updateContext = useCallback(
     async (fields: InterviewContextFields): Promise<boolean> => {
@@ -251,6 +271,8 @@ export function InterviewContextProvider({
   );
 
   const saveContext = useCallback(async () => {
+    if (!isApprovedUser || !isHydrated) return false;
+    if (fieldsSnapshot() === lastSavedSnapshotRef.current) return true;
     return updateContext({
       interviewNotes: interviewNotes.trim() || null,
       resumeText,
@@ -258,6 +280,9 @@ export function InterviewContextProvider({
       jobDescription: jobDescription.trim() || null,
     });
   }, [
+    isApprovedUser,
+    isHydrated,
+    fieldsSnapshot,
     updateContext,
     interviewNotes,
     resumeText,
@@ -267,7 +292,7 @@ export function InterviewContextProvider({
 
   // Debounced server sync — drafts already persist to sessionStorage on change.
   useEffect(() => {
-    if (!session?.user || !isHydrated || isLoading) return;
+    if (!isApprovedUser || !isHydrated || isLoading) return;
 
     const snapshot = fieldsSnapshot();
     if (snapshot === lastSavedSnapshotRef.current) return;
@@ -285,7 +310,7 @@ export function InterviewContextProvider({
     isLoading,
     markFieldsSaved,
     saveContext,
-    session?.user,
+    isApprovedUser,
   ]);
 
   const setResumeParsed = useCallback((text: string, fileName: string) => {
@@ -298,24 +323,42 @@ export function InterviewContextProvider({
     setResumeFileName(null);
   }, []);
 
-  const value: InterviewContextValue = {
-    context,
-    interviewNotes,
-    resumeText,
-    resumeFileName,
-    jobDescription,
-    setInterviewNotes,
-    setJobDescription,
-    setResumeParsed,
-    clearResume,
-    isLoading,
-    isSaving,
-    isHydrated,
-    error,
-    fetchContext,
-    saveContext,
-    updateContext,
-  };
+  const value = useMemo<InterviewContextValue>(
+    () => ({
+      context,
+      interviewNotes,
+      resumeText,
+      resumeFileName,
+      jobDescription,
+      setInterviewNotes,
+      setJobDescription,
+      setResumeParsed,
+      clearResume,
+      isLoading,
+      isSaving,
+      isHydrated,
+      error,
+      fetchContext,
+      saveContext,
+      updateContext,
+    }),
+    [
+      context,
+      interviewNotes,
+      resumeText,
+      resumeFileName,
+      jobDescription,
+      setResumeParsed,
+      clearResume,
+      isLoading,
+      isSaving,
+      isHydrated,
+      error,
+      fetchContext,
+      saveContext,
+      updateContext,
+    ],
+  );
 
   return (
     <InterviewContext.Provider value={value}>

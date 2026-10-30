@@ -171,22 +171,10 @@ async function createWindow() {
   // Auto-open DevTools when ANY of these signal a debug session:
   //   - `isDev` (renderer pointed at `next dev`)
   //   - `ELECTRON_DEBUG=true` (set by `bun run electron:debug`)
-  //   - a `.debug-build` marker file shipped alongside `main.js`
-  //     (env vars don't survive a packaged binary, so the marker is
-  //     how `bun run electron:build:debug` flags a distributable
-  //     debug artifact at build time).
   // Detached mode so the overlay window keeps its declared 1000×600
   // even with DevTools visible — otherwise DevTools docks inside and
   // steals half the UI.
-  const debugMarker = (() => {
-    try {
-      return fs.existsSync(path.join(__dirname, "DEBUG_BUILD"));
-    } catch {
-      return false;
-    }
-  })();
-  const debugMode =
-    isDev || process.env.ELECTRON_DEBUG === "true" || debugMarker;
+  const debugMode = isDev || process.env.ELECTRON_DEBUG === "true";
 
   const devPort = process.env.DEV_PORT || "3000";
   const indexFile = path.join(buildPath, "index.html");

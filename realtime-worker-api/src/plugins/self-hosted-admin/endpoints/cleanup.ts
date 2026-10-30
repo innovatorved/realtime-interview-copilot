@@ -17,8 +17,10 @@ export function cleanupEndpoints(deps: AdminDeps) {
         const db = opts.getDb();
         const now = new Date();
 
-        await db.delete(rateLimitEntry).where(lt(rateLimitEntry.expiresAt, now));
-        await db.delete(session).where(lt(session.expiresAt, now));
+        await Promise.all([
+          db.delete(rateLimitEntry).where(lt(rateLimitEntry.expiresAt, now)),
+          db.delete(session).where(lt(session.expiresAt, now)),
+        ]);
 
         await recordAudit({
           eventType: "admin_action",

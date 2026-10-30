@@ -1,10 +1,9 @@
 /** Deepgram key minting routes.
  *
- *  Two near-duplicate handlers — `handleDeepgram` (system audio /
+ *  Shares core minting logic between `handleDeepgram` (system audio /
  *  transcript flow, can bind to a live_session) and `handleDeepgramAsk`
- *  (Ask AI mic, no live_session). Consolidating them changes one side's
- *  request shape, so the duplication is preserved deliberately and
- *  tracked as a known design flaw. */
+ *  (Ask AI mic, no live_session), while preserving their distinct rate-limit
+ *  buckets, analytics metadata, and session binding behavior. */
 
 import { eq } from "drizzle-orm";
 import { getCachedConfig } from "../config-cache";
@@ -14,6 +13,7 @@ import {
   authErrorResponse,
   getAuthenticatedUser,
   isAuthed,
+  type AuthedUser,
 } from "../middleware/auth";
 import { jsonHeaders, jsonResponse } from "../lib/http";
 import { getClientIp } from "../lib/ip";
@@ -24,6 +24,7 @@ import { checkQuota, consumeQuota } from "../services/quota.service";
 import type { Env } from "../env";
 
 const DEEPGRAM_TIMEOUT_MS = 10_000;
+const PROJECT_ID_TTL_MS = 10 * 60_000;
 
 type DeepgramProjectsResponse = {
   projects: Array<{ project_id: string }>;
@@ -34,6 +35,229 @@ type DeepgramKeyResponse = Record<string, unknown> & {
   /** The new key id Deepgram returns; we persist it on live_session so admins can revoke. */
   api_key_id?: string;
 };
+
+const projectIdCache = new Map<
+  string,
+  { projectId: string; expiresAt: number }
+>();
+
+interface MintDeepgramKeyOptions {
+  authResult: AuthedUser;
+  sessionId: string | null;
+  usageMetadata?: Record<string, unknown>;
+  keyComment: string;
+  keyTags: string[];
+  logPrefix: string;
+}
+
+async function resolveDeepgramProjectId(
+  apiKey: string,
+  authHeaders: Record<string, string>,
+): Promise<
+  | { ok: true; projectId: string }
+  | { ok: false; status: number; errorCode: string; response: Response }
+> {
+  const cached = projectIdCache.get(apiKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return { ok: true, projectId: cached.projectId };
+  }
+
+  const projectsResponse = await fetch(
+    "https://api.deepgram.com/v1/projects",
+    {
+      method: "GET",
+      headers: authHeaders,
+      signal: AbortSignal.timeout(DEEPGRAM_TIMEOUT_MS),
+    },
+  );
+
+  const projectsBody =
+    (await projectsResponse.json()) as DeepgramProjectsResponse;
+
+  if (!projectsResponse.ok) {
+    return {
+      ok: false,
+      status: projectsResponse.status,
+      errorCode: String(projectsResponse.status),
+      response: new Response(JSON.stringify(projectsBody), {
+        status: projectsResponse.status,
+        headers: jsonHeaders,
+      }),
+    };
+  }
+
+  const project = projectsBody.projects?.[0];
+  if (!project) {
+    return {
+      ok: false,
+      status: 404,
+      errorCode: "no_project",
+      response: jsonResponse(
+        {
+          error:
+            "Cannot find a Deepgram project. Please create a project first.",
+        },
+        404,
+      ),
+    };
+  }
+
+  projectIdCache.set(apiKey, {
+    projectId: project.project_id,
+    expiresAt: Date.now() + PROJECT_ID_TTL_MS,
+  });
+
+  return { ok: true, projectId: project.project_id };
+}
+
+async function mintTemporaryDeepgramKey(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+  opts: MintDeepgramKeyOptions,
+): Promise<Response> {
+  const {
+    authResult,
+    sessionId,
+    usageMetadata,
+    keyComment,
+    keyTags,
+    logPrefix,
+  } = opts;
+
+  const [quotaCheck, cfg] = await Promise.all([
+    checkQuota(getDb(env), env, authResult.id, "deepgram_seconds"),
+    getCachedConfig(env),
+  ]);
+
+  if (!quotaCheck.allowed) {
+    recordUsage(env, ctx, request, authResult, "deepgram_key", {
+      status: "rate_limited",
+      errorCode: "quota_exceeded",
+      ...(usageMetadata ? { metadata: usageMetadata } : {}),
+    });
+    return jsonResponse(
+      {
+        error: "Monthly audio transcription quota exceeded.",
+        resetAt: quotaCheck.resetAt.toISOString(),
+      },
+      429,
+    );
+  }
+
+  const tracker = startUsage(
+    env,
+    ctx,
+    request,
+    authResult,
+    "deepgram_key",
+    usageMetadata ? { metadata: usageMetadata } : undefined,
+  );
+
+  const apiKey = cfg.deepgramKey;
+  if (!apiKey) {
+    tracker.finish({ status: "error", errorCode: "missing_key" });
+    return jsonResponse(
+      {
+        error:
+          "Missing Deepgram API key — set via Admin Dashboard or DEEPGRAM_API_KEY env var",
+      },
+      500,
+    );
+  }
+
+  const authHeaders = {
+    Authorization: `Token ${apiKey}`,
+    accept: "application/json",
+  };
+
+  try {
+    const projectResolution = await resolveDeepgramProjectId(
+      apiKey,
+      authHeaders,
+    );
+    if (!projectResolution.ok) {
+      tracker.finish({
+        status: "error",
+        errorCode: projectResolution.errorCode,
+      });
+      return projectResolution.response;
+    }
+
+    const projectId = projectResolution.projectId;
+    const createResponse = await fetch(
+      `https://api.deepgram.com/v1/projects/${projectId}/keys`,
+      {
+        method: "POST",
+        headers: {
+          ...authHeaders,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          comment: keyComment,
+          scopes: ["usage:write"],
+          tags: keyTags,
+          time_to_live_in_seconds: 60,
+        }),
+        signal: AbortSignal.timeout(DEEPGRAM_TIMEOUT_MS),
+      },
+    );
+
+    const createBody = (await createResponse.json()) as DeepgramKeyResponse;
+
+    if (!createResponse.ok && createResponse.status === 404) {
+      projectIdCache.delete(apiKey);
+    }
+
+    tracker.finish({
+      status: createResponse.ok ? "ok" : "error",
+      errorCode: createResponse.ok ? null : String(createResponse.status),
+    });
+
+    if (createResponse.ok) {
+      ctx.waitUntil(
+        consumeQuota(getDb(env), env, authResult.id, "deepgram_seconds", {
+          seconds: 60,
+        }),
+      );
+    }
+
+    if (
+      createResponse.ok &&
+      sessionId &&
+      typeof createBody.api_key_id === "string"
+    ) {
+      // Bind the new key to the live_session so admins can revoke it.
+      // Best-effort: a write failure must not break the recorder flow.
+      ctx.waitUntil(
+        getDb(env)
+          .update(liveSession)
+          .set({
+            deepgramKeyId: createBody.api_key_id,
+            deepgramProjectId: projectId,
+            lastSeenAt: new Date(),
+          })
+          .where(eq(liveSession.id, sessionId))
+          .execute()
+          .catch((e) =>
+            console.warn("[Worker] live_session deepgram bind failed:", e),
+          ),
+      );
+    }
+
+    return new Response(JSON.stringify(createBody), {
+      status: createResponse.ok ? 200 : createResponse.status,
+      headers: jsonHeaders,
+    });
+  } catch (err) {
+    console.warn(`[Worker] ${logPrefix} upstream failed:`, err);
+    tracker.finish({ status: "error", errorCode: "upstream_timeout" });
+    return jsonResponse(
+      { error: "Upstream timeout or error talking to Deepgram" },
+      504,
+    );
+  }
+}
 
 export async function handleDeepgram(
   request: Request,
@@ -105,152 +329,13 @@ export async function handleDeepgram(
     }
   }
 
-  const quotaCheck = await checkQuota(
-    getDb(env),
-    env,
-    authResult.id,
-    "deepgram_seconds",
-  );
-  if (!quotaCheck.allowed) {
-    recordUsage(env, ctx, request, authResult, "deepgram_key", {
-      status: "rate_limited",
-      errorCode: "quota_exceeded",
-    });
-    return jsonResponse(
-      {
-        error: "Monthly audio transcription quota exceeded.",
-        resetAt: quotaCheck.resetAt.toISOString(),
-      },
-      429,
-    );
-  }
-
-  const tracker = startUsage(env, ctx, request, authResult, "deepgram_key");
-
-  const cfg = await getCachedConfig(env);
-  const apiKey = cfg.deepgramKey;
-
-  if (!apiKey) {
-    tracker.finish({ status: "error", errorCode: "missing_key" });
-    return jsonResponse(
-      {
-        error:
-          "Missing Deepgram API key — set via Admin Dashboard or DEEPGRAM_API_KEY env var",
-      },
-      500,
-    );
-  }
-
-  const authHeaders = {
-    Authorization: `Token ${apiKey}`,
-    accept: "application/json",
-  };
-
-  try {
-    const projectsResponse = await fetch(
-      "https://api.deepgram.com/v1/projects",
-      {
-        method: "GET",
-        headers: authHeaders,
-        signal: AbortSignal.timeout(DEEPGRAM_TIMEOUT_MS),
-      },
-    );
-
-    const projectsBody =
-      (await projectsResponse.json()) as DeepgramProjectsResponse;
-
-    if (!projectsResponse.ok) {
-      tracker.finish({
-        status: "error",
-        errorCode: String(projectsResponse.status),
-      });
-      return new Response(JSON.stringify(projectsBody), {
-        status: projectsResponse.status,
-        headers: jsonHeaders,
-      });
-    }
-
-    const project = projectsBody.projects?.[0];
-
-    if (!project) {
-      tracker.finish({ status: "error", errorCode: "no_project" });
-      return jsonResponse(
-        {
-          error:
-            "Cannot find a Deepgram project. Please create a project first.",
-        },
-        404,
-      );
-    }
-
-    const createResponse = await fetch(
-      `https://api.deepgram.com/v1/projects/${project.project_id}/keys`,
-      {
-        method: "POST",
-        headers: {
-          ...authHeaders,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          comment: `Temporary API key (user ${authResult.id})`,
-          scopes: ["usage:write"],
-          tags: ["cloudflare-worker", `user:${authResult.id}`],
-          time_to_live_in_seconds: 60,
-        }),
-        signal: AbortSignal.timeout(DEEPGRAM_TIMEOUT_MS),
-      },
-    );
-
-    const createBody = (await createResponse.json()) as DeepgramKeyResponse;
-
-    tracker.finish({
-      status: createResponse.ok ? "ok" : "error",
-      errorCode: createResponse.ok ? null : String(createResponse.status),
-    });
-
-    if (createResponse.ok) {
-      ctx.waitUntil(
-        consumeQuota(getDb(env), env, authResult.id, "deepgram_seconds", {
-          seconds: 60,
-        }),
-      );
-    }
-
-    if (
-      createResponse.ok &&
-      sessionId &&
-      typeof createBody.api_key_id === "string"
-    ) {
-      // Bind the new key to the live_session so admins can revoke it.
-      // Best-effort: a write failure must not break the recorder flow.
-      ctx.waitUntil(
-        getDb(env)
-          .update(liveSession)
-          .set({
-            deepgramKeyId: createBody.api_key_id,
-            deepgramProjectId: project.project_id,
-            lastSeenAt: new Date(),
-          })
-          .where(eq(liveSession.id, sessionId))
-          .execute()
-          .catch((e) =>
-            console.warn("[Worker] live_session deepgram bind failed:", e),
-          ),
-      );
-    }
-
-    return new Response(JSON.stringify(createBody), {
-      status: createResponse.ok ? 200 : createResponse.status,
-      headers: jsonHeaders,
-    });
-  } catch (err) {
-    console.warn("[Worker] deepgram upstream failed:", err);
-    tracker.finish({ status: "error", errorCode: "upstream_timeout" });
-    return jsonResponse(
-      { error: "Upstream timeout or error talking to Deepgram" },
-      504,
-    );
-  }
+  return mintTemporaryDeepgramKey(request, env, ctx, {
+    authResult,
+    sessionId,
+    keyComment: `Temporary API key (user ${authResult.id})`,
+    keyTags: ["cloudflare-worker", `user:${authResult.id}`],
+    logPrefix: "deepgram",
+  });
 }
 
 /**
@@ -293,128 +378,12 @@ export async function handleDeepgramAsk(
     }
   }
 
-  const quotaCheck = await checkQuota(
-    getDb(env),
-    env,
-    authResult.id,
-    "deepgram_seconds",
-  );
-  if (!quotaCheck.allowed) {
-    recordUsage(env, ctx, request, authResult, "deepgram_key", {
-      status: "rate_limited",
-      errorCode: "quota_exceeded",
-      metadata: { source: "ask_mic" },
-    });
-    return jsonResponse(
-      {
-        error: "Monthly audio transcription quota exceeded.",
-        resetAt: quotaCheck.resetAt.toISOString(),
-      },
-      429,
-    );
-  }
-
-  const tracker = startUsage(env, ctx, request, authResult, "deepgram_key", {
-    metadata: { source: "ask_mic" },
+  return mintTemporaryDeepgramKey(request, env, ctx, {
+    authResult,
+    sessionId: null,
+    usageMetadata: { source: "ask_mic" },
+    keyComment: `Ask AI mic temporary key (user ${authResult.id})`,
+    keyTags: ["cloudflare-worker", "ask-mic", `user:${authResult.id}`],
+    logPrefix: "deepgram-ask",
   });
-
-  const cfg = await getCachedConfig(env);
-  const apiKey = cfg.deepgramKey;
-  if (!apiKey) {
-    tracker.finish({ status: "error", errorCode: "missing_key" });
-    return jsonResponse(
-      {
-        error:
-          "Missing Deepgram API key — set via Admin Dashboard or DEEPGRAM_API_KEY env var",
-      },
-      500,
-    );
-  }
-
-  const authHeaders = {
-    Authorization: `Token ${apiKey}`,
-    accept: "application/json",
-  };
-
-  try {
-    const projectsResponse = await fetch(
-      "https://api.deepgram.com/v1/projects",
-      {
-        method: "GET",
-        headers: authHeaders,
-        signal: AbortSignal.timeout(DEEPGRAM_TIMEOUT_MS),
-      },
-    );
-
-    const projectsBody =
-      (await projectsResponse.json()) as DeepgramProjectsResponse;
-
-    if (!projectsResponse.ok) {
-      tracker.finish({
-        status: "error",
-        errorCode: String(projectsResponse.status),
-      });
-      return new Response(JSON.stringify(projectsBody), {
-        status: projectsResponse.status,
-        headers: jsonHeaders,
-      });
-    }
-
-    const project = projectsBody.projects?.[0];
-    if (!project) {
-      tracker.finish({ status: "error", errorCode: "no_project" });
-      return jsonResponse(
-        {
-          error:
-            "Cannot find a Deepgram project. Please create a project first.",
-        },
-        404,
-      );
-    }
-
-    const createResponse = await fetch(
-      `https://api.deepgram.com/v1/projects/${project.project_id}/keys`,
-      {
-        method: "POST",
-        headers: {
-          ...authHeaders,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          comment: `Ask AI mic temporary key (user ${authResult.id})`,
-          scopes: ["usage:write"],
-          tags: ["cloudflare-worker", "ask-mic", `user:${authResult.id}`],
-          time_to_live_in_seconds: 60,
-        }),
-        signal: AbortSignal.timeout(DEEPGRAM_TIMEOUT_MS),
-      },
-    );
-
-    const createBody = (await createResponse.json()) as DeepgramKeyResponse;
-
-    tracker.finish({
-      status: createResponse.ok ? "ok" : "error",
-      errorCode: createResponse.ok ? null : String(createResponse.status),
-    });
-
-    if (createResponse.ok) {
-      ctx.waitUntil(
-        consumeQuota(getDb(env), env, authResult.id, "deepgram_seconds", {
-          seconds: 60,
-        }),
-      );
-    }
-
-    return new Response(JSON.stringify(createBody), {
-      status: createResponse.ok ? 200 : createResponse.status,
-      headers: jsonHeaders,
-    });
-  } catch (err) {
-    console.warn("[Worker] deepgram-ask upstream failed:", err);
-    tracker.finish({ status: "error", errorCode: "upstream_timeout" });
-    return jsonResponse(
-      { error: "Upstream timeout or error talking to Deepgram" },
-      504,
-    );
-  }
 }

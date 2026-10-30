@@ -12,20 +12,21 @@ export async function runScheduledMaintenance(env: Env) {
   const now = new Date();
   const staleCutoff = new Date(now.getTime() - STALE_LIVE_SESSION_MS);
 
-  await db.delete(rateLimitEntry).where(lt(rateLimitEntry.expiresAt, now));
-  await db.delete(session).where(lt(session.expiresAt, now));
-
-  await db
-    .update(liveSession)
-    .set({
-      endedAt: now,
-      lastSeenAt: now,
-      endedBy: "system",
-      endReason: "stale_timeout",
-    })
-    .where(
-      and(isNull(liveSession.endedAt), lt(liveSession.lastSeenAt, staleCutoff)),
-    );
+  await Promise.all([
+    db.delete(rateLimitEntry).where(lt(rateLimitEntry.expiresAt, now)),
+    db.delete(session).where(lt(session.expiresAt, now)),
+    db
+      .update(liveSession)
+      .set({
+        endedAt: now,
+        lastSeenAt: now,
+        endedBy: "system",
+        endReason: "stale_timeout",
+      })
+      .where(
+        and(isNull(liveSession.endedAt), lt(liveSession.lastSeenAt, staleCutoff)),
+      ),
+  ]);
 
   return { cleanedAt: now.toISOString() };
 }

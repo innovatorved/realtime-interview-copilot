@@ -73,23 +73,24 @@ export function usageEndpoints(deps: AdminDeps) {
         const { userId } = query;
         const { since, window: w } = resolveUsageWindow(query.window ?? null);
 
-        const [targetUser] = await db
-          .select({
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            createdAt: user.createdAt,
-            lastActiveAt: user.lastActiveAt,
-          })
-          .from(user)
-          .where(eq(user.id, userId));
-        if (!targetUser) throw new APIError("NOT_FOUND", { message: "User not found" });
-
-        const summary = await getUserUsageSummary(db, userId, since);
-
         const windowMs = since ? Date.now() - since.getTime() : 30 * 86_400_000;
         const bucketSeconds = Math.max(60, Math.floor(windowMs / 1000 / 30));
-        const series = await getUsageTimeseries(opts.d1, since, bucketSeconds, userId);
+
+        const [[targetUser], summary, series] = await Promise.all([
+          db
+            .select({
+              id: user.id,
+              email: user.email,
+              name: user.name,
+              createdAt: user.createdAt,
+              lastActiveAt: user.lastActiveAt,
+            })
+            .from(user)
+            .where(eq(user.id, userId)),
+          getUserUsageSummary(db, userId, since),
+          getUsageTimeseries(opts.d1, since, bucketSeconds, userId),
+        ]);
+        if (!targetUser) throw new APIError("NOT_FOUND", { message: "User not found" });
 
         return ctx.json({
           window: w,

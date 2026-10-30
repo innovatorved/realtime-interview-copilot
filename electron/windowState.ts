@@ -18,7 +18,7 @@ interface WindowBounds {
   height: number;
 }
 
-export interface PersistedWindowState {
+interface PersistedWindowState {
   bounds?: WindowBounds;
   alwaysOnTop?: boolean;
 }
@@ -28,18 +28,27 @@ export interface PersistedWindowState {
 const STATE_FILE = () =>
   path.join(app.getPath("userData"), "window-state.json");
 
-function readStateFile<T>(fallback: T): T {
+let cachedState: Record<string, unknown> | null = null;
+
+function getCachedState(): Record<string, unknown> {
+  if (cachedState !== null) return cachedState;
   try {
     const raw = fs.readFileSync(STATE_FILE(), "utf8");
-    return JSON.parse(raw) as T;
+    const parsed = JSON.parse(raw);
+    cachedState =
+      parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : {};
   } catch {
-    return fallback;
+    cachedState = {};
   }
+  return cachedState;
 }
 
-function writeStateFile(state: Record<string, unknown>): void {
+function writeStateFileSync(state: Record<string, unknown>): void {
   try {
-    const merged = { ...readStateFile<Record<string, unknown>>({}), ...state };
+    const merged = { ...getCachedState(), ...state };
+    cachedState = merged;
     fs.mkdirSync(app.getPath("userData"), { recursive: true });
     fs.writeFileSync(STATE_FILE(), JSON.stringify(merged, null, 2), "utf8");
   } catch {
@@ -47,18 +56,36 @@ function writeStateFile(state: Record<string, unknown>): void {
   }
 }
 
+async function writeStateFileAsync(
+  state: Record<string, unknown>,
+): Promise<void> {
+  try {
+    const merged = { ...getCachedState(), ...state };
+    cachedState = merged;
+    const dir = app.getPath("userData");
+    await fs.promises.mkdir(dir, { recursive: true });
+    await fs.promises.writeFile(
+      STATE_FILE(),
+      JSON.stringify(merged, null, 2),
+      "utf8",
+    );
+  } catch {
+    /* best-effort persistence */
+  }
+}
+
 export function loadWindowState(): PersistedWindowState {
-  return readStateFile<PersistedWindowState>({});
+  return getCachedState() as PersistedWindowState;
 }
 
 /** Read a namespaced value previously written via `writeStateValue`. */
 export function readStateValue<T>(key: string): T | undefined {
-  const state = readStateFile<Record<string, unknown>>({});
+  const state = getCachedState();
   return state[key] as T | undefined;
 }
 
 export function writeStateValue(key: string, value: unknown): void {
-  writeStateFile({ [key]: value });
+  void writeStateFileAsync({ [key]: value });
 }
 
 /** Saved bounds are only usable when they intersect a current display. */
@@ -98,14 +125,26 @@ function scheduleSave(window: BrowserWindow): void {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     saveTimer = null;
-    persistNow(window);
+    persistNowAsync(window);
   }, 500);
 }
 
-function persistNow(window: BrowserWindow): void {
+function persistNowAsync(window: BrowserWindow): void {
   if (window.isDestroyed()) return;
   try {
-    writeStateFile({
+    void writeStateFileAsync({
+      bounds: window.getNormalBounds(),
+      alwaysOnTop: window.isAlwaysOnTop(),
+    });
+  } catch {
+    /* best-effort persistence */
+  }
+}
+
+function persistNowSync(window: BrowserWindow): void {
+  if (window.isDestroyed()) return;
+  try {
+    writeStateFileSync({
       bounds: window.getNormalBounds(),
       alwaysOnTop: window.isAlwaysOnTop(),
     });
@@ -121,6 +160,6 @@ export function trackWindowState(window: BrowserWindow): void {
   window.on("move", onChange);
   window.on("close", () => {
     if (saveTimer) clearTimeout(saveTimer);
-    persistNow(window);
+    persistNowSync(window);
   });
 }

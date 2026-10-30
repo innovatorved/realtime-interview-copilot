@@ -9,6 +9,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useMemo,
   useState,
   type Dispatch,
   type ReactNode,
@@ -16,7 +17,6 @@ import {
 } from "react";
 import {
   APP_SESSION_KEYS,
-  migrateLegacySessionKeys,
   readAppSession,
   writeAppSession,
 } from "@/lib/app-session-storage";
@@ -51,7 +51,6 @@ export function CopilotSessionProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    migrateLegacySessionKeys();
     setCompletion(readAppSession(APP_SESSION_KEYS.completion));
     setFlag(readFlag());
     setOutputMode(readOutputMode());
@@ -73,17 +72,20 @@ export function CopilotSessionProvider({ children }: { children: ReactNode }) {
     writeAppSession(APP_SESSION_KEYS.outputMode, outputMode);
   }, [outputMode, ready]);
 
+  const value = useMemo<CopilotSessionValue>(
+    () => ({
+      completion,
+      setCompletion,
+      flag,
+      setFlag,
+      outputMode,
+      setOutputMode,
+    }),
+    [completion, flag, outputMode],
+  );
+
   return (
-    <CopilotSessionContext.Provider
-      value={{
-        completion,
-        setCompletion,
-        flag,
-        setFlag,
-        outputMode,
-        setOutputMode,
-      }}
-    >
+    <CopilotSessionContext.Provider value={value}>
       {children}
     </CopilotSessionContext.Provider>
   );

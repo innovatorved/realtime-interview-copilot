@@ -44,10 +44,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("window:focus", handler);
     return () => ipcRenderer.removeListener("window:focus", handler);
   },
-  appQuit: () => ipcRenderer.invoke("app-quit"),
   appRelaunch: () => ipcRenderer.invoke("app-relaunch"),
   updaterGetVersion: () => ipcRenderer.invoke("updater:get-version"),
-  updaterGetStatus: () => ipcRenderer.invoke("updater:get-status"),
   updaterCheck: () => ipcRenderer.invoke("updater:check"),
   updaterInstall: () => ipcRenderer.invoke("updater:install"),
   onUpdaterStatus: (callback: (status: UpdaterStatusPayload) => void) => {
@@ -59,8 +57,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener("updater:status", handler);
   },
   platform: process.platform,
-  isElectron: true,
-  supportsSystemAudio: true,
   screen: {
     getAccess: (): Promise<ScreenAccessStatus> =>
       ipcRenderer.invoke("screen:get-access"),
@@ -78,40 +74,3 @@ contextBridge.exposeInMainWorld("electronAPI", {
     },
   },
 });
-
-export interface ElectronAPI {
-  windowMinimize: () => Promise<void>;
-  windowMaximize: () => Promise<boolean>;
-  windowClose: () => Promise<void>;
-  windowAlwaysOnTop: (flag: boolean) => Promise<boolean>;
-  windowIsAlwaysOnTop: () => Promise<boolean>;
-  windowIsMaximized: () => Promise<boolean>;
-  windowSetSize: (width: number, height: number) => Promise<void>;
-  windowSetResizable: (resizable: boolean) => Promise<boolean>;
-  windowSetIgnoreMouseEvents: (
-    ignore: boolean,
-    options?: { forward?: boolean },
-  ) => Promise<void>;
-  windowFocus: () => Promise<void>;
-  windowSetFocusable?: (focusable: boolean) => Promise<boolean>;
-  onWindowFocus?: (callback: () => void) => () => void;
-  appQuit: () => Promise<void>;
-  appRelaunch: () => Promise<void>;
-  updaterGetVersion: () => Promise<string>;
-  updaterGetStatus: () => Promise<UpdaterStatusPayload>;
-  updaterCheck: () => Promise<void>;
-  updaterInstall?: () => Promise<void>;
-  onUpdaterStatus: (
-    callback: (status: UpdaterStatusPayload) => void,
-  ) => () => void;
-  platform: string;
-  isElectron: boolean;
-  supportsSystemAudio: boolean;
-  screen: {
-    getAccess: () => Promise<ScreenAccessStatus>;
-    openSettings: () => Promise<boolean>;
-    triggerPrompt: () => Promise<ScreenAccessStatus>;
-    capture: () => Promise<ScreenCaptureResult>;
-    onCaptureAndAsk: (callback: () => void) => () => void;
-  };
-}

@@ -15,7 +15,6 @@ import { useSharedAskChat } from "@/components/AskChatProvider";
 import { useCopilotSession } from "@/components/CopilotSessionProvider";
 import { useAskMic } from "@/hooks/useAskMic";
 import { useMicPushToTalk } from "@/hooks/useMicPushToTalk";
-import { dbg } from "@/lib/debug";
 import { FLAGS, type HistoryData } from "@/lib/types";
 import {
   isVisionScreenshotDataUrl,
@@ -148,7 +147,6 @@ export function CompactCopilot({
   } = useCompactGenerate({
     bg: effectiveBg,
     transcribedText,
-    attachedImages,
     isLoading,
     setError,
     setCompletion,
@@ -351,25 +349,17 @@ export function CompactCopilot({
         if (isLoading) {
           if (activeFlag === wantFlag) {
             e.preventDefault();
-            dbg("ask-ui", "Mod+Enter while streaming → stop");
             abortGeneration();
           }
           return;
         }
         e.preventDefault();
-        dbg(
-          "ask-ui",
-          wantSummarize
-            ? "Mod+Shift+Enter → Summarize"
-            : "Mod+Enter → Ask (Copilot)",
-        );
         void handleGenerate(wantFlag);
         return;
       }
 
       if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === "KeyA") {
         e.preventDefault();
-        dbg("ask-ui", "Alt+A → toggle Ask input");
         toggleAskComposer();
       }
     };
@@ -502,7 +492,6 @@ export function CompactCopilot({
           ptt={ptt}
           isLoading={isLoading}
           setOutputMode={setOutputMode}
-          setOutputCollapsed={setOutputCollapsed}
           submitAskInput={submitAskInput}
         />
       )}
@@ -520,12 +509,6 @@ export function CompactCopilot({
             session?.user ? sessionDisplayName(session.user) : undefined
           }
           onDismissError={() => {
-            // Clear both error surfaces so a stale banner doesn't hover
-            // over a fresh, successful chat thread. `chat.clearError`
-            // wipes just the transport error without touching the
-            // conversation; `setError(null)` clears the local capture
-            // failure store.
-            dbg("ask-ui", "Dismiss error banner (compact)");
             setError(null);
             chatClearError();
           }}

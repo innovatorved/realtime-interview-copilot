@@ -30,7 +30,6 @@ interface CompactAskComposerProps {
   ptt: ReturnType<typeof useMicPushToTalk>;
   isLoading: boolean;
   setOutputMode: (mode: CompactOutputMode) => void;
-  setOutputCollapsed: (collapsed: boolean) => void;
   submitAskInput: (textOverride?: string) => void | Promise<void>;
 }
 
@@ -48,7 +47,6 @@ export function CompactAskComposer({
   ptt,
   isLoading,
   setOutputMode,
-  setOutputCollapsed,
   submitAskInput,
 }: CompactAskComposerProps) {
   const showListening =

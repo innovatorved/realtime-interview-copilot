@@ -3,7 +3,6 @@
 /** Owns the single-shot Copilot/Summarizer completion flow for the
  *  full Copilot surface. */
 
-import { sendGTMEvent } from "@next/third-parties/google";
 import posthog from "posthog-js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { humanizeHttpStatus } from "@/lib/api-errors";
@@ -87,7 +86,6 @@ export function useCopilotSubmit({
       setIsLoading(true);
       controller.current = new AbortController();
 
-      sendGTMEvent({ event: "generate_completion", flag: runFlag });
       posthog.capture("completion_generated", {
         mode: runFlag === FLAGS.COPILOT ? "copilot" : "summarizer",
         has_context: runBg.length > 0,

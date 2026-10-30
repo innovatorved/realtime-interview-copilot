@@ -169,7 +169,7 @@ export async function handleCreateSupportMessage(
   const id = crypto.randomUUID();
   const now = new Date();
 
-  await db.insert(supportMessage).values({
+  const insertPromise = db.insert(supportMessage).values({
     id,
     userId: user.id,
     userEmail: user.email,
@@ -193,14 +193,19 @@ export async function handleCreateSupportMessage(
   // If this was a reply, bump the parent thread's unread/updated state
   // and reopen it ("user followed up after admin reply").
   if (parentId) {
-    await db
-      .update(supportMessage)
-      .set({
-        status: "open",
-        unreadByAdmin: 1,
-        updatedAt: now,
-      })
-      .where(eq(supportMessage.id, parentId));
+    await Promise.all([
+      insertPromise,
+      db
+        .update(supportMessage)
+        .set({
+          status: "open",
+          unreadByAdmin: 1,
+          updatedAt: now,
+        })
+        .where(eq(supportMessage.id, parentId)),
+    ]);
+  } else {
+    await insertPromise;
   }
 
   recordUsage(env, ctx, request, user, "support_message_create", {

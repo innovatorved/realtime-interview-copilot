@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { useAskMic } from "@/hooks/useAskMic";
-import { dbg } from "@/lib/debug";
 
 type AskMicHandle = ReturnType<typeof useAskMic>;
 
@@ -96,15 +95,8 @@ export function useMicPushToTalk(
 
   /** Start recording (idempotent — won't double-arm an active session). */
   const armRecording = useCallback(() => {
-    if (disabledRef.current) {
-      dbg("ptt", "armRecording skipped — disabled");
-      return;
-    }
-    if (askMicRef.current.state !== "idle") {
-      dbg("ptt", "armRecording skipped — state is", askMicRef.current.state);
-      return;
-    }
-    dbg("ptt", "armRecording → start()");
+    if (disabledRef.current) return;
+    if (askMicRef.current.state !== "idle") return;
     onArmRef.current?.();
     void askMicRef.current.start();
   }, []);
@@ -112,14 +104,12 @@ export function useMicPushToTalk(
   /** Stop recording + auto-submit via onFinal. */
   const commitRecording = useCallback(() => {
     if (askMicRef.current.state === "idle") return;
-    dbg("ptt", "commitRecording → stop()");
     void askMicRef.current.stop();
   }, []);
 
   /** Drop recording without submitting (drag-off / blur / Esc). */
   const cancelRecording = useCallback(() => {
     if (askMicRef.current.state === "idle") return;
-    dbg("ptt", "cancelRecording → cancel()");
     void askMicRef.current.cancel();
     setIsTapLocked(false);
   }, []);
@@ -139,7 +129,6 @@ export function useMicPushToTalk(
     if (disabledRef.current) return;
     if (isTapLockedRef.current) {
       // Second tap of the toggle flow → commit + clear lock.
-      dbg("ptt", "press down while tap-locked → committing");
       setIsTapLocked(false);
       commitRecording();
       pressStartedAtRef.current = null;
@@ -170,10 +159,6 @@ export function useMicPushToTalk(
     if (heldMs < TAP_THRESHOLD_MS) {
       // Quick tap → enter tap-toggle mode; recording keeps running
       // until the user taps again.
-      dbg(
-        "ptt",
-        `release after ${heldMs}ms → TAP (tap-locked, keep recording)`,
-      );
       setIsTapLocked(true);
     } else if (micState === "fetching-key" || micState === "connecting") {
       // The mic hasn't finished connecting yet (slow network / cold
@@ -181,14 +166,9 @@ export function useMicPushToTalk(
       // session before any audio is captured. Promote to tap-toggle
       // so the session survives and the user can tap again to commit
       // once it's actually recording.
-      dbg(
-        "ptt",
-        `release after ${heldMs}ms but mic still ${micState} → promoting to tap-lock`,
-      );
       setIsTapLocked(true);
     } else {
       // Long hold → press-to-talk; release submits.
-      dbg("ptt", `release after ${heldMs}ms → HOLD (committing)`);
       setIsTapLocked(false);
       commitRecording();
     }
@@ -252,26 +232,6 @@ export function useMicPushToTalk(
   useEffect(() => {
     if (!enableHotkey) return;
 
-    /**
-     * Decide whether to intercept this Space keydown for the mic. The
-     * goal is "Space starts/holds the mic" without breaking ordinary
-     * typing in the question textarea.
-     *
-     * Intercept when ANY of:
-     *   - tap-toggle is already active (recording in progress from a
-     *     prior tap) — the user needs Space to stop+send regardless
-     *     of what now lives in the textarea.
-     *   - Ctrl is held (explicit "force mic" override).
-     *   - The event target is NOT a text-editable element (the user
-     *     hasn't clicked into any input — e.g. they just opened Ask AI
-     *     and the body still has focus, or focus is on a non-input
-     *     element).
-     *   - The event target IS a text-editable element but its value
-     *     is currently empty (the typical state right after Ask AI's
-     *     autofocus — pressing Space at that moment to start the mic
-     *     is intuitive and never collides with real typing because
-     *     there's nothing to type into).
-     */
     const shouldIntercept = (e: KeyboardEvent): boolean => {
       if (isTapLockedRef.current) return true;
       if (e.ctrlKey) return true;
@@ -286,16 +246,9 @@ export function useMicPushToTalk(
     };
 
     const onWindowKeyDown = (e: KeyboardEvent) => {
-      // Block Meta/Alt/Shift+Space — those are reserved for OS / app
-      // shortcuts (Spotlight, special character pickers, etc.) and
-      // stealing them would surprise users. Ctrl is allowed because
-      // we treat it as an explicit override.
       if (e.metaKey || e.altKey || e.shiftKey) return;
       if (e.code !== "Space") return;
       if (e.repeat) {
-        // Still preventDefault on repeats if we initiated a press or
-        // are tap-locked — otherwise the browser inserts space chars
-        // into the focused input while the user is holding the key.
         if (pressStartedAtRef.current !== null || isTapLockedRef.current) {
           e.preventDefault();
         }
@@ -307,33 +260,22 @@ export function useMicPushToTalk(
     };
 
     const onWindowKeyUp = (e: KeyboardEvent) => {
-      // Treat releasing Space (or Ctrl, when Ctrl+Space was used as
-      // the override) as the release signal.
       if (
         e.code !== "Space" &&
         e.code !== "ControlLeft" &&
         e.code !== "ControlRight"
       )
         return;
-      // Only respond if we initiated a press (otherwise spurious
-      // Ctrl/Space releases from unrelated shortcuts would re-trigger).
       if (pressStartedAtRef.current === null && !isTapLockedRef.current) return;
       e.preventDefault();
       onPressUp();
     };
 
     const onWindowBlur = () => {
-      // Lost focus mid-press — drop the gesture state without
-      // committing. We never want a pretend-release to fire because
-      // we missed the real keyup.
       if (pressStartedAtRef.current !== null) {
-        dbg("ptt", "window blur during press → cancelling");
         pressStartedAtRef.current = null;
         cancelRecording();
       }
-      // Tap-locked mode survives blur intentionally: the user might
-      // alt-tab to a doc and come back, expecting their session to
-      // still be open.
     };
     window.addEventListener("keydown", onWindowKeyDown);
     window.addEventListener("keyup", onWindowKeyUp);
@@ -351,7 +293,6 @@ export function useMicPushToTalk(
   // still look "locked on" with nothing actually recording.
   useEffect(() => {
     if (askMic.state === "idle" && isTapLockedRef.current) {
-      dbg("ptt", "askMic returned to idle externally → clearing tap-lock");
       setIsTapLocked(false);
     }
   }, [askMic.state]);

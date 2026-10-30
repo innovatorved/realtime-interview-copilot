@@ -8,7 +8,6 @@ import { InterviewContextProvider } from "@/components/InterviewContextProvider"
 import { CopilotSessionProvider } from "@/components/CopilotSessionProvider";
 import { AskChatProvider } from "@/components/AskChatProvider";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
-import { GoogleTagManager } from "@next/third-parties/google";
 import { PostHogProvider } from "@/components/PostHogProvider";
 import { APP_DISPLAY_NAME } from "@/lib/constant";
 import { PROD_CSP } from "@/lib/csp";
@@ -70,7 +69,6 @@ export default function RootLayout({
         <meta name="referrer" content="strict-origin-when-cross-origin" />
       </head>
       <body className="font-sans bg-transparent text-text-primary antialiased">
-        <GoogleTagManager gtmId="GTM-TD6DHJZZ" />
         <AppErrorBoundary>
           <PostHogProvider>
             <AppBackdropProvider>

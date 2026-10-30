@@ -42,11 +42,12 @@ function quotaFlags(env: Env) {
 
 const CYCLE_MS = 30 * 86_400_000;
 
-export async function maybeResetCycle(db: Db, row: QuotaRow): Promise<void> {
+export async function maybeResetCycle(db: Db, row: QuotaRow): Promise<QuotaRow> {
   const now = Date.now();
   const resetAt = row.cycleResetAt?.getTime() ?? 0;
-  if (resetAt > now) return;
+  if (resetAt > now) return row;
 
+  const updatedAt = new Date(now);
   const nextReset = new Date(now + CYCLE_MS);
   await db
     .update(quotaBalance)
@@ -54,29 +55,39 @@ export async function maybeResetCycle(db: Db, row: QuotaRow): Promise<void> {
       consumedSeconds: 0,
       consumedCompletions: 0,
       cycleResetAt: nextReset,
-      updatedAt: new Date(),
+      updatedAt,
     })
     .where(eq(quotaBalance.userId, row.userId));
+
+  return {
+    ...row,
+    consumedSeconds: 0,
+    consumedCompletions: 0,
+    cycleResetAt: nextReset,
+    updatedAt,
+  };
 }
 
-export async function ensureQuotaRow(db: Db, userId: string): Promise<void> {
+export async function ensureQuotaRow(db: Db, userId: string): Promise<QuotaRow> {
   const now = new Date();
   const cycleResetAt = new Date(now.getTime() + CYCLE_MS);
+  const defaultRow: QuotaRow = {
+    userId,
+    planTier: "legacy_unlimited",
+    monthlyAllowanceSeconds: null,
+    monthlyAllowanceCompletions: null,
+    consumedSeconds: 0,
+    consumedCompletions: 0,
+    cycleResetAt,
+    overageAllowed: true,
+    createdAt: now,
+    updatedAt: now,
+  };
   await db
     .insert(quotaBalance)
-    .values({
-      userId,
-      planTier: "legacy_unlimited",
-      monthlyAllowanceSeconds: null,
-      monthlyAllowanceCompletions: null,
-      consumedSeconds: 0,
-      consumedCompletions: 0,
-      cycleResetAt,
-      overageAllowed: true,
-      createdAt: now,
-      updatedAt: now,
-    })
+    .values(defaultRow)
     .onConflictDoNothing();
+  return defaultRow;
 }
 
 export async function getQuotaForUser(
@@ -149,8 +160,7 @@ export async function checkQuota(
   const row = await getQuotaForUser(db, userId);
   if (!row) return { allowed: true };
 
-  await maybeResetCycle(db, row);
-  const fresh = (await getQuotaForUser(db, userId)) ?? row;
+  const fresh = await maybeResetCycle(db, row);
 
   const secondsCap = fresh.monthlyAllowanceSeconds;
   const completionsCap = fresh.monthlyAllowanceCompletions;
@@ -183,10 +193,11 @@ export async function consumeQuota(
   const deltaCompletions = Math.max(0, amount.completions ?? 0);
   if (deltaSeconds === 0 && deltaCompletions === 0) return;
 
-  await ensureQuotaRow(db, userId);
   const existing = await getQuotaForUser(db, userId);
   if (existing) {
     await maybeResetCycle(db, existing);
+  } else {
+    await ensureQuotaRow(db, userId);
   }
 
   await db

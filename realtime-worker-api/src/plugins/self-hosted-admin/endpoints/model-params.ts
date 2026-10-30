@@ -93,14 +93,17 @@ export function modelParamsEndpoints(deps: AdminDeps) {
         if (body.thinkingBudget !== undefined)
           pairs.push({ key: "model_thinking_budget", value: body.thinkingBudget });
 
-        for (const { key, value } of pairs) {
-          const existing = await db.select().from(adminConfig).where(eq(adminConfig.key, key));
-          if (existing.length > 0) {
-            await db.update(adminConfig).set({ value, updatedAt: now }).where(eq(adminConfig.key, key));
-          } else {
-            await db.insert(adminConfig).values({ key, value, updatedAt: now });
-          }
-        }
+        await Promise.all(
+          pairs.map(({ key, value }) =>
+            db
+              .insert(adminConfig)
+              .values({ key, value, updatedAt: now })
+              .onConflictDoUpdate({
+                target: adminConfig.key,
+                set: { value, updatedAt: now },
+              }),
+          ),
+        );
 
         await recordAudit({
           eventType: "admin_action",

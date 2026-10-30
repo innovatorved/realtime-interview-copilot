@@ -15,13 +15,30 @@ export function createAiGateway(
   getDb: () => DbHandle,
   runtimeInfo?: () => Record<string, unknown>,
 ) {
-  async function resolveCfConfig(): Promise<CfGatewayConfig> {
-    const db = getDb();
-    const rows = await db
-      .select()
-      .from(adminConfig)
-      .catch(() => [] as { key: string; value: string }[]);
-    const map = new Map(rows.map((r) => [r.key, r.value]));
+  let inflightMapPromise: Promise<Map<string, string>> | null = null;
+
+  async function loadConfigMap(): Promise<Map<string, string>> {
+    if (!inflightMapPromise) {
+      inflightMapPromise = (async () => {
+        try {
+          const db = getDb();
+          const rows = await db
+            .select()
+            .from(adminConfig)
+            .catch(() => [] as { key: string; value: string }[]);
+          return new Map(rows.map((r) => [r.key, r.value]));
+        } finally {
+          inflightMapPromise = null;
+        }
+      })();
+    }
+    return inflightMapPromise;
+  }
+
+  async function resolveCfConfig(
+    preloadedMap?: Map<string, string>,
+  ): Promise<CfGatewayConfig> {
+    const map = preloadedMap ?? (await loadConfigMap());
     const runtime = runtimeInfo?.() ?? {};
     return {
       accountId: String(map.get("cf_account_id") ?? runtime.cfAccountId ?? ""),
@@ -30,13 +47,8 @@ export function createAiGateway(
     };
   }
 
-  async function resolveActiveAiConfig() {
-    const db = getDb();
-    const rows = await db
-      .select()
-      .from(adminConfig)
-      .catch(() => [] as { key: string; value: string }[]);
-    const map = new Map(rows.map((r) => [r.key, r.value]));
+  async function resolveActiveAiConfig(preloadedMap?: Map<string, string>) {
+    const map = preloadedMap ?? (await loadConfigMap());
     const runtime = runtimeInfo?.() ?? {};
     const customModelName = map.get("custom_model_name") || "";
     const customBaseUrl = map.get("custom_base_url") || "";

@@ -24,6 +24,7 @@ import { and, count, desc, eq, gte, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import { usageEvent, user as userTable } from "./db/schema";
 import type * as schemaTypes from "./db/schema";
+import { getClientIpFromHeaders } from "./lib/ip";
 
 export interface TrackedUser {
   id: string;
@@ -50,14 +51,6 @@ export interface UsageTracker {
 }
 
 type MinimalEnv = { DB: D1Database };
-
-function ipOf(request: Request): string | null {
-  return (
-    request.headers.get("cf-connecting-ip") ??
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    null
-  );
-}
 
 function uaOf(request: Request): string | null {
   const ua = request.headers.get("user-agent");
@@ -103,7 +96,7 @@ export function startUsage(
         durationMs,
         status: final.status ?? "ok",
         errorCode: final.errorCode ?? null,
-        ipAddress: ipOf(request),
+        ipAddress: getClientIpFromHeaders(request.headers),
         userAgent: uaOf(request),
         metadata: hasMeta ? JSON.stringify(mergedMeta) : null,
         createdAt: now,
@@ -168,17 +161,6 @@ type Db = DrizzleD1Database<typeof schemaTypes>;
  * totals plus a per-action breakdown.
  */
 export async function getUserUsageSummary(db: Db, userId: string, since: Date) {
-  const [totals] = await db
-    .select({
-      events: count(),
-      promptChars: sql<number>`COALESCE(SUM(${usageEvent.promptChars}), 0)`,
-      responseChars: sql<number>`COALESCE(SUM(${usageEvent.responseChars}), 0)`,
-      durationMs: sql<number>`COALESCE(SUM(${usageEvent.durationMs}), 0)`,
-      errors: sql<number>`COALESCE(SUM(CASE WHEN ${usageEvent.status} != 'ok' THEN 1 ELSE 0 END), 0)`,
-    })
-    .from(usageEvent)
-    .where(and(eq(usageEvent.userId, userId), gte(usageEvent.createdAt, since)));
-
   const perAction = await db
     .select({
       action: usageEvent.action,
@@ -192,8 +174,19 @@ export async function getUserUsageSummary(db: Db, userId: string, since: Date) {
     .where(and(eq(usageEvent.userId, userId), gte(usageEvent.createdAt, since)))
     .groupBy(usageEvent.action);
 
+  const totals = perAction.reduce(
+    (acc, row) => ({
+      events: acc.events + Number(row.events ?? 0),
+      promptChars: acc.promptChars + Number(row.promptChars ?? 0),
+      responseChars: acc.responseChars + Number(row.responseChars ?? 0),
+      durationMs: acc.durationMs + Number(row.durationMs ?? 0),
+      errors: acc.errors + Number(row.errors ?? 0),
+    }),
+    { events: 0, promptChars: 0, responseChars: 0, durationMs: 0, errors: 0 },
+  );
+
   return {
-    totals: totals ?? { events: 0, promptChars: 0, responseChars: 0, durationMs: 0, errors: 0 },
+    totals,
     perAction,
   };
 }
@@ -227,34 +220,42 @@ export async function getTopUsersByUsage(db: Db, since: Date, limit: number, off
 
 /** System-wide totals and per-action split across all users. */
 export async function getSystemUsageSummary(db: Db, since: Date) {
-  const [totals] = await db
-    .select({
-      events: count(),
-      uniqueUsers: sql<number>`COUNT(DISTINCT ${usageEvent.userId})`,
-      promptChars: sql<number>`COALESCE(SUM(${usageEvent.promptChars}), 0)`,
-      responseChars: sql<number>`COALESCE(SUM(${usageEvent.responseChars}), 0)`,
-      durationMs: sql<number>`COALESCE(SUM(${usageEvent.durationMs}), 0)`,
-      errors: sql<number>`COALESCE(SUM(CASE WHEN ${usageEvent.status} != 'ok' THEN 1 ELSE 0 END), 0)`,
-    })
-    .from(usageEvent)
-    .where(gte(usageEvent.createdAt, since));
+  const [[userRow], perAction] = await Promise.all([
+    db
+      .select({
+        uniqueUsers: sql<number>`COUNT(DISTINCT ${usageEvent.userId})`,
+      })
+      .from(usageEvent)
+      .where(gte(usageEvent.createdAt, since)),
+    db
+      .select({
+        action: usageEvent.action,
+        events: count(),
+        promptChars: sql<number>`COALESCE(SUM(${usageEvent.promptChars}), 0)`,
+        responseChars: sql<number>`COALESCE(SUM(${usageEvent.responseChars}), 0)`,
+        durationMs: sql<number>`COALESCE(SUM(${usageEvent.durationMs}), 0)`,
+        errors: sql<number>`COALESCE(SUM(CASE WHEN ${usageEvent.status} != 'ok' THEN 1 ELSE 0 END), 0)`,
+      })
+      .from(usageEvent)
+      .where(gte(usageEvent.createdAt, since))
+      .groupBy(usageEvent.action),
+  ]);
 
-  const perAction = await db
-    .select({
-      action: usageEvent.action,
-      events: count(),
-      promptChars: sql<number>`COALESCE(SUM(${usageEvent.promptChars}), 0)`,
-      responseChars: sql<number>`COALESCE(SUM(${usageEvent.responseChars}), 0)`,
-      durationMs: sql<number>`COALESCE(SUM(${usageEvent.durationMs}), 0)`,
-      errors: sql<number>`COALESCE(SUM(CASE WHEN ${usageEvent.status} != 'ok' THEN 1 ELSE 0 END), 0)`,
-    })
-    .from(usageEvent)
-    .where(gte(usageEvent.createdAt, since))
-    .groupBy(usageEvent.action);
+  const summed = perAction.reduce(
+    (acc, row) => ({
+      events: acc.events + Number(row.events ?? 0),
+      promptChars: acc.promptChars + Number(row.promptChars ?? 0),
+      responseChars: acc.responseChars + Number(row.responseChars ?? 0),
+      durationMs: acc.durationMs + Number(row.durationMs ?? 0),
+      errors: acc.errors + Number(row.errors ?? 0),
+    }),
+    { events: 0, promptChars: 0, responseChars: 0, durationMs: 0, errors: 0 },
+  );
 
   return {
-    totals: totals ?? {
-      events: 0, uniqueUsers: 0, promptChars: 0, responseChars: 0, durationMs: 0, errors: 0,
+    totals: {
+      ...summed,
+      uniqueUsers: Number(userRow?.uniqueUsers ?? 0),
     },
     perAction,
   };

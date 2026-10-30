@@ -33,7 +33,6 @@ function handleDeepLink(rawUrl: string | undefined, getWindow: WindowAccessor) {
   if (w) {
     if (!w.isVisible()) w.show();
     w.focus();
-    w.webContents.send("deep-link", { action: host });
   }
 }
 

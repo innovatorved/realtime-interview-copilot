@@ -16,7 +16,6 @@ export const COMPACT_HEIGHT_IDLE = 64;
 const COMPACT_HEIGHT_TRANSCRIPT = 140;
 const COMPACT_HEIGHT_COMPOSER = 120;
 const COMPACT_HEIGHT_COMPOSER_IMAGES = 168;
-const COMPACT_HEIGHT_OUTPUT = 300;
 /** Unified compact height whenever output (Copilot, Summarize, or Ask AI) is visible. */
 const COMPACT_HEIGHT_OUTPUT_COMPOSER = 420;
 const COMPACT_HEIGHT_CONTEXT_EXTRA = 80;

@@ -61,16 +61,14 @@ function globalModelParamsFromMap(map: Map<string, string>): ModelParams {
   };
 }
 
-// Shape validator for anything we read back from KV. We strip secret fields
-// from what we cache and require callers to re-fetch those from D1 each
-// request — an attacker who compromises KV should not get keys for free.
-const NonSecretConfigSchema = z.object({
+// Shape validator for anything we read back from KV. Secret fields are stored
+// as AES-GCM ciphertexts (`enc:v1:<ivHex>:<cipherHex>`) derived from
+// BETTER_AUTH_SECRET so a KV read hit never needs a D1 round-trip.
+const CachedConfigSchema = z.object({
   geminiModel: z.string(),
   customModelName: z.string(),
   customBaseUrl: z.string(),
   useCustom: z.boolean(),
-  // Optional + defaulted so v2 blobs written before this field existed
-  // (or partially rolled-out deploys) still parse.
   provider: z.enum(["gemini", "openai"]).optional().default("gemini"),
   cfAccountId: z.string(),
   cfGatewayId: z.string(),
@@ -78,8 +76,12 @@ const NonSecretConfigSchema = z.object({
   modelTemperature: z.number(),
   modelTopP: z.number(),
   modelThinkingBudget: z.enum(THINKING_VALUES),
+  encGeminiKey: z.string(),
+  encDeepgramKey: z.string(),
+  encCustomApiKey: z.string(),
+  encCfApiToken: z.string(),
 });
-type NonSecretConfig = z.infer<typeof NonSecretConfigSchema>;
+type CachedConfig = z.infer<typeof CachedConfigSchema>;
 
 export interface ResolvedConfig {
   geminiModel: string;
@@ -102,12 +104,97 @@ export interface ResolvedConfig {
 export interface ConfigCacheEnv {
   DB: D1Database;
   CONFIG_KV?: KVNamespace;
+  BETTER_AUTH_SECRET?: string;
   GEMINI_MODEL?: string;
   GOOGLE_GENERATIVE_AI_API_KEY?: string;
   DEEPGRAM_API_KEY?: string;
   CF_ACCOUNT_ID?: string;
   CF_GATEWAY_ID?: string;
   CF_API_TOKEN?: string;
+}
+
+const ENC_PREFIX = "enc:v1:";
+let cachedAesKeySecret: string | null = null;
+let cachedAesKey: CryptoKey | null = null;
+
+async function getKvCipherKey(secret: string | undefined): Promise<CryptoKey> {
+  const material = secret || "ric-config-kv-default-secret";
+  if (cachedAesKey && cachedAesKeySecret === material) {
+    return cachedAesKey;
+  }
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(material),
+  );
+  const key = await crypto.subtle.importKey(
+    "raw",
+    digest,
+    { name: "AES-GCM" },
+    false,
+    ["encrypt", "decrypt"],
+  );
+  cachedAesKeySecret = material;
+  cachedAesKey = key;
+  return key;
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  let out = "";
+  for (let i = 0; i < bytes.length; i++) {
+    out += bytes[i]!.toString(16).padStart(2, "0");
+  }
+  return out;
+}
+
+function hexToBytes(hex: string): Uint8Array | null {
+  if (hex.length === 0 || hex.length % 2 !== 0) return null;
+  const out = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < out.length; i++) {
+    const byte = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    if (Number.isNaN(byte)) return null;
+    out[i] = byte;
+  }
+  return out;
+}
+
+export async function encryptSecretForKv(
+  plaintext: string,
+  envSecret: string | undefined,
+): Promise<string> {
+  if (!plaintext) return "";
+  const key = await getKvCipherKey(envSecret);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const cipherBuf = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    new TextEncoder().encode(plaintext),
+  );
+  return `${ENC_PREFIX}${bytesToHex(iv)}:${bytesToHex(new Uint8Array(cipherBuf))}`;
+}
+
+async function decryptSecretFromKv(
+  payload: string,
+  envSecret: string | undefined,
+): Promise<string | null> {
+  if (!payload) return "";
+  if (!payload.startsWith(ENC_PREFIX)) return null;
+  const rest = payload.slice(ENC_PREFIX.length);
+  const sep = rest.indexOf(":");
+  if (sep <= 0) return null;
+  const iv = hexToBytes(rest.slice(0, sep));
+  const cipher = hexToBytes(rest.slice(sep + 1));
+  if (!iv || !cipher || iv.length !== 12) return null;
+  try {
+    const key = await getKvCipherKey(envSecret);
+    const plainBuf = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: iv as BufferSource },
+      key,
+      cipher as BufferSource,
+    );
+    return new TextDecoder().decode(plainBuf);
+  } catch {
+    return null;
+  }
 }
 
 const DEFAULT_CF_ACCOUNT_ID = "b4ca0337fb21e846c53e1f2611ba436c";
@@ -202,16 +289,13 @@ export async function getCachedConfig(env: ConfigCacheEnv): Promise<ResolvedConf
   }
 
   const key = KV.adminConfig();
-  // KV only stores the non-secret shape; secret fields are loaded from D1
-  // every request. We still strictly validate what we read back — a
-  // malformed / truncated JSON blob must not reach the hot path.
-  let cachedNonSecret: NonSecretConfig | null = null;
+  let cachedBlob: CachedConfig | null = null;
   try {
     const raw = await env.CONFIG_KV.get<unknown>(key, "json");
     if (raw) {
-      const parsed = NonSecretConfigSchema.safeParse(raw);
+      const parsed = CachedConfigSchema.safeParse(raw);
       if (parsed.success) {
-        cachedNonSecret = parsed.data;
+        cachedBlob = parsed.data;
       } else {
         console.warn("[config-cache] KV blob failed schema; refreshing");
       }
@@ -220,43 +304,70 @@ export async function getCachedConfig(env: ConfigCacheEnv): Promise<ResolvedConf
     console.warn("[config-cache] KV read failed, falling back to D1:", err);
   }
 
-  if (cachedNonSecret) {
-    // We always hit D1 for the secret columns so they never live in KV.
-    const fresh = await loadFromD1(env);
-    const merged: ResolvedConfig = {
-      ...fresh,
-      geminiModel: cachedNonSecret.geminiModel,
-      customModelName: cachedNonSecret.customModelName,
-      customBaseUrl: cachedNonSecret.customBaseUrl,
-      useCustom: cachedNonSecret.useCustom,
-      provider: cachedNonSecret.provider,
-      cfAccountId: cachedNonSecret.cfAccountId,
-      cfGatewayId: cachedNonSecret.cfGatewayId,
-      modelMaxOutputTokens: cachedNonSecret.modelMaxOutputTokens,
-      modelTemperature: cachedNonSecret.modelTemperature,
-      modelTopP: cachedNonSecret.modelTopP,
-      modelThinkingBudget: cachedNonSecret.modelThinkingBudget,
-    };
-    memoryConfigCache = { ts: Date.now(), cfg: merged };
-    return merged;
+  if (cachedBlob) {
+    const [geminiKey, deepgramKey, customApiKey, cfApiToken] = await Promise.all([
+      decryptSecretFromKv(cachedBlob.encGeminiKey, env.BETTER_AUTH_SECRET),
+      decryptSecretFromKv(cachedBlob.encDeepgramKey, env.BETTER_AUTH_SECRET),
+      decryptSecretFromKv(cachedBlob.encCustomApiKey, env.BETTER_AUTH_SECRET),
+      decryptSecretFromKv(cachedBlob.encCfApiToken, env.BETTER_AUTH_SECRET),
+    ]);
+
+    if (
+      geminiKey !== null &&
+      deepgramKey !== null &&
+      customApiKey !== null &&
+      cfApiToken !== null
+    ) {
+      const resolved: ResolvedConfig = {
+        geminiModel: cachedBlob.geminiModel,
+        geminiKey: geminiKey || env.GOOGLE_GENERATIVE_AI_API_KEY || "",
+        deepgramKey: deepgramKey || env.DEEPGRAM_API_KEY || "",
+        customModelName: cachedBlob.customModelName,
+        customBaseUrl: cachedBlob.customBaseUrl,
+        customApiKey,
+        useCustom: cachedBlob.useCustom,
+        provider: cachedBlob.provider,
+        cfAccountId: cachedBlob.cfAccountId,
+        cfGatewayId: cachedBlob.cfGatewayId,
+        cfApiToken: cfApiToken || env.CF_API_TOKEN || "",
+        modelMaxOutputTokens: cachedBlob.modelMaxOutputTokens,
+        modelTemperature: cachedBlob.modelTemperature,
+        modelTopP: cachedBlob.modelTopP,
+        modelThinkingBudget: cachedBlob.modelThinkingBudget,
+      };
+      memoryConfigCache = { ts: Date.now(), cfg: resolved };
+      return resolved;
+    }
+    console.warn("[config-cache] KV secret decryption failed; refreshing from D1");
   }
 
   const fresh = await loadFromD1(env);
-  const nonSecret: NonSecretConfig = {
-    geminiModel: fresh.geminiModel,
-    customModelName: fresh.customModelName,
-    customBaseUrl: fresh.customBaseUrl,
-    useCustom: fresh.useCustom,
-    provider: fresh.provider,
-    cfAccountId: fresh.cfAccountId,
-    cfGatewayId: fresh.cfGatewayId,
-    modelMaxOutputTokens: fresh.modelMaxOutputTokens,
-    modelTemperature: fresh.modelTemperature,
-    modelTopP: fresh.modelTopP,
-    modelThinkingBudget: fresh.modelThinkingBudget,
-  };
   try {
-    await env.CONFIG_KV.put(key, JSON.stringify(nonSecret), {
+    const [encGeminiKey, encDeepgramKey, encCustomApiKey, encCfApiToken] =
+      await Promise.all([
+        encryptSecretForKv(fresh.geminiKey, env.BETTER_AUTH_SECRET),
+        encryptSecretForKv(fresh.deepgramKey, env.BETTER_AUTH_SECRET),
+        encryptSecretForKv(fresh.customApiKey, env.BETTER_AUTH_SECRET),
+        encryptSecretForKv(fresh.cfApiToken, env.BETTER_AUTH_SECRET),
+      ]);
+    const toCache: CachedConfig = {
+      geminiModel: fresh.geminiModel,
+      customModelName: fresh.customModelName,
+      customBaseUrl: fresh.customBaseUrl,
+      useCustom: fresh.useCustom,
+      provider: fresh.provider,
+      cfAccountId: fresh.cfAccountId,
+      cfGatewayId: fresh.cfGatewayId,
+      modelMaxOutputTokens: fresh.modelMaxOutputTokens,
+      modelTemperature: fresh.modelTemperature,
+      modelTopP: fresh.modelTopP,
+      modelThinkingBudget: fresh.modelThinkingBudget,
+      encGeminiKey,
+      encDeepgramKey,
+      encCustomApiKey,
+      encCfApiToken,
+    };
+    await env.CONFIG_KV.put(key, JSON.stringify(toCache), {
       expirationTtl: KV_TTL_SECONDS.adminConfig,
     });
   } catch (err) {

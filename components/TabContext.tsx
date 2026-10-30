@@ -2,9 +2,11 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useState,
   useEffect,
+  useMemo,
   ReactNode,
 } from "react";
 
@@ -36,7 +38,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const setCompactMode = (value: boolean) => {
+  const setCompactMode = useCallback((value: boolean) => {
     setCompactModeState(value);
     try {
       if (typeof window !== "undefined") {
@@ -48,7 +50,7 @@ export function TabProvider({ children }: { children: ReactNode }) {
     } catch {
       /* localStorage unavailable */
     }
-  };
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -80,13 +82,12 @@ export function TabProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [compactMode]);
 
-  return (
-    <TabContext.Provider
-      value={{ activeTab, setActiveTab, compactMode, setCompactMode }}
-    >
-      {children}
-    </TabContext.Provider>
+  const value = useMemo(
+    () => ({ activeTab, setActiveTab, compactMode, setCompactMode }),
+    [activeTab, compactMode, setCompactMode],
   );
+
+  return <TabContext.Provider value={value}>{children}</TabContext.Provider>;
 }
 
 export function useTab() {

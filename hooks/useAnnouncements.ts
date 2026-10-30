@@ -14,7 +14,6 @@ interface UseAnnouncementsOptions {
 interface UseAnnouncementsReturn {
   banners: AppAnnouncement[];
   popups: AppAnnouncement[];
-  toasts: AppAnnouncement[];
   isLoading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
@@ -131,6 +130,12 @@ export function useAnnouncements(
     void refresh();
     if (!enabled || pollMs <= 0) return;
     const id = window.setInterval(() => {
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState === "hidden"
+      ) {
+        return;
+      }
       void refresh();
     }, pollMs);
     return () => window.clearInterval(id);
@@ -144,12 +149,10 @@ export function useAnnouncements(
     (a) => a.kind === "banner" && !localBanners.has(a.id),
   );
   const popups = items.filter((a) => a.kind === "popup");
-  const toasts = items.filter((a) => a.kind === "toast");
 
   return {
     banners,
     popups,
-    toasts,
     isLoading,
     error,
     refresh,

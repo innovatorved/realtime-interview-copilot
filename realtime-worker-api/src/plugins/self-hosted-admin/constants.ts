@@ -69,26 +69,28 @@ export const USAGE_WINDOW_MS: Record<string, number> = {
 };
 
 /**
- * Mirrors the server-side ALLOWED_TRACKED_ACTIONS in routes/events.ts plus
- * the LLM-level actions we already record automatically. Anything not on
- * this list is rejected so an attacker can't fish through the entire
- * usage_event table via an unsafe filter.
- *
- * KNOWN DESIGN FLAW: this list has drifted from `ALLOWED_TRACKED_ACTIONS`
- * (the client-allow list in routes/events.ts). Tracked for a separate
- * follow-up; intentionally preserved verbatim here.
+ * Canonical client-side tracked actions accepted by `/api/events/track`.
  */
-export const IMPORTANT_EVENT_ACTIONS = [
+export const CLIENT_TRACKED_ACTIONS = [
   "recording_start",
   "recording_stop",
   "screen_capture",
   "question_asked",
   "mode_switched",
   "completion_saved",
-  "session_started",
-  "session_ended",
   "session_resumed",
   "session_paused_by_user",
+] as const;
+
+/**
+ * Combines client-tracked actions (`CLIENT_TRACKED_ACTIONS`) with the
+ * server-side actions recorded automatically. Anything not on this list is
+ * rejected by admin filter queries.
+ */
+export const IMPORTANT_EVENT_ACTIONS = [
+  ...CLIENT_TRACKED_ACTIONS,
+  "session_started",
+  "session_ended",
   "completion",
   "deepgram_key",
   "note_create",

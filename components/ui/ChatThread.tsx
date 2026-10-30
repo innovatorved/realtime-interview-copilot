@@ -126,15 +126,8 @@ const ChatBubble = memo(function ChatBubble({
             density === "compact"
               ? "px-2.5 py-1.5 text-xs"
               : "px-3.5 py-2.5 text-sm",
-            density === "compact"
-              ? cn(
-                  overlayTextShadow,
-                  isUser ? overlayBubbleUser : overlayBubbleAssistant,
-                )
-              : cn(
-                  overlayTextShadow,
-                  isUser ? overlayBubbleUser : overlayBubbleAssistant,
-                ),
+            overlayTextShadow,
+            isUser ? overlayBubbleUser : overlayBubbleAssistant,
           )}
         >
           {isUser ? (

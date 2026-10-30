@@ -84,7 +84,6 @@ html {
   --warning: oklch(0.75 0.14 85);
   --info: oklch(0.65 0.12 240);
 
-  --app-shadow: oklch(0 0 0 / 0.35);
   --app-backdrop-opacity: 1;
 
   /* Legacy aliases for gradual migration */
@@ -113,27 +112,6 @@ html {
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border-subtle);
-}
-
-.animation-delay-100 {
-  animation-delay: 0.1s;
-}
-
-.animation-delay-200 {
-  animation-delay: 0.2s;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.fade-in-answer {
-  animation: fadeIn 0.2s cubic-bezier(0.33, 1, 0.68, 1);
 }
 
 @keyframes shimmer {
@@ -178,17 +156,6 @@ html {
   }
 }
 
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateX(-6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
 @keyframes recordingPulse {
   0%,
   100% {
@@ -218,26 +185,6 @@ html {
     border-radius: var(--radius-md);
   }
 
-  .surface-inset {
-    background-color: var(--surface-inset);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md);
-  }
-
-  .surface-split {
-    background-color: var(--surface-base);
-    border: 1px solid var(--border-subtle);
-  }
-
-  .accent-solid {
-    background-color: var(--accent);
-    color: var(--accent-foreground);
-  }
-
-  .accent-solid:hover {
-    background-color: var(--accent-hover);
-  }
-
   .custom-scrollbar::-webkit-scrollbar {
     width: 4px;
   }
@@ -264,20 +211,14 @@ html {
   animation: fadeInUp 0.2s cubic-bezier(0.33, 1, 0.68, 1);
 }
 
-.animate-slide-in {
-  animation: slideIn 0.2s cubic-bezier(0.33, 1, 0.68, 1);
-}
-
 .animate-recording-pulse {
   animation: recordingPulse 1.5s cubic-bezier(0.33, 1, 0.68, 1) infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fade-in-answer,
   .animate-skeleton,
   .animate-fade-in-scale,
   .animate-fade-in-up,
-  .animate-slide-in,
   .animate-recording-pulse {
     animation: none;
   }

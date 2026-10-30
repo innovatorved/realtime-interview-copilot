@@ -5,7 +5,6 @@ import {
   Search,
   Trash2,
   FileDown,
-  FileText,
   ChevronLeft,
   ChevronRight,
   BookOpen,
@@ -28,10 +27,6 @@ interface HistoryProps {
   onDelete: (noteId: string) => void;
   onExport: (format: "markdown" | "pdf", noteIds?: string[]) => void;
   isExporting: boolean;
-  /** Compact panel beside Copilot (interview view). */
-  variant?: "page" | "sidebar";
-  /** Collapse the notes sidebar (desktop). */
-  onCollapseSidebar?: () => void;
 }
 
 export default function History({
@@ -43,10 +38,7 @@ export default function History({
   onDelete,
   onExport,
   isExporting,
-  variant = "page",
-  onCollapseSidebar,
 }: HistoryProps) {
-  const isSidebar = variant === "sidebar";
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedNote, setExpandedNote] = useState<string | null>(null);
   const [selectedNotes, setSelectedNotes] = useState<Set<string>>(new Set());
@@ -110,57 +102,14 @@ export default function History({
   const tags = ["Copilot", "Summarizer"];
 
   return (
-    <div
-      className={cn(
-        "animate-fade-in-up",
-        isSidebar
-          ? "flex flex-col h-full min-h-0 space-y-2 px-3 py-2 md:px-3 md:py-3"
-          : "mx-auto max-w-4xl space-y-0 px-4 py-4",
-      )}
-    >
-      <div
-        className={cn(
-          "flex items-center justify-between shrink-0",
-          isSidebar && "gap-2",
-        )}
-      >
-        <div
-          className={cn(
-            "flex items-center gap-3 min-w-0",
-            isSidebar && "gap-1.5",
-          )}
-        >
-          {isSidebar && onCollapseSidebar && (
-            <button
-              type="button"
-              onClick={onCollapseSidebar}
-              className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.06] shrink-0"
-              title="Hide saved notes"
-              aria-label="Hide saved notes panel"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          )}
-          <div
-            className={cn(
-              "flex shrink-0 items-center justify-center rounded-md border border-border-subtle bg-accent-muted",
-              isSidebar ? "h-8 w-8" : "h-9 w-9",
-            )}
-          >
-            <BookOpen
-              className={cn(
-                "text-accent-text",
-                isSidebar ? "h-4 w-4" : "h-4 w-4",
-              )}
-            />
+    <div className="animate-fade-in-up mx-auto max-w-4xl space-y-0 px-4 py-4">
+      <div className="flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-accent-muted">
+            <BookOpen className="h-4 w-4 text-accent-text" />
           </div>
           <div className="min-w-0">
-            <h2
-              className={cn(
-                "font-semibold leading-tight text-text-primary",
-                isSidebar ? "text-xs" : "text-base",
-              )}
-            >
+            <h2 className="text-base font-semibold leading-tight text-text-primary">
               Saved notes
             </h2>
             <p className="truncate text-[10px] text-text-tertiary">
@@ -170,7 +119,7 @@ export default function History({
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
-          {selectedNotes.size > 0 && !isSidebar && (
+          {selectedNotes.size > 0 && (
             <span className="text-[10px] text-neutral-500 mr-1">
               {selectedNotes.size} selected
             </span>
@@ -178,57 +127,37 @@ export default function History({
           <Button
             variant="secondary"
             size="sm"
-            className={cn(
-              "gap-1.5 text-xs",
-              isSidebar ? "h-7 w-7 p-0" : "h-8 px-3",
-            )}
+            className="h-8 gap-1.5 px-3 text-xs"
             onClick={() => handleExport("markdown")}
             disabled={isExporting || notes.length === 0}
             title="Export Markdown"
           >
             <FileDown className="w-3.5 h-3.5" />
-            {!isSidebar && <span className="hidden sm:inline">Markdown</span>}
+            <span className="hidden sm:inline">Markdown</span>
           </Button>
           <Button
             variant="secondary"
             size="sm"
-            className={cn(
-              "gap-1.5 text-xs",
-              isSidebar ? "h-7 w-7 p-0" : "h-8 px-3",
-            )}
+            className="h-8 gap-1.5 px-3 text-xs"
             onClick={() => handleExport("pdf")}
             disabled={isExporting || notes.length === 0}
             title="Export PDF"
           >
             <Download className="w-3.5 h-3.5" />
-            {!isSidebar && <span className="hidden sm:inline">PDF</span>}
+            <span className="hidden sm:inline">PDF</span>
           </Button>
         </div>
       </div>
 
-      <div
-        className={cn(
-          "sticky top-0 z-10 shrink-0 gap-2 bg-surface-base pb-3",
-          isSidebar
-            ? "flex flex-col"
-            : "flex flex-col space-y-2 border-b border-border-subtle",
-        )}
-      >
-        <div className={cn("flex gap-2", isSidebar && "flex-col")}>
+      <div className="sticky top-0 z-10 flex shrink-0 flex-col gap-2 space-y-2 border-b border-border-subtle bg-surface-base pb-3">
+        <div className="flex gap-2">
           <div className="relative flex-1 min-w-0">
-            <Search
-              className={cn(
-                "absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-500",
-                isSidebar ? "w-3.5 h-3.5" : "w-4 h-4 left-3",
-              )}
-            />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
             <Input
               value={searchQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
               placeholder="Search…"
-              className={cn(
-                isSidebar ? "h-8 pl-8 text-[11px]" : "h-9 pl-9 text-sm",
-              )}
+              className="h-9 pl-9 text-sm"
             />
           </div>
           <div className="flex flex-wrap items-center gap-1">
@@ -242,10 +171,7 @@ export default function History({
                   onSearch(searchQuery, next);
                 }}
                 className={cn(
-                  "rounded-lg font-medium transition-all border",
-                  isSidebar
-                    ? "px-2 py-1 text-[10px]"
-                    : "px-2.5 py-1.5 text-[10px]",
+                  "rounded-lg px-2.5 py-1.5 text-[10px] font-medium transition-all border",
                   activeTag === tag
                     ? (tagColors[tag] ??
                         "bg-neutral-500/10 text-neutral-400 border-neutral-500/20")
@@ -259,22 +185,13 @@ export default function History({
         </div>
       </div>
 
-      <div
-        className={cn(
-          "space-y-3",
-          isSidebar &&
-            "flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-0.5 space-y-2",
-        )}
-      >
+      <div className="space-y-3">
         {isLoading && notes.length === 0 ? (
-          <div className={cn("space-y-3", isSidebar && "space-y-2")}>
-            {[...Array(isSidebar ? 2 : 3)].map((_, i) => (
+          <div className="space-y-3">
+            {[...Array(3)].map((_, i) => (
               <div
                 key={i}
-                className={cn(
-                  "surface-panel animate-skeleton",
-                  isSidebar ? "p-2.5 space-y-2" : "p-4 space-y-3",
-                )}
+                className="surface-panel animate-skeleton p-4 space-y-3"
               >
                 <div className="flex items-center gap-2">
                   <div className="h-4 w-16 bg-white/[0.06] rounded-md" />
@@ -289,37 +206,24 @@ export default function History({
             ))}
           </div>
         ) : notes.length === 0 ? (
-          <div
-            className={cn(
-              "surface-panel border-dashed text-center",
-              isSidebar ? "p-4" : "p-10",
-            )}
-          >
-            <p
-              className={cn(
-                "font-medium text-text-secondary",
-                isSidebar ? "text-[11px]" : "text-sm",
-              )}
-            >
+          <div className="surface-panel border-dashed p-10 text-center">
+            <p className="text-sm font-medium text-text-secondary">
               No notes yet
             </p>
-            {!isSidebar && (
-              <p className="mt-1 text-xs text-text-tertiary">
-                Save answers from Copilot or Ask AI to see them here
-              </p>
-            )}
+            <p className="mt-1 text-xs text-text-tertiary">
+              Save answers from Copilot or Ask AI to see them here
+            </p>
           </div>
         ) : (
           notes.map((note, idx) => {
             const isExpanded = expandedNote === note.id;
             const isSelected = selectedNotes.has(note.id);
-            const previewLen = isSidebar ? 120 : 200;
+            const previewLen = 200;
             return (
               <div
                 key={note.id}
                 className={cn(
-                  "group cursor-pointer border-b border-border-subtle transition-colors hover:bg-surface-overlay focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  isSidebar ? "px-1 py-2.5" : "px-2 py-3",
+                  "group cursor-pointer border-b border-border-subtle px-2 py-3 transition-colors hover:bg-surface-overlay focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   isSelected && "bg-accent-muted/50",
                 )}
                 style={{ animationDelay: `${idx * 40}ms` }}
@@ -334,42 +238,22 @@ export default function History({
                   }
                 }}
               >
-                <div
-                  className={cn(
-                    "flex items-center justify-between",
-                    isSidebar ? "mb-1.5" : "mb-2",
-                  )}
-                >
+                <div className="mb-2 flex items-center justify-between">
                   <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                     <span
                       className={cn(
-                        "inline-flex items-center rounded-md font-medium border shrink-0",
-                        isSidebar
-                          ? "px-1.5 py-0.5 text-[10px]"
-                          : "px-2 py-0.5 text-[10px]",
+                        "inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-medium border shrink-0",
                         tagColors[note.tag] ??
                           "bg-neutral-500/10 text-neutral-400 border-neutral-500/20",
                       )}
                     >
                       {note.tag}
                     </span>
-                    <span
-                      className={cn(
-                        "text-text-tertiary",
-                        isSidebar ? "text-[10px]" : "text-[10px]",
-                      )}
-                    >
+                    <span className="text-[10px] text-text-tertiary">
                       {formatDate(note.createdAt)}
                     </span>
                   </div>
-                  <div
-                    className={cn(
-                      "flex items-center gap-1 transition-opacity shrink-0",
-                      isSidebar
-                        ? "opacity-100"
-                        : "opacity-0 group-hover:opacity-100",
-                    )}
-                  >
+                  <div className="flex items-center gap-1 opacity-0 transition-opacity shrink-0 group-hover:opacity-100">
                     <button
                       role="checkbox"
                       aria-checked={isSelected}
@@ -405,22 +289,12 @@ export default function History({
 
                 <div
                   className={cn(
-                    "text-text-primary leading-relaxed transition-all",
-                    isSidebar ? "text-[11px]" : "text-sm",
-                    isExpanded
-                      ? ""
-                      : isSidebar
-                        ? "line-clamp-2"
-                        : "line-clamp-3",
+                    "text-sm text-text-primary leading-relaxed transition-all",
+                    !isExpanded && "line-clamp-3",
                   )}
                 >
                   {isExpanded ? (
-                    <div
-                      className={cn(
-                        "prose prose-invert prose-sm max-w-none",
-                        isSidebar && "[&_*]:text-[11px]",
-                      )}
-                    >
+                    <div className="prose prose-invert prose-sm max-w-none">
                       <SafeMarkdown>{note.content}</SafeMarkdown>
                     </div>
                   ) : (
@@ -451,12 +325,7 @@ export default function History({
       </div>
 
       {pagination.totalPages > 1 && (
-        <div
-          className={cn(
-            "flex items-center justify-center gap-2 shrink-0",
-            isSidebar ? "pt-1 border-t border-white/[0.04]" : "pt-2",
-          )}
-        >
+        <div className="flex items-center justify-center gap-2 shrink-0 pt-2">
           <Button
             variant="secondary"
             size="sm"
