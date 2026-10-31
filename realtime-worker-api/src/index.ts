@@ -240,7 +240,10 @@ export default {
       const response = await handleDesktopSsoComplete(request, env);
       return withCors(response, request);
     }
-    if (path === "/api/sso/desktop/exchange" && request.method === "POST") {
+    if (
+      path === "/api/sso/desktop/exchange" &&
+      (request.method === "POST" || request.method === "GET")
+    ) {
       const response = await handleDesktopSsoExchange(request, env);
       return withCors(response, request);
     }

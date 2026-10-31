@@ -1,7 +1,5 @@
 "use client";
 
-import { useSupportMessages } from "@/hooks/useSupportMessages";
-import { LogoMark } from "@/components/brand/v-logo";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -11,6 +9,8 @@ import {
 } from "lucide-react";
 import posthog from "posthog-js";
 import { useEffect, useMemo, useState } from "react";
+import { LogoMark } from "@/components/brand/v-logo";
+import { useSupportMessages } from "@/hooks/useSupportMessages";
 
 // Single source of truth for the auth chrome palette; the wizard pulls
 // from the same module.
@@ -320,7 +320,7 @@ export function WaitingForApproval({ email }: { email?: string }) {
 
   return (
     <div
-      className="hero-grid-bg min-h-screen w-full flex items-center justify-center px-4 py-10"
+      className="min-h-screen w-full flex items-center justify-center px-4 py-10"
       style={{ backgroundColor: TOKEN.pageBg }}
     >
       <div

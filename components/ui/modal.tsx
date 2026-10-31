@@ -1,7 +1,7 @@
 "use client";
 
-import * as React from "react";
 import { X } from "lucide-react";
+import * as React from "react";
 import { cn } from "@/lib/utils";
 
 interface ModalProps {
@@ -43,11 +43,11 @@ export function Modal({
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-fade-in-scale"
+      className="fixed inset-0 z-[110] flex items-center justify-center bg-surface-base/80 p-4 backdrop-blur-sm animate-fade-in-scale"
     >
       <div
         className={cn(
-          "relative w-full max-w-sm rounded-xl border border-border-strong bg-surface-raised p-5 shadow-2xl",
+          "relative w-full max-w-sm rounded-xl border border-border-default bg-surface-raised p-5 shadow-2xl",
           className,
         )}
       >

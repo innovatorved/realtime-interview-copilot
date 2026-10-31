@@ -58,14 +58,18 @@ function escapeHtml(s: string): string {
 }
 
 function resolveIconPath(): string {
-  if (process.platform === "darwin") {
-    // macOS - use larger PNG or .icns if available
-    return path.join(__dirname, "../public/icons/android-chrome-512x512.png");
+  const fileName =
+    process.platform === "win32" ? "favicon.ico" : "android-chrome-512x512.png";
+  const candidates = [
+    path.join(__dirname, "../public/icons", fileName),
+    path.join(__dirname, "../out/icons", fileName),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
   }
-  if (process.platform === "win32") {
-    return path.join(__dirname, "../public/icons/favicon.ico");
-  }
-  return path.join(__dirname, "../public/icons/android-chrome-512x512.png");
+  return candidates[0];
 }
 
 function loadDisplayName(): string {
@@ -244,6 +248,16 @@ async function createWindow() {
 
 app.whenReady().then(async () => {
   app.setName(loadDisplayName());
+  if (process.platform === "darwin" && app.dock) {
+    const dockIcon = resolveIconPath();
+    if (fs.existsSync(dockIcon)) {
+      try {
+        app.dock.setIcon(dockIcon);
+      } catch {
+        /* ignore dock icon errors */
+      }
+    }
+  }
 
   installPermissionRequestHandler(session.defaultSession);
   installDisplayMediaHandler(session.defaultSession);

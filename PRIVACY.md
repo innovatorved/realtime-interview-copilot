@@ -66,7 +66,6 @@ transmitted over HTTPS from your machine to third-party APIs:
 This project also ships a Cloudflare Worker (optional, self-hostable) that
 some users route through in order to avoid distributing API keys. If you use
 a deployment of this worker:
-
 - Your email address and a hashed password (via Better Auth) are stored in a
   Cloudflare D1 database operated by whoever hosts that instance.
 - Any configuration keys you save (Deepgram key, Gemini key, custom model
@@ -85,7 +84,6 @@ the desktop app to talk to a different endpoint.
 
 Stored only on your own machine, in the operating-system-standard
 application-support directory:
-
 - API keys (via secure storage where the OS supports it).
 - Interview context, notes, saved AI responses, and UI preferences.
 - Any transcripts you explicitly export.

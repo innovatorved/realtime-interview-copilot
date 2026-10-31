@@ -138,7 +138,7 @@ export function renderHtml(
     @media (min-width: 1024px) {
       .auth-shell {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(28rem, 46%);
+        grid-template-columns: minmax(0, 1fr) minmax(36rem, 52%);
         height: 100dvh;
         overflow: hidden;
       }
@@ -264,12 +264,12 @@ export function renderHtml(
       margin: 0;
     }
     .card {
-      max-width: 28rem;
+      max-width: 36rem;
       width: 100%;
       background: var(--surface);
       border: 1px solid var(--hairline-strong);
       border-radius: 12px;
-      padding: 28px;
+      padding: 32px;
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.75);
     }
     .card-header {
@@ -347,8 +347,8 @@ export function renderHtml(
       color: var(--body);
       border-color: var(--hairline-strong);
       width: auto;
-      height: 30px;
-      padding: 0 10px;
+      height: 38px;
+      padding: 0 14px;
       font-family: var(--font-mono);
       font-size: 11px;
       flex-shrink: 0;
@@ -385,19 +385,22 @@ export function renderHtml(
     }
     code {
       flex: 1;
-      display: block;
-      padding: 8px 11px;
+      display: flex;
+      align-items: center;
+      height: 38px;
+      padding: 0 12px;
       background: var(--surface-elevated);
       border: 1px solid var(--hairline-strong);
       border-radius: 6px;
       color: var(--ink);
       font-family: var(--font-mono);
-      font-size: 12px;
-      word-break: break-all;
+      font-size: 12.5px;
+      white-space: nowrap;
+      overflow-x: auto;
       user-select: all;
     }
     .card-footer {
-      max-width: 28rem;
+      max-width: 36rem;
       width: 100%;
       margin-top: 20px;
       display: flex;
@@ -405,6 +408,19 @@ export function renderHtml(
       justify-content: center;
       gap: 16px;
       text-align: center;
+    }
+    .consumed-banner {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--accent-green-border);
+      background: var(--accent-green-soft);
+      color: var(--accent-green);
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      line-height: 1.45;
     }
   </style>
 </head>
@@ -600,22 +616,18 @@ export async function handleDesktopSsoComplete(
     userId: session.user.id,
   });
 
-  if (env.CONFIG_KV) {
-    await env.CONFIG_KV.put(`${TICKET_PREFIX}${ticket}`, payload, {
-      expirationTtl: TICKET_TTL_SECONDS,
-    });
-  } else {
-    const db = getDb(env);
-    const now = new Date();
-    await db.insert(verification).values({
-      id: crypto.randomUUID(),
-      identifier: `${TICKET_PREFIX}${ticket}`,
-      value: payload,
-      expiresAt: new Date(now.getTime() + TICKET_TTL_SECONDS * 1000),
-      createdAt: now,
-      updatedAt: now,
-    });
-  }
+  // Always store in strongly-consistent D1 so atomic DELETE ... RETURNING
+  // guarantees strict single-use consumption across all edge locations.
+  const db = getDb(env);
+  const now = new Date();
+  await db.insert(verification).values({
+    id: crypto.randomUUID(),
+    identifier: `${TICKET_PREFIX}${ticket}`,
+    value: payload,
+    expiresAt: new Date(now.getTime() + TICKET_TTL_SECONDS * 1000),
+    createdAt: now,
+    updatedAt: now,
+  });
 
   const deepLink = `realtime-copilot://auth-callback?ticket=${encodeURIComponent(ticket)}`;
   const safeEmail = escapeHtml(session.user.email);
@@ -624,10 +636,10 @@ export async function handleDesktopSsoComplete(
     "Signed in to Realtime Interview Copilot",
     `<div class="card-header">
        <div class="card-badge-row">
-         <span class="eco-pill eco-pill--green"><span class="eco-dot"></span>Authenticated</span>
+         <span class="eco-pill eco-pill--green" id="auth-status-pill"><span class="eco-dot"></span><span id="auth-status-text">Authenticated</span></span>
        </div>
-       <h1>Signed in to Realtime Interview Copilot</h1>
-       <p style="margin-bottom:0">Redirecting back to the Realtime Interview Copilot desktop app…</p>
+       <h1 id="auth-heading">Signed in to Realtime Interview Copilot</h1>
+       <p id="auth-subtext" style="margin-bottom:0">Redirecting back to the Realtime Interview Copilot desktop app…</p>
      </div>
      <div class="identity-panel">
        <div class="identity-meta">
@@ -636,32 +648,103 @@ export async function handleDesktopSsoComplete(
        </div>
        <a class="mono-link" href="${escapeHtml(baseURL)}/api/sso/desktop/start">Switch account</a>
      </div>
-     <a class="btn" href="${deepLink}">Open Realtime Interview Copilot</a>
-     <div class="code-box">
+     <a class="btn" id="open-app-btn" href="${deepLink}">Open Realtime Interview Copilot</a>
+     <div class="code-box" id="code-box">
        <span class="field-label">One-time desktop sign-in code</span>
-       <p class="field-hint">
-         If the desktop app did not open automatically, paste this one-time sign-in code in the app:
+       <p class="field-hint" id="code-hint">
+         If the desktop app did not open automatically, reveal and paste this single-use sign-in code in the app (valid for one desktop login only):
        </p>
-       <div class="code-row">
-         <code id="sso-ticket">${escapeHtml(ticket)}</code>
-         <button type="button" class="btn btn-outline" id="copy-ticket-btn">Copy</button>
+       <div class="code-row" id="code-row">
+         <code id="sso-ticket">••••••••-••••-••••-••••-••••••••••••</code>
+         <button type="button" class="btn btn-outline" id="reveal-ticket-btn">Reveal code</button>
+         <button type="button" class="btn btn-outline" id="copy-ticket-btn" style="display:none">Copy</button>
+       </div>
+       <div class="consumed-banner" id="consumed-banner">
+         <span class="eco-dot"></span>
+         <span>Desktop app connected. This one-time sign-in code has been used and permanently invalidated.</span>
        </div>
      </div>
      <script>
        (function () {
-         var btn = document.getElementById("copy-ticket-btn");
+         var rawTicket = ${JSON.stringify(ticket)};
+         var consumed = false;
+         var revealed = false;
+         var revealBtn = document.getElementById("reveal-ticket-btn");
+         var copyBtn = document.getElementById("copy-ticket-btn");
          var codeEl = document.getElementById("sso-ticket");
-         if (btn && codeEl) {
-           btn.addEventListener("click", function () {
-             var text = (codeEl.textContent || "").trim();
+         var codeRow = document.getElementById("code-row");
+         var codeHint = document.getElementById("code-hint");
+         var consumedBanner = document.getElementById("consumed-banner");
+         var openAppBtn = document.getElementById("open-app-btn");
+         var subtextEl = document.getElementById("auth-subtext");
+         var statusTextEl = document.getElementById("auth-status-text");
+
+         function markConsumed() {
+           if (consumed) return;
+           consumed = true;
+           rawTicket = "";
+           if (codeEl) codeEl.textContent = "";
+           if (codeRow) codeRow.style.display = "none";
+           if (codeHint) codeHint.style.display = "none";
+           if (consumedBanner) consumedBanner.style.display = "flex";
+           if (openAppBtn) openAppBtn.style.display = "none";
+           if (subtextEl) {
+             subtextEl.textContent = "Your desktop app is now signed in. You can safely close this browser tab.";
+           }
+           if (statusTextEl) {
+             statusTextEl.textContent = "Desktop App Connected";
+           }
+         }
+
+         if (revealBtn && codeEl) {
+           revealBtn.addEventListener("click", function () {
+             if (consumed || !rawTicket) return;
+             revealed = !revealed;
+             if (revealed) {
+               codeEl.textContent = rawTicket;
+               revealBtn.textContent = "Hide";
+               if (copyBtn) copyBtn.style.display = "inline-flex";
+             } else {
+               codeEl.textContent = "••••••••-••••-••••-••••-••••••••••••";
+               revealBtn.textContent = "Reveal code";
+               if (copyBtn) copyBtn.style.display = "none";
+             }
+           });
+         }
+
+         if (copyBtn) {
+           copyBtn.addEventListener("click", function () {
+             if (consumed || !rawTicket) return;
              if (navigator.clipboard && navigator.clipboard.writeText) {
-               navigator.clipboard.writeText(text).then(function () {
-                 btn.textContent = "Copied";
-                 setTimeout(function () { btn.textContent = "Copy"; }, 1800);
+               navigator.clipboard.writeText(rawTicket).then(function () {
+                 copyBtn.textContent = "Copied";
+                 setTimeout(function () { copyBtn.textContent = "Copy"; }, 1800);
                });
              }
            });
          }
+
+         var pollCount = 0;
+         var pollTimer = setInterval(function () {
+           if (consumed || !rawTicket || pollCount > 45) {
+             clearInterval(pollTimer);
+             return;
+           }
+           pollCount++;
+           fetch("/api/sso/desktop/exchange?ticket=" + encodeURIComponent(rawTicket), {
+             method: "GET",
+             cache: "no-store"
+           })
+             .then(function (r) { return r.json(); })
+             .then(function (data) {
+               if (data && data.consumed === true) {
+                 markConsumed();
+                 clearInterval(pollTimer);
+               }
+             })
+             .catch(function () {});
+         }, 1200);
+
          window.location.href = ${JSON.stringify(deepLink)};
        })();
      </script>`,
@@ -672,6 +755,24 @@ export async function handleDesktopSsoExchange(
   request: Request,
   env: Env,
 ): Promise<Response> {
+  if (request.method === "GET") {
+    const reqUrl = new URL(request.url);
+    const ticket = reqUrl.searchParams.get("ticket")?.trim();
+    if (!ticket || ticket.length < 10) {
+      return jsonResponse({ consumed: true }, 200);
+    }
+    const key = `${TICKET_PREFIX}${ticket}`;
+    const db = getDb(env);
+    const rows = await db
+      .select({ expiresAt: verification.expiresAt })
+      .from(verification)
+      .where(eq(verification.identifier, key))
+      .limit(1);
+    const row = rows[0];
+    const isAvailable = Boolean(row && row.expiresAt.getTime() > Date.now());
+    return jsonResponse({ consumed: !isAvailable }, 200);
+  }
+
   let body: { ticket?: string } = {};
   try {
     body = (await request.json()) as { ticket?: string };
@@ -687,27 +788,21 @@ export async function handleDesktopSsoExchange(
   const key = `${TICKET_PREFIX}${ticket}`;
   let rawPayload: string | null = null;
 
-  if (env.CONFIG_KV) {
-    rawPayload = await env.CONFIG_KV.get(key);
-    if (rawPayload) {
-      await env.CONFIG_KV.delete(key);
-    }
+  const db = getDb(env);
+  const deletedRows = await db
+    .delete(verification)
+    .where(eq(verification.identifier, key))
+    .returning({
+      value: verification.value,
+      expiresAt: verification.expiresAt,
+    });
+  const row = deletedRows[0];
+  if (row && row.expiresAt.getTime() > Date.now()) {
+    rawPayload = row.value;
   }
 
-  if (!rawPayload) {
-    const db = getDb(env);
-    const rows = await db
-      .select()
-      .from(verification)
-      .where(eq(verification.identifier, key))
-      .limit(1);
-    const row = rows[0];
-    if (row) {
-      await db.delete(verification).where(eq(verification.id, row.id));
-      if (row.expiresAt.getTime() > Date.now()) {
-        rawPayload = row.value;
-      }
-    }
+  if (env.CONFIG_KV) {
+    await env.CONFIG_KV.delete(key).catch(() => {});
   }
 
   if (!rawPayload) {

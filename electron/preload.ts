@@ -58,8 +58,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
       payload: { ticket?: string | null; error?: string | null },
     ) => callback(payload);
     ipcRenderer.on("auth:deep-link-callback", handler);
-    return () =>
-      ipcRenderer.removeListener("auth:deep-link-callback", handler);
+    return () => ipcRenderer.removeListener("auth:deep-link-callback", handler);
   },
   updaterGetVersion: () => ipcRenderer.invoke("updater:get-version"),
   updaterCheck: () => ipcRenderer.invoke("updater:check"),

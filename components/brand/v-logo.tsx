@@ -1,4 +1,4 @@
-import * as React from "react";
+import type * as React from "react";
 import { cn } from "@/lib/utils";
 
 type VLogoProps = React.SVGProps<SVGSVGElement> & {
@@ -7,7 +7,7 @@ type VLogoProps = React.SVGProps<SVGSVGElement> & {
 
 /**
  * Meeting Copilot question-mark (`?`) mark — exact geometry from the original
- * Copilot app icon, updated to the monochrome Paper & Ink / Ved Gupta palette.
+ * Copilot app icon in the signature green theme.
  */
 export function VLogo({ size = 20, className, ...props }: VLogoProps) {
   return (
@@ -58,8 +58,8 @@ export function LogoMark({
         "inline-flex items-center justify-center shrink-0 select-none border transition-colors",
         box,
         inverted
-          ? "bg-primary text-on-primary border-primary"
-          : "bg-surface-elevated text-ink border-hairline-strong",
+          ? "bg-accent text-accent-foreground border-accent"
+          : "bg-accent-muted text-accent-text border-accent/30",
         className,
       )}
       {...props}

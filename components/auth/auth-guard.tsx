@@ -1,21 +1,20 @@
 "use client";
 
-import { authClient } from "@/lib/auth-client";
-import { onSessionExpired } from "@/lib/auth-events";
-import { useEffect, useState } from "react";
-import { AuthWizard } from "./auth-wizard";
-import { WaitingForApproval } from "./waiting-for-approval";
-import { AppAnnouncements } from "@/components/announcements/AppAnnouncements";
-import { useTab } from "@/components/TabContext";
 import { AlertTriangle, Ban, Loader2 } from "lucide-react";
 import posthog from "posthog-js";
-
+import { useEffect, useState } from "react";
+import { AppAnnouncements } from "@/components/announcements/AppAnnouncements";
+import { useTab } from "@/components/TabContext";
+import { authClient } from "@/lib/auth-client";
+import { onSessionExpired } from "@/lib/auth-events";
 import { authTokens as TOKEN } from "@/lib/design-tokens";
+import { AuthWizard } from "./auth-wizard";
+import { WaitingForApproval } from "./waiting-for-approval";
 
 function AuthLoadingShell() {
   return (
     <div
-      className="hero-grid-bg flex items-center justify-center min-h-screen px-4"
+      className="flex items-center justify-center min-h-screen px-4"
       style={{ backgroundColor: TOKEN.pageBg }}
     >
       <div
@@ -86,7 +85,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     const msg = error instanceof Error ? error.message : String(error);
     return (
       <div
-        className="hero-grid-bg flex items-center justify-center min-h-screen px-4 py-10"
+        className="flex items-center justify-center min-h-screen px-4 py-10"
         style={{ backgroundColor: TOKEN.pageBg }}
       >
         <div
@@ -200,15 +199,15 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   // Better Auth's generated user type doesn't include our custom
-  // approval/ban columns. Narrow through a local interface instead of
-  // @ts-ignore so TS still catches misspellings.
+  // approval/ban columns. Narrow through a local interface rather than
+  // suppressing TS errors so TS still catches misspellings.
   const extendedUser = session?.user as
     | { email: string; isBanned?: boolean; isApproved?: boolean }
     | undefined;
   if (extendedUser?.isBanned) {
     return (
       <div
-        className="hero-grid-bg flex items-center justify-center min-h-screen px-4 py-10"
+        className="flex items-center justify-center min-h-screen px-4 py-10"
         style={{ backgroundColor: TOKEN.pageBg }}
       >
         <div

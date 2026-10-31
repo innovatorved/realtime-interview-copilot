@@ -1,58 +1,21 @@
 "use client";
 
+import { ArrowRight, KeyRound, Loader2, ShieldCheck } from "lucide-react";
+import { useRouter } from "next/navigation";
+import posthog from "posthog-js";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { LogoMark } from "@/components/brand/v-logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
 import { authClient, setStoredSessionToken } from "@/lib/auth-client";
 import { APP_DISPLAY_NAME, BACKEND_API_URL } from "@/lib/constant";
 import { authTokens as TOKEN } from "@/lib/design-tokens";
 import { RIC_CLIENT_HEADER } from "@/lib/ric-fetch";
-import { cn } from "@/lib/utils";
-import { ExternalLink, KeyRound, Loader2, ShieldCheck } from "lucide-react";
-import { useRouter } from "next/navigation";
-import posthog from "posthog-js";
-import { useCallback, useEffect, useRef, useState } from "react";
 
 interface AuthWizardProps {
   initialStep?: "welcome" | "signup" | "signin";
   onSuccess?: () => void;
-}
-
-function NotionPrimaryButton({
-  children,
-  loading,
-  disabled,
-  className,
-  ...rest
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { loading?: boolean }) {
-  return (
-    <Button
-      {...rest}
-      disabled={disabled || loading}
-      className={cn("h-9 w-full gap-2 text-[13px] font-semibold", className)}
-    >
-      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-      {children}
-    </Button>
-  );
-}
-
-function NotionSecondaryButton({
-  children,
-  className,
-  ...rest
-}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <Button
-      {...rest}
-      variant="secondary"
-      className={cn("h-9 w-full text-[13px] font-medium", className)}
-    >
-      {children}
-    </Button>
-  );
 }
 
 async function openUrlInSystemBrowser(url: string): Promise<void> {
@@ -195,7 +158,7 @@ export function AuthWizard({ onSuccess }: AuthWizardProps) {
 
   return (
     <div
-      className="hero-grid-bg min-h-screen w-full flex flex-col items-center justify-center px-4 py-10"
+      className="min-h-screen w-full flex items-center justify-center px-4 py-10"
       style={{ backgroundColor: TOKEN.pageBg }}
     >
       <Modal
@@ -225,111 +188,91 @@ export function AuthWizard({ onSuccess }: AuthWizardProps) {
         </div>
       </Modal>
 
-      <div className="mb-5 flex flex-col items-center text-center">
-        <div className="flex items-center gap-2.5">
-          <LogoMark size="md" />
-          <div className="text-left">
-            <span className="block text-[14px] font-bold tracking-[-0.02em] text-ink leading-tight">
-              {APP_DISPLAY_NAME}
-            </span>
-            <span className="block font-mono text-[10px] uppercase tracking-[0.06em] text-mute">
-              sso.vedgupta.in · Identity
-            </span>
-          </div>
-        </div>
-      </div>
-
       <div
-        className="w-full max-w-[400px] rounded-xl border border-hairline-strong bg-surface p-6"
+        className="w-full max-w-[380px] rounded-xl p-6"
         style={{
+          backgroundColor: TOKEN.cardBg,
+          backdropFilter: "blur(24px)",
+          WebkitBackdropFilter: "blur(24px)",
+          border: `1px solid ${TOKEN.cardBorder}`,
           boxShadow:
-            "0 1px 0 rgba(255,255,255,0.04) inset, 0 24px 48px -12px rgba(0, 0, 0, 0.8)",
+            "0 4px 12px rgba(0,0,0,0.35), 0 24px 48px -16px rgba(0,0,0,0.45)",
         }}
       >
-        <div className="mb-5 space-y-1.5">
-          <div className="mb-2 flex items-center gap-2">
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <LogoMark size="sm" />
             <span className="eco-pill eco-pill--green">
-              <span className="h-1.5 w-1.5 rounded-full bg-accent-green" />
-              OAuth 2.1 + PKCE
+              <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+              VEDGUPTA SSO
             </span>
           </div>
-          <h1 className="text-[19px] font-bold tracking-[-0.025em] text-ink leading-tight">
-            Sign in with VedGupta SSO
+          <h1 className="text-[19px] font-semibold text-text-primary tracking-[-0.025em]">
+            {APP_DISPLAY_NAME}
           </h1>
-          <p className="text-[13px] text-mute leading-relaxed">
-            Authentication and account approval are managed centrally through{" "}
-            <span className="font-mono text-[12px] text-body">
-              sso.vedgupta.in
-            </span>
-            .
+          <p className="text-[13px] text-text-secondary mt-1">
+            Sign in with your authorized VedGupta SSO account
           </p>
         </div>
 
-        <div className="grid gap-2.5">
-          <NotionPrimaryButton
+        <div className="space-y-3.5">
+          <Button
             onClick={() => void handleStartSso()}
-            loading={loading}
+            disabled={loading}
+            className="w-full h-9 text-xs font-medium gap-2"
           >
-            <ShieldCheck className="h-4 w-4" />
+            {loading ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <ShieldCheck className="w-3.5 h-3.5" />
+            )}
             {loading
               ? "Completing sign-in…"
               : awaitingBrowser
                 ? "Re-open VedGupta SSO in browser"
-                : "Continue with VedGupta SSO"}
-            <ExternalLink className="h-3.5 w-3.5 opacity-70" />
-          </NotionPrimaryButton>
+                : "Sign in with VedGupta SSO"}
+            {!loading && <ArrowRight className="w-3.5 h-3.5" />}
+          </Button>
 
           {awaitingBrowser && !loading && (
-            <div className="rounded-lg border border-hairline bg-surface-elevated px-3 py-2.5 text-[12px] leading-relaxed text-mute">
+            <div className="rounded-lg border border-border-default bg-surface-inset px-3 py-2 text-[12px] leading-relaxed text-text-secondary">
               Complete sign-in in your browser window. Once approved,
               you&apos;ll be redirected back to {APP_DISPLAY_NAME}{" "}
               automatically.
             </div>
           )}
 
-          <NotionSecondaryButton
-            onClick={() =>
-              void openUrlInSystemBrowser(
-                "https://sso.vedgupta.in/forgot-password?reason=migrated",
-              )
-            }
-          >
-            Reset migrated account password
-          </NotionSecondaryButton>
-
-          <div className="mt-1">
+          <div className="pt-1">
             <button
               type="button"
               onClick={() => setShowManualTicket((v) => !v)}
-              className="inline-flex items-center gap-1.5 text-[11.5px] text-mute transition-colors hover:text-ink"
+              className="inline-flex items-center gap-1.5 text-[11px] font-mono text-text-tertiary hover:text-text-primary transition-colors cursor-pointer"
             >
-              <KeyRound className="h-3 w-3" />
+              <KeyRound className="w-3 h-3" />
               {showManualTicket
-                ? "Hide manual sign-in code"
-                : "Browser didn't redirect back? Enter sign-in code"}
+                ? "Hide sign-in code input"
+                : "Use one-time SSO code instead"}
             </button>
 
             {showManualTicket && (
-              <div className="mt-2.5 grid gap-2 rounded-lg border border-hairline bg-surface-elevated p-3">
-                <Label
-                  htmlFor="sso-ticket"
-                  className="font-mono text-[10px] uppercase tracking-[0.06em] text-mute"
-                >
-                  One-time sign-in code from browser
-                </Label>
+              <div className="mt-2.5 space-y-2">
                 <div className="flex gap-2">
                   <Input
                     id="sso-ticket"
-                    placeholder="Paste code here…"
+                    type="text"
+                    placeholder="Paste SSO code…"
                     value={manualTicket}
                     onChange={(e) => setManualTicket(e.target.value)}
-                    className="h-9 bg-surface text-[12px] font-mono"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void exchangeTicket(manualTicket);
+                    }}
+                    className="h-8 text-xs font-mono bg-surface-inset"
                   />
                   <Button
                     type="button"
                     disabled={!manualTicket.trim() || loading}
                     onClick={() => void exchangeTicket(manualTicket)}
-                    className="h-9 px-3.5 text-[12px] font-semibold shrink-0"
+                    className="h-8 px-3 text-xs shrink-0"
                   >
                     Verify
                   </Button>
@@ -337,24 +280,20 @@ export function AuthWizard({ onSuccess }: AuthWizardProps) {
               </div>
             )}
           </div>
-
-          <div className="mt-1.5 flex items-start gap-2.5 rounded-lg border border-hairline bg-surface-elevated px-3 py-2.5">
-            <span className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-accent-green/30 bg-accent-green/10 font-mono text-[10px] font-bold text-accent-green">
-              i
-            </span>
-            <p className="m-0 text-[11.5px] leading-relaxed text-mute">
-              Existing accounts were migrated to{" "}
-              <strong className="font-medium text-body">sso.vedgupta.in</strong>
-              . On your first login, reset your password if prompted.
-            </p>
-          </div>
         </div>
 
-        <div className="mt-5 border-t border-hairline pt-3.5 text-center">
-          <p className="m-0 font-mono text-[10px] leading-relaxed text-stone">
-            Protected by OAuth 2.1 + PKCE · Intended for educational use
-          </p>
-        </div>
+        <p className="font-mono text-[10.5px] text-text-tertiary text-center mt-6 pt-4 border-t border-border-subtle">
+          Managed centrally via{" "}
+          <button
+            type="button"
+            onClick={() =>
+              void openUrlInSystemBrowser("https://sso.vedgupta.in")
+            }
+            className="underline text-text-secondary hover:text-text-primary cursor-pointer"
+          >
+            sso.vedgupta.in
+          </button>
+        </p>
       </div>
     </div>
   );

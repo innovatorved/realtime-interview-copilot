@@ -70,17 +70,16 @@ Manual downloads are also on the [GitHub Releases](https://github.com/innovatorv
 
 ### Keyboard shortcuts
 
-
-| Action                         | macOS                               | Windows               |
-| ------------------------------ | ----------------------------------- | --------------------- |
+| Action                         | macOS                             | Windows               |
+| ------------------------------ | --------------------------------- | --------------------- |
 | Switch tab (full mode)         | ⌥C Copilot · ⌥A Ask AI · ⌥N Notes | Alt+C / A / N         |
-| Generate Copilot answer        | ⌘Enter                              | Ctrl+Enter            |
-| Summarize transcript           | ⌘⇧Enter                             | Ctrl+Shift+Enter      |
-| Toggle Ask drawer (compact)    | ⌥A                                  | Alt+A                 |
-| New Ask chat                   | ⌘⇧N                                 | Ctrl+Shift+N          |
-| Push-to-talk mic (empty input) | Space (hold)                        | Space (hold)          |
-| Attach screenshot              | ⌘⇧1 (global)                        | Ctrl+Shift+1 (global) |
-| Cancel mic / close drawer      | Esc                                 | Esc                   |
+| Generate Copilot answer        | ⌘Enter                            | Ctrl+Enter            |
+| Summarize transcript           | ⌘⇧Enter                           | Ctrl+Shift+Enter      |
+| Toggle Ask drawer (compact)    | ⌥A                                | Alt+A                 |
+| New Ask chat                   | ⌘⇧N                               | Ctrl+Shift+N          |
+| Push-to-talk mic (empty input) | Space (hold)                      | Space (hold)          |
+| Attach screenshot              | ⌘⇧1 (global)                      | Ctrl+Shift+1 (global) |
+| Cancel mic / close drawer      | Esc                               | Esc                   |
 
 
 On first launch, macOS may prompt for **Screen Recording** (system audio) and **Microphone** (Ask AI dictation). In compact mode, a small **Screen access** chip opens System Settings without blocking the overlay.
@@ -111,4 +110,3 @@ Node 22+ and Bun 1.3+
 - [License](./LICENSE)
 - [Privacy Policy](./PRIVACY.md)
 - [Issues](https://github.com/innovatorved/realtime-interview-copilot/issues)
-

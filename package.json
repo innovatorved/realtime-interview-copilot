@@ -1,6 +1,6 @@
 {
   "name": "realtime-interview-copilot",
-  "version": "0.20.0",
+  "version": "0.20.1",
   "description": "Real-time AI copilot for interviews (beta desktop app)",
   "author": "Ved Gupta <vedgupta@protonmail.com>",
   "private": true,
@@ -83,6 +83,7 @@
     ],
     "files": [
       "out/**/*",
+      "public/icons/**/*",
       "electron/**/*",
       "!electron/**/*.ts",
       "node_modules/**/*",

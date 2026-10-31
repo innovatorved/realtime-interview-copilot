@@ -4,12 +4,7 @@
  * Single Ask AI conversation shared by the full Ask tab and compact drawer.
  */
 
-import {
-  createContext,
-  useContext,
-  useMemo,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useInterviewContext } from "@/components/InterviewContextProvider";
 import { useAskChat, type UseAskChatHandle } from "@/hooks/useAskChat";
 import { APP_SESSION_KEYS } from "@/lib/app-session-storage";
