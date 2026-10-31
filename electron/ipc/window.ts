@@ -47,10 +47,13 @@ export function registerWindowIpc(getWindow: WindowAccessor): void {
         : currentWidth;
     const nextH =
       Number.isFinite(height) && height > 0
-        ? clamp(height, 100, maxH)
+        ? clamp(height, 74, maxH)
         : currentHeight;
     if (nextW !== currentWidth || nextH !== currentHeight) {
+      const wasResizable = w.isResizable();
+      if (!wasResizable) w.setResizable(true);
       w.setSize(nextW, nextH, false);
+      if (!wasResizable) w.setResizable(false);
     }
   });
 

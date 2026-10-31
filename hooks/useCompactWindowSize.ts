@@ -11,14 +11,16 @@ import { useEffect } from "react";
 const COMPACT_WINDOW_WIDTH = 980;
 const FULL_WINDOW = { width: 1180, height: 640 } as const;
 
-/** Toolbar-only idle height. */
-export const COMPACT_HEIGHT_IDLE = 64;
-const COMPACT_HEIGHT_TRANSCRIPT = 140;
-const COMPACT_HEIGHT_COMPOSER = 120;
-const COMPACT_HEIGHT_COMPOSER_IMAGES = 168;
+/** Toolbar-only idle height (TitleBar 32px + CompactToolbar 41px). */
+export const COMPACT_HEIGHT_IDLE = 76;
+const COMPACT_HEIGHT_TRANSCRIPT = 280;
+const COMPACT_HEIGHT_COMPOSER = 160;
+const COMPACT_HEIGHT_COMPOSER_IMAGES = 210;
 /** Unified compact height whenever output (Copilot, Summarize, or Ask AI) is visible. */
-const COMPACT_HEIGHT_OUTPUT_COMPOSER = 420;
-const COMPACT_HEIGHT_CONTEXT_EXTRA = 80;
+const COMPACT_HEIGHT_OUTPUT_COMPOSER = 460;
+const COMPACT_HEIGHT_COMPOSER_EXTRA = 72;
+const COMPACT_HEIGHT_COMPOSER_IMAGES_EXTRA = 120;
+const COMPACT_HEIGHT_CONTEXT_EXTRA = 120;
 
 export type CompactLayoutState = {
   showContext: boolean;
@@ -42,6 +44,11 @@ export function resolveCompactHeight(state: CompactLayoutState): number {
 
   if (hasVisibleOutput) {
     height = COMPACT_HEIGHT_OUTPUT_COMPOSER;
+    if (askMode) {
+      height += hasAttachedImages
+        ? COMPACT_HEIGHT_COMPOSER_IMAGES_EXTRA
+        : COMPACT_HEIGHT_COMPOSER_EXTRA;
+    }
   } else if (askMode) {
     height = hasAttachedImages
       ? COMPACT_HEIGHT_COMPOSER_IMAGES

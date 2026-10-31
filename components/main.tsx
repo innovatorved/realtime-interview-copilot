@@ -188,11 +188,11 @@ export default function MainPage() {
         </header>
       )}
 
-      {visibleTopError && (
+      {!compactMode && visibleTopError && (
         <AlertBanner
           message={visibleTopError}
           onDismiss={handleDismissTopError}
-          className="mx-3 mt-2 rounded-md"
+          className={cn("mx-3 mt-2 rounded-md", isElectron && "mt-10")}
         />
       )}
 
