@@ -20,7 +20,6 @@ export const TRUSTED_ORIGINS = [
   "http://localhost:3001",
   "https://copilot.vedgupta.in",
   "https://admin.copilot.vedgupta.in",
-  "https://interview-copilot-admin.vedgupta.in",
   "https://realtime-worker-api-prod.vedgupta.in",
   "https://sso.vedgupta.in",
 ] as const;

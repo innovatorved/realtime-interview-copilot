@@ -11,7 +11,6 @@ const TICKET_TTL_SECONDS = 180;
 
 const ALLOWED_WEB_CALLBACK_ORIGINS = new Set([
   "https://admin.copilot.vedgupta.in",
-  "https://interview-copilot-admin.vedgupta.in",
   "https://copilot.vedgupta.in",
   "http://localhost:3000",
   "http://localhost:3001",

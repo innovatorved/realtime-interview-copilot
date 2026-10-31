@@ -10,6 +10,7 @@ const ALLOWED_EXTERNAL_HOSTS = new Set([
   "sso.vedgupta.in",
   "realtime-worker-api-prod.vedgupta.in",
   "copilot.vedgupta.in",
+  "admin.copilot.vedgupta.in",
   "localhost",
   "127.0.0.1",
 ]);
