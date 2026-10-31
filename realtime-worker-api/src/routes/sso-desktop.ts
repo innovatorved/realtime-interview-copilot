@@ -409,18 +409,32 @@ export function renderHtml(
       gap: 16px;
       text-align: center;
     }
-    .consumed-banner {
+    .consumed-note {
       display: none;
       align-items: center;
-      gap: 10px;
-      padding: 10px 12px;
-      border-radius: 6px;
-      border: 1px solid var(--accent-green-border);
-      background: var(--accent-green-soft);
-      color: var(--accent-green);
+      justify-content: center;
+      gap: 6px;
+      margin-top: 12px;
+      color: var(--ash);
       font-family: var(--font-mono);
-      font-size: 11.5px;
-      line-height: 1.45;
+      font-size: 11px;
+    }
+    .fallback-toggle {
+      display: inline-block;
+      margin-top: 14px;
+      background: none;
+      border: none;
+      padding: 0;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--mute);
+      text-decoration: underline;
+      text-decoration-color: var(--hairline-strong);
+      text-underline-offset: 4px;
+      cursor: pointer;
+    }
+    .fallback-toggle:hover {
+      color: var(--ink);
     }
   </style>
 </head>
@@ -649,32 +663,28 @@ export async function handleDesktopSsoComplete(
        <a class="mono-link" href="${escapeHtml(baseURL)}/api/sso/desktop/start">Switch account</a>
      </div>
      <a class="btn" id="open-app-btn" href="${deepLink}">Open Realtime Interview Copilot</a>
-     <div class="code-box" id="code-box">
-       <span class="field-label">One-time desktop sign-in code</span>
-       <p class="field-hint" id="code-hint">
-         If the desktop app did not open automatically, reveal and paste this single-use sign-in code in the app (valid for one desktop login only):
-       </p>
+     <div style="text-align:center" id="fallback-toggle-wrap">
+       <button type="button" class="fallback-toggle" id="fallback-toggle-btn">App didn't open? Use one-time sign-in code</button>
+     </div>
+     <div class="code-box" id="code-box" style="display:none">
        <div class="code-row" id="code-row">
-         <code id="sso-ticket">••••••••-••••-••••-••••-••••••••••••</code>
-         <button type="button" class="btn btn-outline" id="reveal-ticket-btn">Reveal code</button>
-         <button type="button" class="btn btn-outline" id="copy-ticket-btn" style="display:none">Copy</button>
+         <code id="sso-ticket"></code>
+         <button type="button" class="btn btn-outline" id="copy-ticket-btn">Copy</button>
        </div>
-       <div class="consumed-banner" id="consumed-banner">
-         <span class="eco-dot"></span>
-         <span>Desktop app connected. This one-time sign-in code has been used and permanently invalidated.</span>
-       </div>
+     </div>
+     <div class="consumed-note" id="consumed-note">
+       <span>Desktop app connected · One-time code used</span>
      </div>
      <script>
        (function () {
          var rawTicket = ${JSON.stringify(ticket)};
          var consumed = false;
-         var revealed = false;
-         var revealBtn = document.getElementById("reveal-ticket-btn");
+         var toggleWrap = document.getElementById("fallback-toggle-wrap");
+         var toggleBtn = document.getElementById("fallback-toggle-btn");
+         var codeBox = document.getElementById("code-box");
          var copyBtn = document.getElementById("copy-ticket-btn");
          var codeEl = document.getElementById("sso-ticket");
-         var codeRow = document.getElementById("code-row");
-         var codeHint = document.getElementById("code-hint");
-         var consumedBanner = document.getElementById("consumed-banner");
+         var consumedNote = document.getElementById("consumed-note");
          var openAppBtn = document.getElementById("open-app-btn");
          var subtextEl = document.getElementById("auth-subtext");
          var statusTextEl = document.getElementById("auth-status-text");
@@ -684,31 +694,24 @@ export async function handleDesktopSsoComplete(
            consumed = true;
            rawTicket = "";
            if (codeEl) codeEl.textContent = "";
-           if (codeRow) codeRow.style.display = "none";
-           if (codeHint) codeHint.style.display = "none";
-           if (consumedBanner) consumedBanner.style.display = "flex";
+           if (codeBox) codeBox.style.display = "none";
+           if (toggleWrap) toggleWrap.style.display = "none";
            if (openAppBtn) openAppBtn.style.display = "none";
+           if (consumedNote) consumedNote.style.display = "flex";
            if (subtextEl) {
-             subtextEl.textContent = "Your desktop app is now signed in. You can safely close this browser tab.";
+             subtextEl.textContent = "Your desktop app is signed in. You can close this tab.";
            }
            if (statusTextEl) {
-             statusTextEl.textContent = "Desktop App Connected";
+             statusTextEl.textContent = "Connected";
            }
          }
 
-         if (revealBtn && codeEl) {
-           revealBtn.addEventListener("click", function () {
+         if (toggleBtn && codeBox && codeEl) {
+           toggleBtn.addEventListener("click", function () {
              if (consumed || !rawTicket) return;
-             revealed = !revealed;
-             if (revealed) {
-               codeEl.textContent = rawTicket;
-               revealBtn.textContent = "Hide";
-               if (copyBtn) copyBtn.style.display = "inline-flex";
-             } else {
-               codeEl.textContent = "••••••••-••••-••••-••••-••••••••••••";
-               revealBtn.textContent = "Reveal code";
-               if (copyBtn) copyBtn.style.display = "none";
-             }
+             codeEl.textContent = rawTicket;
+             codeBox.style.display = "block";
+             if (toggleWrap) toggleWrap.style.display = "none";
            });
          }
 
