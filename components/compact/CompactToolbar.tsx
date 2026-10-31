@@ -137,7 +137,7 @@ export function CompactToolbar({
             <Kbd
               keys={["Mod", "Enter"]}
               size="xs"
-              className="hidden md:inline-flex ml-0.5 text-white/70"
+              className="hidden md:inline-flex ml-0.5 opacity-80"
             />
           </>
         )}

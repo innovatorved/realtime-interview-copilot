@@ -31,10 +31,10 @@ function PrimaryButton({
       {...rest}
       disabled={isOff}
       style={{
-        backgroundColor: isOff ? "rgba(255,255,255,0.06)" : TOKEN.accent,
-        color: isOff ? TOKEN.stone : "#ffffff",
+        backgroundColor: isOff ? "rgba(255,255,255,0.06)" : TOKEN.primary,
+        color: isOff ? TOKEN.stone : TOKEN.onPrimary,
         border: "none",
-        height: 30,
+        height: 32,
         padding: "0 12px",
         borderRadius: 6,
         fontSize: 12,
@@ -46,17 +46,14 @@ function PrimaryButton({
         justifyContent: "center",
         gap: 8,
         transition: "background-color 150ms ease",
-        boxShadow: isOff
-          ? "none"
-          : `0 1px 2px rgba(0,0,0,0.4), 0 0 0 1px ${TOKEN.accentBorder}, 0 0 16px ${TOKEN.accentRing}`,
         ...(rest.style ?? {}),
       }}
       onMouseEnter={(e) => {
-        if (!isOff) e.currentTarget.style.backgroundColor = TOKEN.accentHover;
+        if (!isOff) e.currentTarget.style.backgroundColor = TOKEN.primaryHover;
         rest.onMouseEnter?.(e);
       }}
       onMouseLeave={(e) => {
-        if (!isOff) e.currentTarget.style.backgroundColor = TOKEN.accent;
+        if (!isOff) e.currentTarget.style.backgroundColor = TOKEN.primary;
         rest.onMouseLeave?.(e);
       }}
     >
@@ -323,7 +320,7 @@ export function WaitingForApproval({ email }: { email?: string }) {
 
   return (
     <div
-      className="min-h-screen w-full flex items-center justify-center px-4 py-10"
+      className="hero-grid-bg min-h-screen w-full flex items-center justify-center px-4 py-10"
       style={{ backgroundColor: TOKEN.pageBg }}
     >
       <div

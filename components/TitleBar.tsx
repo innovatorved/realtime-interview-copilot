@@ -23,6 +23,7 @@ import { useInterviewContext } from "@/components/InterviewContextProvider";
 import { SignalStrip } from "@/components/shell/SignalStrip";
 import { UserMenu } from "@/components/shell/UserMenu";
 import { WorkspaceTabs } from "@/components/shell/WorkspaceTabs";
+import { LogoMark } from "@/components/brand/v-logo";
 import { APP_DISPLAY_NAME } from "@/lib/constant";
 
 export default function TitleBar() {
@@ -168,12 +169,13 @@ export default function TitleBar() {
       {isApprovedUser && !compactMode && <SignalStrip activeTab={activeTab} />}
       <div className="flex min-h-0 flex-1 items-center justify-between px-3">
         <div className="flex min-w-0 items-center gap-2">
+          <LogoMark size="xs" />
+          <span className="truncate text-[11px] font-semibold tracking-[-0.01em] text-text-primary">
+            {APP_DISPLAY_NAME}
+          </span>
           <span className="relative flex h-1.5 w-1.5 shrink-0" aria-hidden>
             <span className="absolute inline-flex h-full w-full rounded-full bg-accent/40" />
             <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-accent" />
-          </span>
-          <span className="truncate text-[11px] font-semibold text-text-primary">
-            {APP_DISPLAY_NAME}
           </span>
 
           {isApprovedUser && !compactMode && (
@@ -198,9 +200,9 @@ export default function TitleBar() {
           )}
 
           <div
-            className="mr-1 flex items-center gap-0.5 rounded-md border border-border-subtle px-1.5 py-0.5"
+            className="mr-1 flex items-center gap-0.5 rounded-md border border-border-default px-1.5 py-0.5"
             style={{
-              backgroundColor: `color-mix(in oklch, var(--surface-raised) ${Math.round(backdropOpacity * 100)}%, transparent)`,
+              backgroundColor: `color-mix(in srgb, var(--surface-raised) ${Math.round(backdropOpacity * 100)}%, transparent)`,
             }}
           >
             <Button

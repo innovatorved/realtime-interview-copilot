@@ -53,9 +53,9 @@ export const OutputCard = memo(function OutputCard({
     <div
       className={`flex h-full min-h-0 flex-1 flex-col overflow-hidden ${overlayPanel}`}
     >
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border-subtle/40 px-4 py-2">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border-default px-4 py-2">
         <span
-          className={`min-w-0 truncate pr-2 text-[10px] font-semibold uppercase tracking-wider text-text-tertiary ${overlayTextShadow}`}
+          className={`min-w-0 truncate pr-2 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-text-tertiary ${overlayTextShadow}`}
         >
           Output
         </span>

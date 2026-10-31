@@ -467,27 +467,21 @@ export function QuestionAssistant({
 
           <div className="flex flex-wrap items-center gap-1.5 mb-2">
             {resumeText?.trim() && (
-              <span className="text-[10px] text-sky-300/90 bg-sky-500/[0.08] px-2 py-0.5 rounded-full border border-sky-500/15">
-                Resume attached
-              </span>
+              <span className="eco-pill eco-pill--blue">Resume attached</span>
             )}
             {jobDescription.trim() && (
-              <span className="text-[10px] text-violet-300/90 bg-violet-500/[0.08] px-2 py-0.5 rounded-full border border-violet-500/15">
-                JD attached
-              </span>
+              <span className="eco-pill">JD attached</span>
             )}
             {hasNotes && !contextAttached && (
-              <span className="text-[10px] text-emerald-500/60 bg-emerald-500/[0.06] px-2 py-0.5 rounded-full border border-emerald-500/10">
-                Notes included
-              </span>
+              <span className="eco-pill eco-pill--green">Notes included</span>
             )}
             {!contextAttached && !hasNotes && (
-              <span className="text-[10px] text-text-tertiary">
+              <span className="font-mono text-[10px] text-text-tertiary">
                 No saved context — add resume or JD in Copilot tab
               </span>
             )}
             {messages.length > 0 && (contextAttached || hasNotes) && (
-              <span className="text-[10px] text-text-tertiary">
+              <span className="font-mono text-[10px] text-text-tertiary">
                 · New chat picks up latest context
               </span>
             )}
@@ -542,7 +536,7 @@ export function QuestionAssistant({
           <form
             ref={formRef}
             onSubmit={handleSubmit}
-            className="flex items-center gap-1.5 rounded-lg border border-border-subtle/50 bg-transparent p-1.5"
+            className="flex items-center gap-1.5 rounded-lg border border-border-default bg-surface-elevated/60 p-1.5"
           >
             <div className="relative min-w-0 flex-1">
               <Input

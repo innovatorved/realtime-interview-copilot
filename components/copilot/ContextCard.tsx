@@ -86,12 +86,12 @@ export const ContextCard = memo(function ContextCard({
   };
 
   return (
-    <div className="app-toolbar shrink-0 overflow-hidden rounded-lg border border-border-subtle/40">
+    <div className="app-toolbar shrink-0 overflow-hidden rounded-lg border border-border-default">
       <form ref={formRef} onSubmit={onSubmit} className="flex flex-col">
-        <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle/40 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2 border-b border-border-default px-3 py-2">
           <RecorderTranscriber inline />
 
-          <div className="flex items-center gap-1 rounded-md border border-border-subtle/50 bg-black/10 px-1.5 py-1 backdrop-blur-[2px]">
+          <div className="flex items-center gap-1 rounded-md border border-border-default bg-surface-elevated/80 px-1.5 py-1 backdrop-blur-[2px]">
             <button
               type="button"
               onClick={() => onFlagChange(false)}
@@ -131,7 +131,7 @@ export const ContextCard = memo(function ContextCard({
             <button
               type="button"
               onClick={() => setDetailsOpen((open) => !open)}
-              className="inline-flex items-center gap-1 text-[11px] text-text-tertiary hover:text-text-secondary"
+              className="inline-flex items-center gap-1 rounded border border-transparent px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.04em] text-text-tertiary transition-colors hover:border-border-default hover:text-text-secondary"
               aria-expanded={detailsOpen}
             >
               Context
@@ -143,7 +143,7 @@ export const ContextCard = memo(function ContextCard({
               />
             </button>
             {isSaving && (
-              <span className="inline-flex items-center gap-1 text-[10px] text-text-tertiary">
+              <span className="inline-flex items-center gap-1 font-mono text-[10px] text-text-tertiary">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 Saving
               </span>
@@ -165,15 +165,18 @@ export const ContextCard = memo(function ContextCard({
         </div>
 
         {detailsOpen && (
-          <div className="space-y-2 border-b border-border-subtle/40 px-3 py-2">
+          <div className="space-y-2 border-b border-border-default px-3 py-2">
             <div>
-              <Label htmlFor="interview_notes" className="mb-1 block">
+              <Label
+                htmlFor="interview_notes"
+                className="mb-1 block font-mono text-[10px] uppercase tracking-[0.04em] text-text-secondary"
+              >
                 Interview notes
               </Label>
               <Textarea
                 id="interview_notes"
                 placeholder="Role focus, talking points, or interview topic..."
-                className="min-h-[64px] max-h-[96px] resize-none border-border-subtle/50 bg-black/15 text-xs backdrop-blur-[2px]"
+                className="min-h-[64px] max-h-[96px] resize-none border-border-default bg-surface-elevated/80 text-xs backdrop-blur-[2px]"
                 value={interviewNotes}
                 onChange={(e) => onInterviewNotesChange(e.target.value)}
                 disabled={isLoading}
@@ -224,13 +227,16 @@ export const ContextCard = memo(function ContextCard({
               <p className="text-[10px] text-destructive">{parseError}</p>
             )}
             <div>
-              <Label htmlFor="job_description" className="mb-1 block">
+              <Label
+                htmlFor="job_description"
+                className="mb-1 block font-mono text-[10px] uppercase tracking-[0.04em] text-text-secondary"
+              >
                 Job description
               </Label>
               <Textarea
                 id="job_description"
                 placeholder="Paste the job description..."
-                className="min-h-[56px] max-h-[80px] resize-none border-border-subtle/50 bg-black/15 text-xs backdrop-blur-[2px]"
+                className="min-h-[56px] max-h-[80px] resize-none border-border-default bg-surface-elevated/80 text-xs backdrop-blur-[2px]"
                 value={jobDescription}
                 onChange={(e) => onJobDescriptionChange(e.target.value)}
                 disabled={isLoading}
@@ -240,7 +246,7 @@ export const ContextCard = memo(function ContextCard({
         )}
 
         {!detailsOpen && attached && (
-          <p className="border-b border-border-subtle/40 px-3 py-1.5 text-[10px] text-text-tertiary">
+          <p className="border-b border-border-default px-3 py-1.5 font-mono text-[10px] text-text-tertiary">
             Resume and JD saved. Open Context to edit.
           </p>
         )}

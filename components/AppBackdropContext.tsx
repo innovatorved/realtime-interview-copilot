@@ -149,10 +149,10 @@ export function AppBackdrop({
   return (
     <div
       aria-hidden
-      className="fixed left-0 right-0 top-0 -z-10 pointer-events-auto transition-[background-color,height] duration-200 ease-out"
+      className="fixed left-0 right-0 top-0 -z-10 pointer-events-auto transition-[background-color,height] duration-200 ease-out hero-grid-bg"
       style={{
         height: "100%",
-        backgroundColor: `rgba(9, 9, 11, ${fillAlpha})`,
+        backgroundColor: `rgba(0, 0, 0, ${fillAlpha})`,
       }}
     />
   );

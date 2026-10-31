@@ -53,7 +53,7 @@ export function TranscriptionCard({
       <div className="mb-2 flex shrink-0 items-center justify-between">
         <Label
           htmlFor="transcription"
-          className={`flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-tertiary ${overlayTextShadow}`}
+          className={`flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-text-tertiary ${overlayTextShadow}`}
         >
           <span className="h-1.5 w-1.5 animate-recording-pulse rounded-full bg-signal-copilot" />
           Live transcript

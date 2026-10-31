@@ -43,11 +43,11 @@ export function Modal({
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-[110] flex items-center justify-center bg-surface-base/80 p-4 animate-fade-in-scale"
+      className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-fade-in-scale"
     >
       <div
         className={cn(
-          "relative w-full max-w-sm rounded-lg border border-border-subtle bg-surface-raised p-5 shadow-lg",
+          "relative w-full max-w-sm rounded-xl border border-border-strong bg-surface-raised p-5 shadow-2xl",
           className,
         )}
       >

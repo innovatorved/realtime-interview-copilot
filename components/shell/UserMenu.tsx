@@ -78,14 +78,14 @@ export function UserMenu({
       className={cn(
         "flex min-w-0 items-center gap-1.5",
         !isTitlebar &&
-          "max-w-[18rem] rounded-md border border-border-subtle bg-surface-overlay px-2 py-1",
+          "max-w-[18rem] rounded-md border border-border-default bg-surface-overlay px-2 py-1",
         className,
       )}
     >
       {usageLabel && (
         <span
           className={cn(
-            "inline-flex shrink-0 items-center gap-1 rounded border border-border-subtle bg-surface-raised px-1.5 py-0.5 font-mono text-text-secondary",
+            "inline-flex shrink-0 items-center gap-1 rounded border border-border-default bg-surface-elevated px-1.5 py-0.5 font-mono text-text-secondary",
             isTitlebar ? "text-[9px]" : "text-[10px]",
           )}
           title={usageTitle}

@@ -103,16 +103,16 @@ export default function History({
 
   return (
     <div className="animate-fade-in-up mx-auto max-w-4xl space-y-0 px-4 py-4">
-      <div className="flex items-center justify-between shrink-0">
+      <div className="flex items-center justify-between shrink-0 pb-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-accent-muted">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border-default bg-accent-muted">
             <BookOpen className="h-4 w-4 text-accent-text" />
           </div>
           <div className="min-w-0">
             <h2 className="text-base font-semibold leading-tight text-text-primary">
               Saved notes
             </h2>
-            <p className="truncate text-[10px] text-text-tertiary">
+            <p className="truncate font-mono text-[10px] uppercase tracking-[0.04em] text-text-tertiary">
               {pagination.total} saved
             </p>
           </div>

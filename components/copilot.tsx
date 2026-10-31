@@ -216,8 +216,8 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
         onStop={stop}
       />
 
-      <div className="mt-3 flex min-h-0 flex-1 flex-col gap-0 overflow-hidden rounded-lg border border-border-subtle/40 bg-transparent md:flex-row">
-        <div className="flex min-h-[200px] min-w-0 flex-1 flex-col border-border-subtle/40 md:max-w-[45%] md:border-r">
+      <div className="mt-3 flex min-h-0 flex-1 flex-col gap-0 overflow-hidden rounded-lg border border-border-default bg-transparent md:flex-row">
+        <div className="flex min-h-[200px] min-w-0 flex-1 flex-col border-border-default md:max-w-[45%] md:border-r">
           <TranscriptionCard
             transcriptionBoxRef={transcriptionBoxRef}
             segments={transcriptionSegments}
@@ -240,8 +240,8 @@ function CopilotSkeleton() {
   return (
     <div className="space-y-3 p-4">
       <div className="surface-panel h-24 animate-skeleton" />
-      <div className="mt-3 flex min-h-[320px] gap-0 overflow-hidden rounded-lg border border-border-subtle/40 bg-transparent">
-        <div className="min-h-0 flex-1 border-r border-border-subtle/40 p-4">
+      <div className="mt-3 flex min-h-[320px] gap-0 overflow-hidden rounded-lg border border-border-default bg-transparent">
+        <div className="min-h-0 flex-1 border-r border-border-default p-4">
           <div className="mb-3 h-3 w-32 animate-skeleton rounded" />
           <div className="h-full min-h-[200px] animate-skeleton rounded-md" />
         </div>

@@ -72,12 +72,12 @@ export default function RecorderTranscriber({
         onClick={isActive ? stopSession : startSession}
         disabled={isBusy || !isClientReady}
         className={cn(
-          "h-7 gap-1.5 px-2.5 text-[11px] font-medium rounded-lg border transition-all",
+          "h-7 gap-1.5 px-2.5 text-[11px] font-semibold rounded-md border transition-all",
           sessionState === "live"
-            ? "bg-red-500/15 text-red-300 border-red-500/25 hover:bg-red-500/25 animate-pulse"
+            ? "bg-destructive-muted text-destructive border-destructive/30 hover:bg-destructive/20 animate-pulse"
             : isBusy
-              ? "bg-sky-500/10 text-sky-300 border-sky-500/20"
-              : "bg-emerald-500/15 text-emerald-300 border-emerald-500/25 hover:bg-emerald-500/25",
+              ? "bg-info/10 text-info border-info/25"
+              : "bg-accent-muted text-accent-text border-accent/30 hover:bg-accent/20",
         )}
       >
         {isBusy ? (
@@ -111,10 +111,10 @@ export default function RecorderTranscriber({
       onClick={isActive ? stopSession : startSession}
       disabled={isBusy || !isClientReady}
       className={cn(
-        "h-8 px-3 text-xs font-medium shrink-0 gap-1.5 rounded-lg whitespace-nowrap",
+        "h-8 px-3 text-xs font-semibold shrink-0 gap-1.5 rounded-md whitespace-nowrap border",
         sessionState === "live"
-          ? "bg-red-500/15 text-red-300 border border-red-500/25 hover:bg-red-500/25"
-          : "bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 hover:bg-emerald-500/25",
+          ? "bg-destructive-muted text-destructive border-destructive/30 hover:bg-destructive/20"
+          : "bg-accent-muted text-accent-text border-accent/30 hover:bg-accent/20",
       )}
     >
       {isBusy ? (

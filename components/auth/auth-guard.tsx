@@ -15,20 +15,18 @@ import { authTokens as TOKEN } from "@/lib/design-tokens";
 function AuthLoadingShell() {
   return (
     <div
-      className="flex items-center justify-center min-h-screen px-4"
+      className="hero-grid-bg flex items-center justify-center min-h-screen px-4"
       style={{ backgroundColor: TOKEN.pageBg }}
     >
       <div
         className="flex items-center gap-2.5 px-4 py-2.5 rounded-lg"
         style={{
           backgroundColor: TOKEN.cardBg,
-          backdropFilter: "blur(20px)",
-          WebkitBackdropFilter: "blur(20px)",
           border: `1px solid ${TOKEN.cardBorder}`,
           color: TOKEN.charcoal,
-          fontSize: 14,
+          fontSize: 13,
           fontWeight: 500,
-          boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
         }}
       >
         <Loader2
@@ -88,15 +86,13 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     const msg = error instanceof Error ? error.message : String(error);
     return (
       <div
-        className="flex items-center justify-center min-h-screen px-4 py-10"
+        className="hero-grid-bg flex items-center justify-center min-h-screen px-4 py-10"
         style={{ backgroundColor: TOKEN.pageBg }}
       >
         <div
           className="w-full max-w-md text-center"
           style={{
             backgroundColor: TOKEN.cardBg,
-            backdropFilter: "blur(24px)",
-            WebkitBackdropFilter: "blur(24px)",
             border: `1px solid ${TOKEN.cardBorder}`,
             borderRadius: 12,
             padding: 28,
@@ -142,8 +138,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
               type="button"
               onClick={() => window.location.reload()}
               style={{
-                backgroundColor: TOKEN.accent,
-                color: "#0a0a0a",
+                backgroundColor: TOKEN.primary,
+                color: TOKEN.onPrimary,
                 border: "none",
                 height: 36,
                 padding: "0 14px",
@@ -151,13 +147,12 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
                 fontSize: 13,
                 fontWeight: 600,
                 cursor: "pointer",
-                boxShadow: "0 0 0 1px rgba(16,185,129,0.25)",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = TOKEN.accentHover;
+                e.currentTarget.style.backgroundColor = TOKEN.primaryHover;
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = TOKEN.accent;
+                e.currentTarget.style.backgroundColor = TOKEN.primary;
               }}
             >
               Retry
@@ -213,15 +208,13 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   if (extendedUser?.isBanned) {
     return (
       <div
-        className="flex items-center justify-center min-h-screen px-4 py-10"
+        className="hero-grid-bg flex items-center justify-center min-h-screen px-4 py-10"
         style={{ backgroundColor: TOKEN.pageBg }}
       >
         <div
           className="w-full max-w-md text-center"
           style={{
             backgroundColor: TOKEN.cardBg,
-            backdropFilter: "blur(24px)",
-            WebkitBackdropFilter: "blur(24px)",
             border: `1px solid ${TOKEN.cardBorder}`,
             borderRadius: 12,
             padding: 28,

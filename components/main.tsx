@@ -25,8 +25,9 @@ import { sessionDisplayName } from "@/lib/session-display";
 import { useEffect, useState, useCallback, useLayoutEffect } from "react";
 import { useTab } from "@/components/TabContext";
 import { useInterviewContext } from "@/components/InterviewContextProvider";
-import { Mic, Minimize2 } from "lucide-react";
+import { Minimize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LogoMark } from "@/components/brand/v-logo";
 
 export default function MainPage() {
   const { activeTab, setActiveTab, compactMode, setCompactMode } = useTab();
@@ -134,27 +135,22 @@ export default function MainPage() {
       <AppBackdrop clipToNavbar={compactMode} />
 
       {!isElectron && !compactMode && (
-        <header className="sticky top-0 z-40 border-b border-border-subtle bg-surface-raised">
+        <header className="sticky top-0 z-40 border-b border-border-default bg-surface-raised">
           <SignalStrip activeTab={activeTab} />
           <nav
             className="mx-auto flex h-12 max-w-6xl items-center gap-3 px-4 sm:gap-4 sm:px-6"
             aria-label="Primary navigation"
           >
-            <div className="flex min-w-0 shrink-0 items-center gap-2">
-              <div
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent text-accent-foreground"
-                aria-hidden
-              >
-                <Mic className="h-3.5 w-3.5" />
-              </div>
+            <div className="flex min-w-0 shrink-0 items-center gap-2.5">
+              <LogoMark size="sm" />
               <div className="min-w-0 hidden sm:block">
                 <p className="truncate text-sm font-semibold tracking-tight text-text-primary">
                   {APP_DISPLAY_NAME}
                 </p>
-                <p className="truncate text-[11px] text-text-tertiary">
+                <p className="truncate font-mono text-[10px] uppercase tracking-[0.04em] text-text-tertiary">
                   {session?.user
                     ? `Signed in as ${sessionDisplayName(session.user)}`
-                    : "Transcribe, capture, answer"}
+                    : "Transcribe · Capture · Answer"}
                 </p>
               </div>
             </div>
