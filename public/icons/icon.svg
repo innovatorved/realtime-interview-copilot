@@ -1,9 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <rect x="2" y="2" width="60" height="60" rx="14" fill="#0a0a0a" stroke="#333333" stroke-width="2.5"/>
-  <rect x="3.5" y="3.5" width="57" height="57" rx="12.5" stroke="#ffffff" stroke-opacity="0.06" stroke-width="1"/>
-  <g transform="translate(14, 13) scale(1.5)" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-    <line x1="12" x2="12" y1="19" y2="22" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="#0a0a0a" stroke="#333333" stroke-width="16"/>
+  <g transform="translate(256, 256) scale(0.82) translate(-256, -256)" fill="#ffffff">
+    <path d="M 240 64 L 270 64 L 298 68 L 319 74 L 343 86 L 357 96 L 380 121 L 390 138 L 398 165 L 398 193 L 392 214 L 386 226 L 352 251 L 323 283 L 303 319 L 296 339 L 292 360 L 289 363 L 217 363 L 214 359 L 214 329 L 218 303 L 230 276 L 255 248 L 297 213 L 307 203 L 313 193 L 316 182 L 315 168 L 309 154 L 301 145 L 285 135 L 267 131 L 250 131 L 230 136 L 218 143 L 205 156 L 197 170 L 191 191 L 185 196 L 120 188 L 114 186 L 112 182 L 116 157 L 126 132 L 139 113 L 156 96 L 176 82 L 199 72 L 218 67 L 239 65 Z"/>
+    <rect x="222" y="378" width="70" height="70" rx="8"/>
   </g>
 </svg>
