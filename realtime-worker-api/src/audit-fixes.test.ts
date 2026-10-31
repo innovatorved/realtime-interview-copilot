@@ -244,4 +244,19 @@ describe("sso-desktop security hardening & banned user handling", () => {
     assert.equal(body.code, "BANNED_USER");
     assert.equal(body.error, "Account suspended");
   });
+
+  it("renders pending approval error without linking to sso.vedgupta.in/pending", async () => {
+    const req = new Request(
+      "https://realtime-worker-api-prod.vedgupta.in/api/sso/desktop/complete?error=pending_approval&error_description=Your%20account%20requires%20administrator%20approval",
+    );
+    const res = await handleDesktopSsoComplete(req, {
+      BETTER_AUTH_URL: "https://realtime-worker-api-prod.vedgupta.in",
+    } as Env);
+    assert.equal(res.status, 400);
+    const html = await res.text();
+    assert.ok(html.includes("Access Pending Approval"));
+    assert.ok(html.includes("Your account requires administrator approval"));
+    assert.ok(!html.includes("sso.vedgupta.in/pending"));
+    assert.ok(html.includes("/api/sso/desktop/start"));
+  });
 });

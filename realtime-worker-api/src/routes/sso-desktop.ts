@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { auth } from "../auth";
 import { getDb } from "../db";
-import { verification } from "../db/schema";
+import { user, verification } from "../db/schema";
 import type { Env } from "../env";
 import { escapeHtml } from "../lib/html";
 import { jsonResponse } from "../lib/http";
@@ -572,7 +572,7 @@ export async function handleDesktopSsoComplete(
   if (errorParam) {
     const desc = escapeHtml(
       reqUrl.searchParams.get("error_description") ||
-        "Your account requires approval on sso.vedgupta.in before signing in.",
+        "Your account requires administrator approval before signing in.",
     );
     return renderHtml(
       "Access Pending Approval",
@@ -583,7 +583,7 @@ export async function handleDesktopSsoComplete(
          <h1>Access Pending Approval</h1>
          <p style="margin-bottom:0">${desc}</p>
        </div>
-       <a class="btn" href="https://sso.vedgupta.in/pending">Check Status on VedGupta SSO</a>`,
+       <a class="btn" href="${escapeHtml(baseURL)}/api/sso/desktop/start">Try Again</a>`,
       400,
     );
   }
@@ -607,6 +607,9 @@ export async function handleDesktopSsoComplete(
   const sessionUser = session.user as {
     id: string;
     email: string;
+    role?: string | null;
+    isApproved?: boolean | null;
+    approved?: boolean | null;
     isBanned?: boolean | null;
     banned?: boolean | null;
   };
@@ -622,6 +625,34 @@ export async function handleDesktopSsoComplete(
        </div>`,
       403,
     );
+  }
+
+  const isPrimaryAdmin =
+    sessionUser.email?.toLowerCase() === "admin@vedgupta.in" ||
+    (env.ADMIN_EMAILS ?? "")
+      .split(",")
+      .map((e) => e.trim().toLowerCase())
+      .includes(sessionUser.email?.toLowerCase() ?? "");
+
+  let isApproved =
+    isPrimaryAdmin ||
+    sessionUser.role === "admin" ||
+    sessionUser.isApproved === true ||
+    sessionUser.approved === true;
+
+  if (!isApproved && env.DB) {
+    try {
+      const [u] = await getDb(env)
+        .select({ isApproved: user.isApproved, role: user.role })
+        .from(user)
+        .where(eq(user.id, sessionUser.id))
+        .limit(1);
+      if (u) {
+        isApproved = isPrimaryAdmin || u.role === "admin" || u.isApproved === true;
+      }
+    } catch {
+      /* ignore */
+    }
   }
 
   const ticket = crypto.randomUUID();
@@ -646,14 +677,23 @@ export async function handleDesktopSsoComplete(
   const deepLink = `realtime-copilot://auth-callback?ticket=${encodeURIComponent(ticket)}`;
   const safeEmail = escapeHtml(session.user.email);
 
+  const statusPillClass = isApproved ? "eco-pill--green" : "eco-pill--amber";
+  const statusPillText = isApproved ? "Authenticated" : "Pending approval";
+  const headingText = isApproved
+    ? "Signed in to Realtime Interview Copilot"
+    : "Account Pending Approval";
+  const subtextText = isApproved
+    ? "Redirecting back to the Realtime Interview Copilot desktop app…"
+    : "Redirecting back to the Realtime Interview Copilot desktop app to wait for administrator approval…";
+
   return renderHtml(
-    "Signed in to Realtime Interview Copilot",
+    headingText,
     `<div class="card-header">
        <div class="card-badge-row">
-         <span class="eco-pill eco-pill--green" id="auth-status-pill"><span class="eco-dot"></span><span id="auth-status-text">Authenticated</span></span>
+         <span class="eco-pill ${statusPillClass}" id="auth-status-pill"><span class="eco-dot"></span><span id="auth-status-text">${statusPillText}</span></span>
        </div>
-       <h1 id="auth-heading">Signed in to Realtime Interview Copilot</h1>
-       <p id="auth-subtext" style="margin-bottom:0">Redirecting back to the Realtime Interview Copilot desktop app…</p>
+       <h1 id="auth-heading">${headingText}</h1>
+       <p id="auth-subtext" style="margin-bottom:0">${subtextText}</p>
      </div>
      <div class="identity-panel">
        <div class="identity-meta">

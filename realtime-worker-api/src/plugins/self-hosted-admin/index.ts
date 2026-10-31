@@ -363,19 +363,6 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
                 );
               }
 
-              if (!isApproved) {
-                try {
-                  await ctx.context.internalAdapter.deleteSession(
-                    s.session.token,
-                  );
-                } catch {
-                  /* ignore */
-                }
-                throw ctx.redirect(
-                  `${baseURL}/api/sso/desktop/complete?error=pending_approval&error_description=${encodeURIComponent("Your account is pending administrator approval.")}`,
-                );
-              }
-
               await recordAudit({
                 eventType: "user_signed_in",
                 userId: s.user.id,

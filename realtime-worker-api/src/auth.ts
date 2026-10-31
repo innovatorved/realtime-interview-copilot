@@ -246,22 +246,48 @@ export const auth = (env: Env) => {
               const email = profile?.email?.toLowerCase().trim();
               if (!id || !email) return null;
 
-              const isPrimaryAdmin = email === "admin@vedgupta.in";
+              const isPrimaryAdmin = adminEmails.includes(email);
               const resolvedRole =
                 isPrimaryAdmin || profile?.role === "admin" ? "admin" : "user";
-              // sso.vedgupta.in already enforces account + app approval before issuing tokens,
-              // so any user completing OAuth token exchange is approved.
-              const resolvedApproved =
-                isPrimaryAdmin ||
-                resolvedRole === "admin" ||
-                profile?.approved !== false;
+
+              let resolvedApproved = isPrimaryAdmin;
+              let effectiveRole = resolvedRole;
+
+              try {
+                const [existingUser] = await db
+                  .select({
+                    isApproved: schema.user.isApproved,
+                    role: schema.user.role,
+                  })
+                  .from(schema.user)
+                  .where(eq(schema.user.email, email))
+                  .limit(1);
+
+                if (existingUser) {
+                  // Existing user: preserve the admin's approval decision in Interview Copilot
+                  resolvedApproved =
+                    isPrimaryAdmin ||
+                    existingUser.isApproved === true ||
+                    existingUser.role === "admin";
+                  if (!isPrimaryAdmin && existingUser.role) {
+                    effectiveRole = existingUser.role;
+                  }
+                } else {
+                  // New user: NEVER auto-approve in Interview Copilot, even if approved on SSO.
+                  // An administrator must explicitly approve the user in Interview Copilot admin panel.
+                  resolvedApproved = isPrimaryAdmin;
+                  effectiveRole = "user";
+                }
+              } catch (e) {
+                console.warn("[SSO] Failed to lookup existing user approval status:", e);
+              }
 
               // Sync role and isApproved onto existing user rows in realtime-interview-copilot-db
               try {
                 await db
                   .update(schema.user)
                   .set({
-                    role: resolvedRole,
+                    role: isPrimaryAdmin ? "admin" : effectiveRole,
                     isApproved: resolvedApproved,
                     emailVerified: true,
                     updatedAt: new Date(),
@@ -277,7 +303,7 @@ export const auth = (env: Env) => {
                 name: profile?.name ?? email.split("@")[0] ?? "User",
                 image: profile?.picture ?? profile?.image ?? undefined,
                 emailVerified: profile?.email_verified ?? profile?.emailVerified ?? true,
-                role: resolvedRole,
+                role: isPrimaryAdmin ? "admin" : effectiveRole,
                 isApproved: resolvedApproved,
               };
             },
