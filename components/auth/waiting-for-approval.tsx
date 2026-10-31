@@ -1,10 +1,10 @@
 "use client";
 
 import { useSupportMessages } from "@/hooks/useSupportMessages";
+import { LogoMark } from "@/components/brand/v-logo";
 import {
   ArrowLeft,
   CheckCircle2,
-  Clock,
   Loader2,
   MessageSquarePlus,
   RefreshCw,
@@ -343,30 +343,26 @@ export function WaitingForApproval({ email }: { email?: string }) {
           className="flex items-start gap-2.5 shrink-0"
           style={{ padding: "20px 22px 12px" }}
         >
-          <div
-            className="flex h-7 w-7 items-center justify-center shrink-0"
-            style={{
-              backgroundColor: TOKEN.skySoft,
-              color: TOKEN.sky,
-              borderRadius: 7,
-              border: `1px solid ${TOKEN.skyBorder}`,
-            }}
-          >
-            <Clock className="h-3.5 w-3.5" />
-          </div>
-          <div className="min-w-0">
-            <h1
-              style={{
-                color: TOKEN.ink,
-                fontSize: 16,
-                fontWeight: 600,
-                lineHeight: 1.25,
-                letterSpacing: "-0.2px",
-                margin: 0,
-              }}
-            >
-              Waiting for admin approval
-            </h1>
+          <LogoMark size="sm" />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-2 mb-0.5">
+              <h1
+                style={{
+                  color: TOKEN.ink,
+                  fontSize: 16,
+                  fontWeight: 600,
+                  lineHeight: 1.25,
+                  letterSpacing: "-0.2px",
+                  margin: 0,
+                }}
+              >
+                Waiting for admin approval
+              </h1>
+              <span className="eco-pill eco-pill--blue shrink-0">
+                <span className="h-1.5 w-1.5 rounded-full bg-info" />
+                PENDING
+              </span>
+            </div>
             <p
               style={{
                 color: TOKEN.slate,

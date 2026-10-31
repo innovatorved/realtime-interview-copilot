@@ -5,12 +5,16 @@ type VLogoProps = React.SVGProps<SVGSVGElement> & {
   size?: number;
 };
 
-export function VLogo({ size = 28, className, ...props }: VLogoProps) {
+/**
+ * Meeting Copilot microphone mark — matches the classic Copilot mic icon
+ * updated to the monochrome Paper & Ink / Ved Gupta design system palette.
+ */
+export function VLogo({ size = 20, className, ...props }: VLogoProps) {
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 64 64"
+      viewBox="0 0 24 24"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
@@ -18,9 +22,26 @@ export function VLogo({ size = 28, className, ...props }: VLogoProps) {
       {...props}
     >
       <path
-        d="M16 18 L32 48 L48 18"
+        d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"
         stroke="currentColor"
-        strokeWidth="6.5"
+        strokeWidth="2.1"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M19 10v2a7 7 0 0 1-14 0v-2"
+        stroke="currentColor"
+        strokeWidth="2.1"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <line
+        x1="12"
+        x2="12"
+        y1="19"
+        y2="22"
+        stroke="currentColor"
+        strokeWidth="2.1"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -38,9 +59,9 @@ const BOX: Record<
   { box: string; icon: number }
 > = {
   xs: { box: "h-5 w-5 rounded-[5px]", icon: 12 },
-  sm: { box: "h-7 w-7 rounded-[6px]", icon: 16 },
-  md: { box: "h-9 w-9 rounded-[7px]", icon: 20 },
-  lg: { box: "h-10 w-10 rounded-[8px]", icon: 22 },
+  sm: { box: "h-7 w-7 rounded-[6px]", icon: 15 },
+  md: { box: "h-9 w-9 rounded-[7px]", icon: 18 },
+  lg: { box: "h-10 w-10 rounded-[8px]", icon: 20 },
 };
 
 export function LogoMark({

@@ -22,6 +22,7 @@ import dynamic from "next/dynamic";
 import type { useAskMic } from "@/hooks/useAskMic";
 import type { useMicPushToTalk } from "@/hooks/useMicPushToTalk";
 import { Button } from "@/components/ui/button";
+import { LogoMark } from "@/components/brand/v-logo";
 import { formatShortcut, Kbd } from "@/components/ui/Kbd";
 import { LevelMeter } from "@/components/ui/LevelMeter";
 import { FLAGS } from "@/lib/types";
@@ -97,6 +98,7 @@ export function CompactToolbar({
       data-window-chrome
       className="app-toolbar flex items-center gap-1.5 px-2.5 py-1.5"
     >
+      <LogoMark size="xs" className="mr-0.5" />
       <RecorderTranscriber compact />
 
       <Button
