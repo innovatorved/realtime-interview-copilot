@@ -59,38 +59,6 @@ export interface TranscriptionSegment {
   timestamp: string;
 }
 
-export type SupportAuthorType = "user" | "admin";
-
-export type SupportThreadStatus = "open" | "pending" | "resolved" | "reply";
-
-export interface SupportMessage {
-  id: string;
-  userId: string | null;
-  userEmail: string | null;
-  userName: string | null;
-  parentId: string | null;
-  authorType: SupportAuthorType;
-  authorEmail: string | null;
-  subject: string | null;
-  body: string;
-  status: SupportThreadStatus;
-  unreadByAdmin: boolean;
-  unreadByUser: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface SupportThreadListResponse {
-  threads: SupportMessage[];
-  total: number;
-  pagination: { limit: number; offset: number };
-}
-
-export interface SupportThreadResponse {
-  thread: SupportMessage;
-  messages: SupportMessage[];
-}
-
 export type AnnouncementKind = "banner" | "popup" | "toast";
 export type AnnouncementSeverity =
   | "info"

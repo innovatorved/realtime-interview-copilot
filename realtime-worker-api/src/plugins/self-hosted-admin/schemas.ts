@@ -134,30 +134,6 @@ export const liveSessionTerminateSchema = z.object({
   revokeAuthSessions: z.boolean().optional(),
 });
 
-export const supportReplySchema = z.object({
-  threadId: safeIdSchema,
-  body: z.string().min(1).max(8000),
-  closeAfter: z.boolean().optional(),
-});
-
-export const supportUpdateStatusSchema = z.object({
-  threadId: safeIdSchema,
-  status: z.enum(["open", "pending", "resolved"]),
-});
-
-export const supportDeleteSchema = z.object({ threadId: safeIdSchema });
-
-export const supportAutoReplyConfigSchema = z.object({
-  enabled: z.boolean().optional(),
-  firstTimeOnly: z.boolean().optional(),
-  body: z.string().min(1).max(8000).optional(),
-});
-
-export const supportBulkReplySchema = z.object({
-  body: z.string().min(1).max(8000).optional(),
-  closeAfter: z.boolean().optional(),
-  onlyWithoutAdminReply: z.boolean().optional(),
-});
 
 /** Enforce http/https on CTA URLs so an admin (or compromised admin
  *  account) cannot ship a `javascript:` or `data:` URL into every user's

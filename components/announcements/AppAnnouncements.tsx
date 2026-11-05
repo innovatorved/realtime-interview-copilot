@@ -83,7 +83,7 @@ export function AppAnnouncements({
   className,
 }: AppAnnouncementsProps) {
   const { banners, popups, dismiss, dismissBannerLocal, ack } =
-    useAnnouncements({ enabled: true, pollMs: 60_000 });
+    useAnnouncements({ enabled: true, pollMs: 300_000 });
 
   return (
     <div className={className}>

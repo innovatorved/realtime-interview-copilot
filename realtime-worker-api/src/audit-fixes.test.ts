@@ -5,11 +5,6 @@ import {
   getCachedConfig,
   invalidateConfigCache,
 } from "./config-cache";
-import {
-  DEFAULT_SUPPORT_AUTO_REPLY_BODY,
-  parseSupportAutoReplyMap,
-  SUPPORT_AUTO_REPLY_KEYS,
-} from "./lib/support-auto-reply";
 import { renderMarkdownToHtml } from "./lib/markdown-to-html";
 import { csrfCheck } from "./middleware/csrf";
 import { withCors } from "./middleware/cors";
@@ -158,28 +153,6 @@ describe("getCachedConfig KV hit optimization", () => {
   });
 });
 
-describe("parseSupportAutoReplyMap", () => {
-  it("defaults to enabled, firstTimeOnly, and the GitHub star message", () => {
-    const cfg = parseSupportAutoReplyMap(new Map());
-    assert.equal(cfg.enabled, true);
-    assert.equal(cfg.firstTimeOnly, true);
-    assert.equal(cfg.body, DEFAULT_SUPPORT_AUTO_REPLY_BODY);
-    assert.ok(cfg.body.includes("https://github.com/innovatorved/realtime-interview-copilot"));
-  });
-
-  it("respects custom admin_config overrides", () => {
-    const cfg = parseSupportAutoReplyMap(
-      new Map([
-        [SUPPORT_AUTO_REPLY_KEYS.enabled, "false"],
-        [SUPPORT_AUTO_REPLY_KEYS.firstTimeOnly, "false"],
-        [SUPPORT_AUTO_REPLY_KEYS.body, "Custom star prompt"],
-      ]),
-    );
-    assert.equal(cfg.enabled, false);
-    assert.equal(cfg.firstTimeOnly, false);
-    assert.equal(cfg.body, "Custom star prompt");
-  });
-});
 
 describe("sso-desktop security hardening & banned user handling", () => {
   it("escapes error_description in handleDesktopSsoComplete to prevent reflected XSS", async () => {

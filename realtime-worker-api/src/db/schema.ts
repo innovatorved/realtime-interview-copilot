@@ -265,51 +265,6 @@ export const usageEvent = sqliteTable(
  *    the most recent minted key. The admin terminate endpoint calls
  *    DELETE /v1/projects/{projectId}/keys/{keyId} to revoke it.
  */
-/**
- * Support messages: lets users (especially those waiting for approval)
- * write to admins, and admins reply back. Threaded via `parentId` — a
- * thread root has parentId = NULL, replies point at the root id.
- *
- *  - authorType: 'user' for end-user messages, 'admin' for admin replies.
- *  - status: only meaningful on the thread root.
- *      'open'      → awaiting admin response
- *      'pending'   → admin has replied, waiting on user
- *      'resolved'  → admin marked the conversation done
- *      'reply'     → applied to admin reply rows so dashboard filters
- *                    can hide them when listing thread roots
- *  - unreadByAdmin / unreadByUser: drive the small unread badges on
- *    both sides. Cleared by reading endpoints, set by the appropriate
- *    create endpoints.
- */
-export const supportMessage = sqliteTable(
-  "support_message",
-  {
-    id: text("id").primaryKey(),
-    userId: text("userId").references(() => user.id, { onDelete: "cascade" }),
-    userEmail: text("userEmail"),
-    userName: text("userName"),
-    parentId: text("parentId"),
-    authorType: text("authorType").notNull(),
-    authorEmail: text("authorEmail"),
-    subject: text("subject"),
-    body: text("body").notNull(),
-    status: text("status").notNull().default("open"),
-    unreadByAdmin: integer("unreadByAdmin").notNull().default(1),
-    unreadByUser: integer("unreadByUser").notNull().default(0),
-    ipAddress: text("ipAddress"),
-    userAgent: text("userAgent"),
-    metadata: text("metadata"),
-    createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
-    updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
-  },
-  (table) => [
-    index("support_message_user_idx").on(table.userId),
-    index("support_message_parent_idx").on(table.parentId),
-    index("support_message_status_idx").on(table.status),
-    index("support_message_unread_idx").on(table.unreadByAdmin),
-    index("support_message_created_idx").on(table.createdAt),
-  ],
-);
 
 /**
  * App announcements: admin-controlled banners and popups shown inside

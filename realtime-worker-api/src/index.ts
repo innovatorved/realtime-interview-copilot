@@ -33,11 +33,6 @@ import {
 } from "./routes/sessions";
 import { handleEventTrack } from "./routes/events";
 import {
-  handleCreateSupportMessage,
-  handleListSupportMessages,
-  handleMarkSupportThreadReadByUser,
-} from "./routes/support";
-import {
   handleAckAnnouncement,
   handleActiveAnnouncements,
   handleDismissAnnouncement,
@@ -77,6 +72,18 @@ export default {
 
     if (request.method === "OPTIONS") {
       return handleOptions(request);
+    }
+
+    // Fast-path drop for internet vulnerability scanners and non-API paths
+    // without triggering CSRF checks or database security logging.
+    const isKnownRoutePrefix =
+      path.startsWith("/api") ||
+      path === "/completion" ||
+      path === "/deepgram" ||
+      path === "/deepgram/ask";
+
+    if (!isKnownRoutePrefix) {
+      return new Response("Not found", { status: 404 });
     }
 
     const csrfFailure = csrfCheck(request);
@@ -193,18 +200,21 @@ export default {
       return withCors(response, request);
     }
 
-    // Support messages (pending or approved users).
-    if (path === "/api/support/messages" && request.method === "GET") {
-      const response = await handleListSupportMessages(request, env);
-      return withCors(response, request);
-    }
-    if (path === "/api/support/messages" && request.method === "POST") {
-      const response = await handleCreateSupportMessage(request, env, ctx);
-      return withCors(response, request);
-    }
-    if (path === "/api/support/messages/read" && request.method === "POST") {
-      const response = await handleMarkSupportThreadReadByUser(request, env);
-      return withCors(response, request);
+    // Legacy support endpoints: provide clean deprecation notice for older client versions
+    // without hitting D1 or executing database queries.
+    if (path.startsWith("/api/support/messages")) {
+      return withCors(
+        jsonResponse(
+          {
+            error:
+              "In-app support messaging has been discontinued. Please update Realtime Interview Copilot to the latest version and email admin@vedgupta.in for approval.",
+            code: "FEATURE_DEPRECATED",
+            updateRequired: true,
+          },
+          403,
+        ),
+        request,
+      );
     }
 
     // Announcements (banners / popups).

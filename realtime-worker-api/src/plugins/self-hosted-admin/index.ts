@@ -63,7 +63,6 @@ import { liveSessionEndpoints } from "./endpoints/live-sessions";
 import { modelParamsEndpoints } from "./endpoints/model-params";
 import { notesEndpoints } from "./endpoints/notes";
 import { sessionEndpoints } from "./endpoints/sessions";
-import { supportEndpoints } from "./endpoints/support";
 import { usageEndpoints } from "./endpoints/usage";
 import { userEndpoints } from "./endpoints/users";
 import type { AdminDeps, SelfHostedAdminOptions } from "./types";
@@ -422,7 +421,6 @@ export const selfHostedAdmin = (opts: SelfHostedAdminOptions) => {
       ...modelParamsEndpoints(deps),
       ...liveSessionEndpoints(deps),
       ...importantEventsEndpoints(deps),
-      ...supportEndpoints(deps),
       ...announcementEndpoints(deps),
       ...cleanupEndpoints(deps),
       ...quotaEndpoints(deps),

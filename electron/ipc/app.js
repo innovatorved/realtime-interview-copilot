@@ -4,9 +4,11 @@ exports.registerAppIpc = registerAppIpc;
 const electron_1 = require("electron");
 const updater_1 = require("../updater");
 const ALLOWED_EXTERNAL_HOSTS = new Set([
+    "github.com",
     "sso.vedgupta.in",
     "realtime-worker-api-prod.vedgupta.in",
     "copilot.vedgupta.in",
+    "admin.copilot.vedgupta.in",
     "localhost",
     "127.0.0.1",
 ]);

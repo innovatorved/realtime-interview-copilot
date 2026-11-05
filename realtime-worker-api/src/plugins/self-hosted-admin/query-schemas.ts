@@ -74,14 +74,6 @@ export const usageTimeseriesQuerySchema = z.object({
   userId: safeIdSchema.optional(),
 });
 
-export const supportThreadsQuerySchema = paginationQuerySchema.extend({
-  status: z.enum(["open", "pending", "resolved"]).optional(),
-  unreadOnly: z
-    .enum(["true", "false"])
-    .optional()
-    .transform((v) => v === "true"),
-  userId: safeIdSchema.optional(),
-});
 
 export const announcementsListQuerySchema = paginationQuerySchema.extend({
   status: z.enum(ANNOUNCEMENT_STATUS).optional(),

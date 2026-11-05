@@ -7,6 +7,7 @@ import {
 } from "../updater";
 
 const ALLOWED_EXTERNAL_HOSTS = new Set([
+  "github.com",
   "sso.vedgupta.in",
   "realtime-worker-api-prod.vedgupta.in",
   "copilot.vedgupta.in",

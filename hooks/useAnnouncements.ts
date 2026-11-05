@@ -59,12 +59,13 @@ function persistDismissedBanners(set: Set<string>) {
 export function useAnnouncements(
   opts: UseAnnouncementsOptions = {},
 ): UseAnnouncementsReturn {
-  const { pollMs = 60_000, enabled = true } = opts;
+  const { pollMs = 300_000, enabled = true } = opts;
   const [items, setItems] = useState<AppAnnouncement[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [localBanners, setLocalBanners] = useState<Set<string>>(new Set());
   const abortRef = useRef<AbortController | null>(null);
+  const pollingHaltedRef = useRef(false);
 
   useEffect(() => {
     setLocalBanners(readDismissedBanners());
@@ -82,8 +83,10 @@ export function useAnnouncements(
       });
       if (res.status === 401 || res.status === 403) {
         setItems([]);
+        pollingHaltedRef.current = true;
         return;
       }
+      pollingHaltedRef.current = false;
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as ActiveAnnouncementsResponse;
       setItems(data.announcements ?? []);
@@ -131,8 +134,9 @@ export function useAnnouncements(
     if (!enabled || pollMs <= 0) return;
     const id = window.setInterval(() => {
       if (
-        typeof document !== "undefined" &&
-        document.visibilityState === "hidden"
+        pollingHaltedRef.current ||
+        (typeof document !== "undefined" &&
+          document.visibilityState === "hidden")
       ) {
         return;
       }

@@ -768,7 +768,7 @@ export async function handleDesktopSsoComplete(
 
          var pollCount = 0;
          var pollTimer = setInterval(function () {
-           if (consumed || !rawTicket || pollCount > 45) {
+           if (consumed || !rawTicket || pollCount >= 20) {
              clearInterval(pollTimer);
              return;
            }
@@ -785,7 +785,7 @@ export async function handleDesktopSsoComplete(
                }
              })
              .catch(function () {});
-         }, 1200);
+         }, 3000);
 
          window.location.href = ${JSON.stringify(deepLink)};
        })();

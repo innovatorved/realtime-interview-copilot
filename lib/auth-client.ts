@@ -32,6 +32,9 @@ export function clearStoredSessionToken(): void {
 
 export const authClient = createAuthClient({
   baseURL: `${BACKEND_API_URL}/api/auth`,
+  sessionOptions: {
+    refetchOnWindowFocus: false,
+  },
   fetchOptions: {
     auth: {
       type: "Bearer",

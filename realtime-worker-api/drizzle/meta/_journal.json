@@ -99,6 +99,20 @@
       "when": 1764950000000,
       "tag": "0013_remove_presets_add_interview_context",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1765000000000,
+      "tag": "0014_add_user_role_and_sso_cutover",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1765050000000,
+      "tag": "0015_drop_support_message",
+      "breakpoints": true
     }
   ]
 }

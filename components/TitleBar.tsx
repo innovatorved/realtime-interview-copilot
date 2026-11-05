@@ -149,12 +149,13 @@ export default function TitleBar() {
     return null;
   }
 
+  const extendedUser = session?.user as
+    | { id?: string; email?: string; isBanned?: boolean; isApproved?: boolean }
+    | undefined;
   const isApprovedUser = Boolean(
-    session?.user &&
-      !(session.user as { isBanned?: boolean; isApproved?: boolean })
-        .isBanned &&
-      (session.user as { isBanned?: boolean; isApproved?: boolean })
-        .isApproved !== false,
+    extendedUser?.id &&
+      !extendedUser.isBanned &&
+      extendedUser.isApproved === true,
   );
 
   const noDragStyle = { WebkitAppRegion: "no-drag" } as React.CSSProperties;

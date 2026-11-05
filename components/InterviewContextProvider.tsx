@@ -103,7 +103,7 @@ export function InterviewContextProvider({
   const isApprovedUser = Boolean(
     extendedUser?.id &&
       !extendedUser.isBanned &&
-      extendedUser.isApproved !== false,
+      extendedUser.isApproved === true,
   );
 
   const resetLocalState = useCallback(() => {

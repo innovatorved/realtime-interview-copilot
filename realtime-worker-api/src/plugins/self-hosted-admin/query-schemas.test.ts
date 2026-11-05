@@ -7,7 +7,6 @@ import {
   listUsersQuerySchema,
   requiredUserIdQuerySchema,
   resolveImportantEventActions,
-  supportThreadsQuerySchema,
   usageSummaryQuerySchema,
 } from "./query-schemas";
 import { openaiConfigSchema } from "./schemas";
@@ -34,18 +33,6 @@ describe("admin query schemas", () => {
     assert.equal(q.window, "7d");
   });
 
-  it("parses support unreadOnly as boolean", () => {
-    const url = new URL("http://localhost/support/threads?unreadOnly=true");
-    const q = parseAdminQuery(url, supportThreadsQuerySchema, [
-      "limit",
-      "offset",
-      "status",
-      "unreadOnly",
-      "userId",
-      "q",
-    ]);
-    assert.equal(q.unreadOnly, true);
-  });
 
   it("filters important event actions to allow-list", () => {
     const actions = resolveImportantEventActions("completion,invalid_action");
