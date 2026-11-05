@@ -100,8 +100,7 @@ export const auth = (env: Env) => {
     },
     session: {
       cookieCache: {
-        enabled: true,
-        maxAge: 300, // 5 minutes signed session cookie cache
+        enabled: false,
       },
     },
     databaseHooks: {
@@ -266,7 +265,7 @@ export const auth = (env: Env) => {
                   // Existing user: preserve the admin's approval decision in Interview Copilot
                   resolvedApproved =
                     isPrimaryAdmin ||
-                    existingUser.isApproved === true ||
+                    Boolean(existingUser.isApproved) ||
                     existingUser.role === "admin";
                   if (!isPrimaryAdmin && existingUser.role) {
                     effectiveRole = existingUser.role;

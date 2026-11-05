@@ -2,6 +2,7 @@
 
 import { RefreshCw } from "lucide-react";
 import posthog from "posthog-js";
+import { useEffect, useState } from "react";
 import { LogoMark } from "@/components/brand/v-logo";
 import { authClient } from "@/lib/auth-client";
 import { APPROVAL_CONTACT_EMAIL, GITHUB_REPO_URL } from "@/lib/constant";
@@ -99,11 +100,41 @@ function renderBodyWithLinks(text: string) {
   });
 }
 
-export function WaitingForApproval({ email }: { email?: string }) {
-  const handleCheckStatus = () => {
+export function WaitingForApproval({
+  email,
+  onCheckStatus,
+}: {
+  email?: string;
+  onCheckStatus?: () => Promise<void> | void;
+}) {
+  const [checking, setChecking] = useState(false);
+
+  const handleCheckStatus = async () => {
+    if (checking) return;
+    setChecking(true);
     posthog.capture("approval_status_checked", { email });
-    window.location.reload();
+    try {
+      if (onCheckStatus) {
+        await onCheckStatus();
+      } else {
+        await authClient.getSession({
+          fetchOptions: { query: { disableCookieCache: "true" } },
+        });
+      }
+    } catch (err) {
+      console.warn("Failed to check approval status:", err);
+    } finally {
+      setChecking(false);
+    }
   };
+
+  useEffect(() => {
+    if (!onCheckStatus) return;
+    const interval = setInterval(() => {
+      void onCheckStatus();
+    }, 15_000);
+    return () => clearInterval(interval);
+  }, [onCheckStatus]);
 
   return (
     <div
@@ -174,9 +205,17 @@ export function WaitingForApproval({ email }: { email?: string }) {
         >
           {/* Action buttons (same format as original screen) */}
           <div className="flex flex-wrap gap-2 mb-3 shrink-0">
-            <SecondaryButton onClick={handleCheckStatus}>
-              <RefreshCw className="h-3.5 w-3.5" />
-              Check status
+            <SecondaryButton
+              onClick={handleCheckStatus}
+              disabled={checking}
+              style={
+                checking ? { opacity: 0.7, cursor: "not-allowed" } : undefined
+              }
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${checking ? "animate-spin" : ""}`}
+              />
+              {checking ? "Checking…" : "Check status"}
             </SecondaryButton>
             <SecondaryButton
               onClick={() => openSafeUrl("https://sso.vedgupta.in/pending")}

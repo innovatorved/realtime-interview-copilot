@@ -55,12 +55,12 @@ export async function getAuthenticatedUser(
     sessionUser.isBanned !== undefined || sessionUser.banned !== undefined;
 
   let isApproved =
-    sessionUser.isApproved === true ||
-    sessionUser.approved === true ||
+    Boolean(sessionUser.isApproved) ||
+    Boolean(sessionUser.approved) ||
     sessionUser.role === "admin" ||
     sessionUser.email?.toLowerCase() === "admin@vedgupta.in";
   let isBanned =
-    sessionUser.isBanned === true || sessionUser.banned === true;
+    Boolean(sessionUser.isBanned) || Boolean(sessionUser.banned);
 
   if (!hasApprovedFlag || !hasBannedFlag) {
     try {
@@ -75,11 +75,11 @@ export async function getAuthenticatedUser(
         .limit(1);
       const flags = rows[0] ?? null;
       if (!hasBannedFlag) {
-        isBanned = flags?.isBanned === true;
+        isBanned = Boolean(flags?.isBanned);
       }
       if (!hasApprovedFlag) {
         isApproved =
-          flags?.isApproved === true ||
+          Boolean(flags?.isApproved) ||
           flags?.role === "admin" ||
           sessionUser.email?.toLowerCase() === "admin@vedgupta.in";
       }

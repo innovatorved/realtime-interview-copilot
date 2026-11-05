@@ -636,8 +636,8 @@ export async function handleDesktopSsoComplete(
   let isApproved =
     isPrimaryAdmin ||
     sessionUser.role === "admin" ||
-    sessionUser.isApproved === true ||
-    sessionUser.approved === true;
+    Boolean(sessionUser.isApproved) ||
+    Boolean(sessionUser.approved);
 
   if (!isApproved && env.DB) {
     try {
@@ -647,7 +647,8 @@ export async function handleDesktopSsoComplete(
         .where(eq(user.id, sessionUser.id))
         .limit(1);
       if (u) {
-        isApproved = isPrimaryAdmin || u.role === "admin" || u.isApproved === true;
+        isApproved =
+          isPrimaryAdmin || u.role === "admin" || Boolean(u.isApproved);
       }
     } catch {
       /* ignore */

@@ -300,7 +300,12 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     return (
       <>
         {announcementsOverlay}
-        <WaitingForApproval email={extendedUser.email} />
+        <WaitingForApproval
+          email={extendedUser.email}
+          onCheckStatus={async () => {
+            await refetch({ query: { disableCookieCache: true } });
+          }}
+        />
       </>
     );
   }
