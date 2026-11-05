@@ -2,7 +2,7 @@
 
 import { RefreshCw } from "lucide-react";
 import posthog from "posthog-js";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { LogoMark } from "@/components/brand/v-logo";
 import { authClient } from "@/lib/auth-client";
 import { APPROVAL_CONTACT_EMAIL, GITHUB_REPO_URL } from "@/lib/constant";
@@ -127,14 +127,6 @@ export function WaitingForApproval({
       setChecking(false);
     }
   };
-
-  useEffect(() => {
-    if (!onCheckStatus) return;
-    const interval = setInterval(() => {
-      void onCheckStatus();
-    }, 15_000);
-    return () => clearInterval(interval);
-  }, [onCheckStatus]);
 
   return (
     <div
