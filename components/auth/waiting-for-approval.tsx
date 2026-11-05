@@ -105,18 +105,6 @@ export function WaitingForApproval({ email }: { email?: string }) {
     window.location.reload();
   };
 
-  const messageBody = `Hi there,
-
-Thank you for reaching out and for your interest in Realtime Interview Copilot!
-
-Could you please star our GitHub repository here:
-${GITHUB_REPO_URL}
-
-I (Ved) am reviewing requests and approving access for everyone in batches. If you need urgent access or have questions, feel free to email me directly at ${APPROVAL_CONTACT_EMAIL}. You will also receive an email notification as soon as your account is approved.
-
-Thanks so much for your patience and support!
-— Ved Gupta`;
-
   return (
     <div
       className="min-h-screen w-full flex items-center justify-center px-4 py-10"
@@ -197,49 +185,66 @@ Thanks so much for your patience and support!
             </SecondaryButton>
           </div>
 
-          {/* Admin message container & bubble (exact same UI format as support thread) */}
+          {/* Normal notice text */}
           <div
-            className="rounded-md overflow-hidden flex flex-col p-3 mb-4"
+            className="rounded-lg p-3.5 mb-4 space-y-2.5"
             style={{
               border: `1px solid ${TOKEN.hairline}`,
               backgroundColor: TOKEN.surfaceMid,
             }}
           >
-            <div
-              className="rounded-md px-3 py-2.5"
+            <p
               style={{
-                backgroundColor: TOKEN.accentSoft,
-                border: `1px solid ${TOKEN.accentBorder}`,
+                color: TOKEN.ink,
+                fontSize: 12.5,
+                fontWeight: 500,
+                lineHeight: 1.5,
+                margin: 0,
               }}
             >
-              <div className="flex items-center justify-between gap-2 mb-1.5">
-                <span
-                  style={{
-                    color: TOKEN.accentText,
-                    fontSize: 10,
-                    fontWeight: 600,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.6px",
-                  }}
-                >
-                  Admin
-                </span>
-                <span style={{ color: TOKEN.stone, fontSize: 10 }}>
-                  Auto-Response
-                </span>
-              </div>
-              <p
-                className="whitespace-pre-wrap break-words"
-                style={{
-                  color: TOKEN.charcoal,
-                  fontSize: 12,
-                  lineHeight: 1.55,
-                  margin: 0,
-                }}
-              >
-                {renderBodyWithLinks(messageBody)}
-              </p>
-            </div>
+              Hi there, thank you for reaching out and for your interest in
+              Realtime Interview Copilot!
+            </p>
+            <p
+              style={{
+                color: TOKEN.slate,
+                fontSize: 12,
+                lineHeight: 1.55,
+                margin: 0,
+              }}
+            >
+              Could you please star our GitHub repository here:
+              <br />
+              {renderBodyWithLinks(GITHUB_REPO_URL)}
+            </p>
+            <p
+              style={{
+                color: TOKEN.slate,
+                fontSize: 12,
+                lineHeight: 1.55,
+                margin: 0,
+              }}
+            >
+              I (Ved) am reviewing requests and approving access for everyone in
+              batches. If you need urgent access or have questions, feel free to
+              email me directly at {renderBodyWithLinks(APPROVAL_CONTACT_EMAIL)}
+              . You will also receive an email notification as soon as your
+              account is approved.
+            </p>
+            <p
+              style={{
+                color: TOKEN.charcoal,
+                fontSize: 11.5,
+                lineHeight: 1.5,
+                margin: 0,
+              }}
+            >
+              Thanks so much for your patience and support!
+              <br />
+              <span style={{ color: TOKEN.ink, fontWeight: 500 }}>
+                — Ved Gupta
+              </span>
+            </p>
           </div>
 
           {/* Sign Out Link */}

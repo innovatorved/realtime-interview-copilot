@@ -207,7 +207,7 @@ export default {
         jsonResponse(
           {
             error:
-              "In-app support messaging has been discontinued. Please update Realtime Interview Copilot to the latest version and email admin@vedgupta.in for approval.",
+              "In-app support messaging has been discontinued. Please update Realtime Interview Copilot to the latest version and email contact@vedgupta.in for approval.",
             code: "FEATURE_DEPRECATED",
             updateRequired: true,
           },
